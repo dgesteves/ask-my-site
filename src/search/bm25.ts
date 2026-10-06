@@ -3,7 +3,9 @@
  *
  * Besides the score, every search reports each document's *query coverage*: the share of the
  * query's IDF mass that the document contains. Coverage is bounded to [0, 1] and comparable across
- * corpora and query lengths, which BM25 scores are not, so it is what the relevance gate uses.
+ * query lengths, which BM25 scores are not, so it is what the relevance gate uses. It still
+ * depends on the corpus: a query term no document contains gets the highest IDF, so it weighs
+ * heavily against every document.
  */
 
 export interface Bm25Options {
