@@ -22,14 +22,13 @@ export interface Bm25Result {
   ranked: number[];
 }
 
-interface Postings {
-  docs: Uint32Array;
-  freqs: Uint16Array;
-}
-
 export class Bm25Index {
   readonly size: number;
-  private readonly postings = new Map<string, Postings>();
+  private readonly termIds = new Map<string, number>();
+  /** Postings in compressed sparse row form: term `t` owns `[termStart[t], termStart[t + 1])`. */
+  private readonly termStart: Uint32Array;
+  private readonly postingDocs: Uint32Array;
+  private readonly postingFreqs: Uint16Array;
   private readonly lengths: Uint32Array;
   private readonly averageLength: number;
   private readonly k1: number;
@@ -41,51 +40,88 @@ export class Bm25Index {
     this.size = documents.length;
     this.lengths = new Uint32Array(documents.length);
 
-    const lists = new Map<string, number[]>();
+    // Pass 1: intern terms, count per document, and record (term, count) pairs.
+    // Dense per-term scratch arrays (indexed by term id) instead of a Map per document.
+    const documentFrequency: number[] = [];
+    const lastSeen: number[] = [];
+    const termFrequency: number[] = [];
+    const unique: number[] = [];
+    const pairs: number[] = [];
+    const pairStart = new Uint32Array(documents.length + 1);
     let total = 0;
     documents.forEach((terms, doc) => {
       this.lengths[doc] = terms.length;
       total += terms.length;
-      const counts = new Map<string, number>();
-      for (const term of terms) counts.set(term, (counts.get(term) ?? 0) + 1);
-      for (const [term, count] of counts) {
-        let list = lists.get(term);
-        if (!list) lists.set(term, (list = []));
-        list.push(doc, count);
+      unique.length = 0;
+      for (const term of terms) {
+        let id = this.termIds.get(term);
+        if (id === undefined) {
+          id = documentFrequency.length;
+          this.termIds.set(term, id);
+          documentFrequency.push(0);
+          lastSeen.push(-1);
+          termFrequency.push(0);
+        }
+        if (lastSeen[id] !== doc) {
+          lastSeen[id] = doc;
+          termFrequency[id] = 0;
+          unique.push(id);
+        }
+        termFrequency[id] = (termFrequency[id] ?? 0) + 1;
       }
+      for (const id of unique) {
+        pairs.push(id, termFrequency[id] ?? 0);
+        documentFrequency[id] = (documentFrequency[id] ?? 0) + 1;
+      }
+      pairStart[doc + 1] = pairs.length;
     });
-    for (const [term, list] of lists) {
-      const docs = new Uint32Array(list.length / 2);
-      const freqs = new Uint16Array(list.length / 2);
-      for (let i = 0; i < docs.length; i += 1) {
-        docs[i] = list[2 * i] ?? 0;
-        freqs[i] = Math.min(list[2 * i + 1] ?? 0, 0xffff);
+
+    // Pass 2: lay postings out contiguously, grouped by term.
+    this.termStart = new Uint32Array(documentFrequency.length + 1);
+    documentFrequency.forEach((df, id) => {
+      this.termStart[id + 1] = (this.termStart[id] ?? 0) + df;
+    });
+    const postings = pairs.length / 2;
+    this.postingDocs = new Uint32Array(postings);
+    this.postingFreqs = new Uint16Array(postings);
+    const cursor = this.termStart.slice(0, -1);
+    for (let doc = 0; doc < documents.length; doc += 1) {
+      for (let i = pairStart[doc] ?? 0; i < (pairStart[doc + 1] ?? 0); i += 2) {
+        const id = pairs[i] ?? 0;
+        const slot = cursor[id] ?? 0;
+        cursor[id] = slot + 1;
+        this.postingDocs[slot] = doc;
+        this.postingFreqs[slot] = Math.min(pairs[i + 1] ?? 0, 0xffff);
       }
-      this.postings.set(term, { docs, freqs });
     }
     this.averageLength = documents.length > 0 ? total / documents.length : 0;
   }
 
+  private documentFrequency(id: number | undefined): number {
+    return id === undefined ? 0 : (this.termStart[id + 1] ?? 0) - (this.termStart[id] ?? 0);
+  }
+
   /** Inverse document frequency (the BM25+ variant, always positive). */
   idf(term: string): number {
-    const df = this.postings.get(term)?.docs.length ?? 0;
+    const df = this.documentFrequency(this.termIds.get(term));
     return Math.log(1 + (this.size - df + 0.5) / (df + 0.5));
   }
 
   search(queryTerms: readonly string[]): Bm25Result {
     const scores = new Float32Array(this.size);
     const matched = new Float32Array(this.size);
-    const terms = [...new Set(queryTerms)];
     let totalIdf = 0;
 
-    for (const term of terms) {
-      const idf = this.idf(term);
+    for (const term of new Set(queryTerms)) {
+      const id = this.termIds.get(term);
+      const df = this.documentFrequency(id);
+      const idf = Math.log(1 + (this.size - df + 0.5) / (df + 0.5));
       totalIdf += idf;
-      const postings = this.postings.get(term);
-      if (!postings) continue;
-      for (let i = 0; i < postings.docs.length; i += 1) {
-        const doc = postings.docs[i] ?? 0;
-        const tf = postings.freqs[i] ?? 0;
+      if (id === undefined) continue;
+      const end = this.termStart[id + 1] ?? 0;
+      for (let i = this.termStart[id] ?? 0; i < end; i += 1) {
+        const doc = this.postingDocs[i] ?? 0;
+        const tf = this.postingFreqs[i] ?? 0;
         const norm = 1 - this.b + (this.b * (this.lengths[doc] ?? 0)) / (this.averageLength || 1);
         scores[doc] = (scores[doc] ?? 0) + (idf * (tf * (this.k1 + 1))) / (tf + this.k1 * norm);
         matched[doc] = (matched[doc] ?? 0) + idf;
@@ -97,8 +133,9 @@ export class Bm25Index {
     ranked.sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0) || a - b);
 
     const coverage = matched;
-    if (totalIdf > 0)
-      for (let doc = 0; doc < this.size; doc += 1) coverage[doc] = (matched[doc] ?? 0) / totalIdf;
+    if (totalIdf > 0) {
+      for (const doc of ranked) coverage[doc] = (matched[doc] ?? 0) / totalIdf;
+    }
     return { scores, coverage, ranked };
   }
 }
