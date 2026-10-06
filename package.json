@@ -51,7 +51,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "ask-my-site": "./dist/cli.js"
+    "ask-my-site": "dist/cli.js"
   },
   "files": [
     "dist"
