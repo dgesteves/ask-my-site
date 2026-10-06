@@ -4,11 +4,11 @@
 
 ### Minor Changes
 
-- [`f8fdf65`](https://github.com/dgesteves/ask-my-site/commit/f8fdf6519803695a34f6521ba3b4d3f90425c6ed) Thanks [@dgesteves](https://github.com/dgesteves)! - Initial release: build-time indexing CLI with an offline `--check` mode, int8 static index, hybrid BM25 + vector retrieval with reciprocal rank fusion and a relevance gate, a Web-standard streaming `createAskHandler`, the `AskDialog` command palette and `useAsk` hook, and deterministic mock models for keyless runs.
+- [`64c3c5b`](https://github.com/dgesteves/ask-my-site/commit/64c3c5b1c167234b0853c8160d5509ce0a486827) Thanks [@dgesteves](https://github.com/dgesteves)! - Initial release: build-time indexing CLI with an offline `--check` mode, int8 static index, hybrid BM25 + vector retrieval with reciprocal rank fusion and a relevance gate, a Web-standard streaming `createAskHandler`, the `AskDialog` command palette and `useAsk` hook, and deterministic mock models for keyless runs.
 
 ### Patch Changes
 
-- [`08e824b`](https://github.com/dgesteves/ask-my-site/commit/08e824b198f0142b038453bcef588b44a0cb5451) Thanks [@dgesteves](https://github.com/dgesteves)! - Security and robustness fixes before the first release:
+- [`0791182`](https://github.com/dgesteves/ask-my-site/commit/07911827d4949574507ee687bb28dc96eb039d0f) Thanks [@dgesteves](https://github.com/dgesteves)! - Security and robustness fixes before the first release:
   
   - Rate limits key on one client IP header: the last `X-Forwarded-For` entry by default, or the header your platform sets via the new `trustedHeader` option. A client can no longer pick its own key by sending another platform's header. See "Rate limits and client IPs" in the README.
   - Prompts wrap sources and the question in tags with a random per-request suffix, and pass content through verbatim (`<source>` elements in docs are no longer rewritten).
