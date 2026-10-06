@@ -15,34 +15,36 @@ export interface RateLimitResult {
 
 export type RateLimiter = (request: Request) => RateLimitResult | Promise<RateLimitResult>;
 
-/** Headers that a platform sets itself and a client cannot forge through it. */
-const PLATFORM_HEADERS = ['cf-connecting-ip', 'fly-client-ip', 'x-nf-client-connection-ip'];
-
-/**
- * The client's IP, or `"anonymous"`.
- *
- * Platform-set headers win (Cloudflare, Fly, Netlify), then `x-real-ip`, then the *last*
- * `x-forwarded-for` entry: proxies append to that header, so its first entry is whatever the
- * client sent and must never be trusted. Vercel overwrites both headers, so they are safe there.
- * Behind any other setup, pass your own `key`.
- */
-export function clientKey(request: Request): string {
-  for (const name of PLATFORM_HEADERS) {
-    const value = request.headers.get(name)?.trim();
-    if (value) return value;
-  }
-  const realIp = request.headers.get('x-real-ip')?.trim();
-  if (realIp) return realIp;
-  const forwarded = request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim();
-  return forwarded || 'anonymous';
+export interface ClientKeyOptions {
+  /**
+   * The header that carries the client's IP and that your platform or proxy sets on every
+   * request, replacing whatever the client sent: `cf-connecting-ip` on Cloudflare,
+   * `fly-client-ip` on Fly.io, `x-nf-client-connection-ip` on Netlify. If it holds a list, the
+   * last entry (the one the nearest proxy added) is used. Default `x-forwarded-for`.
+   */
+  trustedHeader?: string;
 }
 
-export interface MemoryRateLimitOptions {
+/**
+ * The client's IP, read from one header, or `"anonymous"` when that header is missing.
+ *
+ * By default it is the *last* `x-forwarded-for` entry: proxies append to that header, so its
+ * last entry is the address the nearest proxy saw, while everything before it is whatever the
+ * client sent. That is right on Vercel (which overwrites the header) and behind one proxy that
+ * appends to it. Elsewhere, name the header your platform sets with `trustedHeader`; a header it
+ * does not set is passed through from the client, who can then pick a new key per request.
+ */
+export function clientKey(request: Request, options: ClientKeyOptions = {}): string {
+  const header = options.trustedHeader ?? 'x-forwarded-for';
+  return request.headers.get(header)?.split(',').at(-1)?.trim() || 'anonymous';
+}
+
+export interface MemoryRateLimitOptions extends ClientKeyOptions {
   /** Requests allowed per window. Default 10. */
   limit?: number;
   /** Window length in milliseconds. Default 60 000. */
   windowMs?: number;
-  /** Maps a request to a bucket. Default {@link clientKey}. */
+  /** Maps a request to a bucket, replacing {@link clientKey} and `trustedHeader`. */
   key?: (request: Request) => string;
   /** Buckets kept before the least recently used are evicted. Default 10 000. */
   maxKeys?: number;
@@ -63,7 +65,7 @@ export function memoryRateLimit(
 ): (request: Request) => Required<RateLimitResult> {
   const limit = options.limit ?? 10;
   const windowMs = options.windowMs ?? 60_000;
-  const key = options.key ?? clientKey;
+  const key = options.key ?? ((request: Request) => clientKey(request, options));
   const maxKeys = options.maxKeys ?? 10_000;
   const now = options.now ?? Date.now;
   if (!Number.isInteger(limit) || limit < 1) {
@@ -115,7 +117,8 @@ export interface UpstashRatelimitLike {
   }>;
 }
 
-export interface UpstashRateLimitOptions {
+export interface UpstashRateLimitOptions extends ClientKeyOptions {
+  /** Maps a request to an identifier, replacing {@link clientKey} and `trustedHeader`. */
   key?: (request: Request) => string;
   /**
    * Keeps the runtime alive for Upstash's background analytics write, e.g. Vercel's `waitUntil`
@@ -137,7 +140,7 @@ export function upstashRateLimit(
   ratelimit: UpstashRatelimitLike,
   options: UpstashRateLimitOptions = {},
 ): RateLimiter {
-  const key = options.key ?? clientKey;
+  const key = options.key ?? ((request: Request) => clientKey(request, options));
   return async (request) => {
     const result = await ratelimit.limit(key(request));
     if (result.pending) options.waitUntil?.(result.pending);

@@ -16,5 +16,7 @@ export const POST = createAskHandler({
   ...(embeddingProviderOptions ? { embeddingProviderOptions } : {}),
   siteName: 'the ask-my-site docs',
   ...(minSimilarity ? { retrieval: { minSimilarity } } : {}),
+  // Keyed by the last X-Forwarded-For entry, which Vercel sets. On Netlify, Cloudflare or Fly,
+  // pass `trustedHeader` (see "Rate limits and client IPs" in the ask-my-site README).
   rateLimit: memoryRateLimit({ limit: 20, windowMs: 60_000 }),
 });

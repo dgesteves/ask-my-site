@@ -51,7 +51,7 @@ That is the whole integration: five lines, imports aside. [Full setup](#full-set
 - **Any AI SDK model.** Embeddings through `embedMany`/`embed` and answers through `streamText`, from any provider package or an AI Gateway model string.
 - **Web-standard handler.** `(Request) => Promise<Response>` built on Web APIs only, so it mounts in Next.js route handlers, Hono, Bun, Deno or Cloudflare Workers. It streams the AI SDK UI message protocol, so `useChat` can consume it too.
 - **Accessible ⌘K dialog.** Radix Dialog and cmdk; focus management, `aria-live` answer, reduced motion, light and dark themes, unstyled-friendly.
-- **Production hygiene.** zod-validated input, body-size cap, pluggable rate limiting (in-memory or Upstash), masked model errors, keyword fallback when the embedding provider is down.
+- **Production hygiene.** zod-validated input, body-size cap, pluggable rate limiting (in-memory or Upstash) keyed on a header you choose to trust, masked model errors, keyword fallback when the embedding provider is down.
 - **Offline mock mode.** A deterministic embedder and a scripted extractive model run the whole pipeline with no key, for demos and tests.
 
 ## How it works
@@ -97,6 +97,7 @@ export const POST = createAskHandler({
   embeddingModel: openai.embedding('text-embedding-3-small'),
   embeddingProviderOptions: { openai: { dimensions: 512 } }, // same as the CLI
   siteName: 'Acme Docs',
+  // Keyed by client IP; on platforms other than Vercel, set `trustedHeader` (see below).
   rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000 }),
 });
 ```
@@ -212,7 +213,7 @@ export default {
 | `maxQuestionLength`        | `500`                       | Longer questions get a 400.                                                                                                                                                                                                    |
 | `maxBodyBytes`             | 64 KiB                      | Counted while reading, so a chunked upload cannot exhaust memory.                                                                                                                                                              |
 | `noAnswerMessage`          | "I don't know. I couldn't…" | Streamed when nothing is relevant.                                                                                                                                                                                             |
-| `rateLimit`                | none                        | `(request) => { success, limit?, remaining?, reset? }`, sync or async.                                                                                                                                                         |
+| `rateLimit`                | none                        | `(request) => { success, limit?, remaining?, reset? }`, sync or async. See [rate limits and client IPs](#rate-limits-and-client-ips).                                                                                          |
 | `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`, …                                                                                                                                            |
 | `headers`                  | none                        | Added to every response, including the 204 that answers a CORS preflight. Cross-origin: set `access-control-allow-origin` and `access-control-allow-headers: content-type`, and in Next.js also `export const OPTIONS = POST`. |
 | `onFinish`                 | none                        | `{ question, answer, sources, refused, retrieval, usage }` after each answer.                                                                                                                                                  |
@@ -231,7 +232,22 @@ data: {"type":"finish"}
 data: [DONE]
 ```
 
-Rate limiters: `memoryRateLimit({ limit, windowMs })` is a per-instance token bucket keyed by client IP; `upstashRateLimit(new Ratelimit({ … }))` adapts `@upstash/ratelimit` for a shared limit without ask-my-site depending on it. The default key reads platform headers first (Cloudflare, Fly, Netlify), then `x-real-ip`, then the last `x-forwarded-for` entry, never the client-controlled first one; pass `key` for any other proxy setup.
+Rate limiters: `memoryRateLimit({ limit, windowMs })` is a per-instance token bucket keyed by client IP; `upstashRateLimit(new Ratelimit({ … }))` adapts `@upstash/ratelimit` for a shared limit without ask-my-site depending on it. Both take `trustedHeader` and `key`, below.
+
+#### Rate limits and client IPs
+
+A rate limit is only as strong as its key. Both limiters key each request by the client IP read from **one** header, and a header can only be trusted if your platform sets it on every request, replacing whatever the client sent. Any other header passes through from the client unchanged, so trusting it lets a client pick a new key for every request and never be limited. ask-my-site cannot know which headers your platform controls, so it never guesses from a list: it reads the last entry of `X-Forwarded-For` unless you name the header with `trustedHeader`.
+
+| Where the handler runs                                     | Configure                                                                                                                                                           |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vercel                                                     | Nothing: Vercel overwrites `X-Forwarded-For` with the client IP.                                                                                                    |
+| Netlify                                                    | `trustedHeader: 'x-nf-client-connection-ip'`                                                                                                                        |
+| Cloudflare Workers, or an origin only Cloudflare can reach | `trustedHeader: 'cf-connecting-ip'`                                                                                                                                 |
+| Fly.io                                                     | `trustedHeader: 'fly-client-ip'`                                                                                                                                    |
+| Behind one reverse proxy you run                           | Nothing if it appends the peer address to `X-Forwarded-For` (nginx: `$proxy_add_x_forwarded_for`); otherwise the header it sets, e.g. `trustedHeader: 'x-real-ip'`. |
+| Exposed directly, with no proxy in front                   | Every header, `X-Forwarded-For` included, comes from the client. Put a proxy in front, or pass a `key` the client cannot forge, such as a signed-in user id.        |
+
+Use your platform's header even when others are present: on Vercel, for example, a client can send its own `cf-connecting-ip`. When the header holds a list, the last entry (added by the nearest proxy) is used, so with several proxies in a chain, name a header the outermost one sets. Requests that lack the header share one `"anonymous"` bucket rather than falling back to a header the client controls. `key: (request) => string` replaces the lookup entirely, for example to limit per signed-in user; `clientKey(request, { trustedHeader })` is exported for custom limiters.
 
 ### `<AskDialog />` and `useAsk()` from `ask-my-site/react`
 
@@ -282,7 +298,7 @@ Also exported: `fromHtml`, `fromDocuments`, `chunkDocument`, `checkIndex`, `pars
 
 **Where it stops scaling.** Everything is linear in corpus size: roughly 1.6 MB of index, 34 ms of cold load and 0.7 ms per query per 1,000 chunks of ~800 characters at 512 dimensions. That is comfortable to about 10,000 chunks and workable to about 50,000 (79 MB, 1.7 s cold start, 37 ms per query). Beyond that, or for content that changes per request or per user, use a vector database. If your platform limits function bundle size, load the index from a static URL instead of importing it: `index: () => fetch(url).then((r) => r.text())`.
 
-**Other limits.** The keyword side is English-leaning (stopwords, plural stripping); other languages rely on the embedding model. Answers are single-turn. MDX is reduced to text, so components that render content from props are invisible to the index. The HTML loader is a tag stripper that expects static-site-generator output, not arbitrary markup. `memoryRateLimit` is per instance.
+**Other limits.** The keyword side is English-leaning (stopwords, plural stripping); other languages rely on the embedding model. Answers are single-turn. MDX is reduced to text, so components that render content from props are invisible to the index. The HTML loader is a tag stripper that expects static-site-generator output, not arbitrary markup. `memoryRateLimit` is per instance, and either limiter keys on a client IP header that only your platform can vouch for (see [rate limits and client IPs](#rate-limits-and-client-ips)).
 
 ## Benchmarks
 
