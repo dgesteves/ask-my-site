@@ -1,0 +1,31 @@
+{
+  "name": "ask-my-site-example-nextjs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "index": "ask-my-site index content/docs --config ask-my-site.config.mjs",
+    "index:check": "ask-my-site index content/docs --config ask-my-site.config.mjs --check",
+    "predev": "pnpm index",
+    "dev": "next dev",
+    "prebuild": "pnpm index",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.83",
+    "ai": "^7.0.127",
+    "ask-my-site": "workspace:*",
+    "geist": "^1.7.2",
+    "marked": "^18.1.0",
+    "next": "16.3.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "6.0.3"
+  }
+}
