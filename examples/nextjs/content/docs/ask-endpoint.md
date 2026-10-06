@@ -8,11 +8,12 @@ order: 6
 
 ## What happens per request
 
-1. The body is validated: `{ "question": string }`, up to 500 characters.
+1. The body must be JSON (`content-type: application/json`), so another site cannot post to the endpoint from its visitors' browsers without a CORS preflight.
 2. The rate limiter runs, if one is configured.
-3. The question is embedded and retrieval runs over the in-memory index.
-4. If nothing is relevant, the "I don't know" message is streamed without calling the model.
-5. Otherwise the top sources are numbered and sent to the model with grounding instructions, and the answer streams back.
+3. The body is validated: `{ "question": string }`, up to 500 characters.
+4. The question is embedded and retrieval runs over the in-memory index.
+5. If nothing is relevant, the "I don't know" message is streamed without calling the model.
+6. Otherwise the top sources are numbered and sent to the model with grounding instructions, and the answer streams back.
 
 If embedding the question fails, the request falls back to keyword retrieval instead of failing.
 

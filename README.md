@@ -69,7 +69,7 @@ That is the whole integration: five lines, imports aside. [Full setup](#full-set
 
 **Request time** (`createAskHandler`, per question)
 
-1. Validate the body (zod), apply the rate limit, embed the question.
+1. Require a JSON body, apply the rate limit, validate the body (zod), embed the question.
 2. Search the index, loaded into memory once per server instance: BM25 over an inverted index and an exact cosine scan over the int8 matrix.
 3. Gate: keep only chunks with cosine ≥ 0.25 **or** keyword coverage ≥ 0.5, then fuse both rankings with reciprocal rank fusion. If nothing passes, stream the "I don't know" message and stop. The model is never called.
 4. Number the top sources (merging chunks of the same section), send them with grounding instructions to `streamText`, and stream back metadata, then the numbered sources, then the answer, which cites them as `[n]`.
@@ -219,7 +219,7 @@ export default {
 | `onFinish`                 | none                        | `{ question, answer, sources, refused, retrieval, usage }` after each answer.                                                                                                                                                  |
 | `onError`                  | `console.error`             | Handled errors: embedding fallbacks, model failures, misconfiguration.                                                                                                                                                         |
 
-The body is `{ "question": string }`; the `{ messages }` body that `useChat` sends is accepted too, using the last user message. Errors are JSON `{ error: { code, message } }` with 400, 405, 413, 429 (with `Retry-After` and `RateLimit-*` headers) or 500. A client that disconnects before the answer starts gets a bare 499 and is not reported as an error.
+The body is `{ "question": string }` sent as `application/json`; the `{ messages }` body that `useChat` sends is accepted too, using the last user message. Any other content type gets a 415: browsers only send a cross-origin POST without a CORS preflight when its type is `text/plain`, a form encoding or missing, so requiring JSON means another site's page cannot make its visitors' browsers spend your model budget unless your `headers` allow its origin. Errors are JSON `{ error: { code, message } }` with 400, 405, 413, 415, 429 (with `Retry-After` and `RateLimit-*` headers) or 500. A client that disconnects before the answer starts gets a bare 499 and is not reported as an error.
 
 The response is an [AI SDK UI message stream](https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol) (SSE):
 

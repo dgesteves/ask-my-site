@@ -45,6 +45,7 @@ export interface AskErrorBody {
     code:
       | 'method_not_allowed'
       | 'payload_too_large'
+      | 'unsupported_media_type'
       | 'invalid_json'
       | 'invalid_request'
       | 'rate_limited'
