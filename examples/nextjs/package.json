@@ -10,7 +10,8 @@
     "dev": "next dev",
     "prebuild": "pnpm index",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "eslint --max-warnings 0 ."
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.83",

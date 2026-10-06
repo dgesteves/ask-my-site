@@ -5,6 +5,9 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+// The example app is linted by its own `lint` script, after it is built: type-aware rules need
+// the package's dist types, the generated index and Next's route types, which a fresh clone lacks.
+// It reuses this file, and from its directory the `examples/**` ignore no longer matches.
 export default defineConfig(
   globalIgnores([
     '**/dist',
@@ -13,6 +16,7 @@ export default defineConfig(
     '**/next-env.d.ts',
     'bench/results',
     'test/fixtures',
+    'examples/**',
   ]),
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,

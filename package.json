@@ -72,7 +72,7 @@
     "screenshot": "node scripts/assets/screenshot.mjs",
     "example:build": "pnpm build && pnpm --filter ask-my-site-example-nextjs build",
     "example:dev": "pnpm build && pnpm --filter ask-my-site-example-nextjs dev",
-    "validate": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm check:package",
+    "validate": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm check:package && pnpm example:build && pnpm --filter ask-my-site-example-nextjs lint",
     "changeset": "changeset",
     "release": "pnpm build && changeset publish"
   },
