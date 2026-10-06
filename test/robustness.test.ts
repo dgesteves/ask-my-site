@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { chunkDocument, fromHtml, fromMarkdown, slugify } from '../src';
+import GithubSlugger from 'github-slugger';
+
+import { chunkDocument, createSlugger, fromHtml, fromMarkdown, slugify } from '../src';
 import type { SourceDocument } from '../src';
+import { seeded } from './helpers';
 
 const doc = (content: string, title = 'Page'): SourceDocument => ({
   id: 'page.md',
@@ -79,6 +82,81 @@ describe('headings', () => {
     expect(slugify('_emphasis_ and __strong__')).toBe('emphasis-and-strong');
     const [chunk] = chunkDocument(doc('## `max_tokens`\n\nBody.'));
     expect(chunk).toMatchObject({ heading: 'max_tokens', anchor: 'max_tokens' });
+  });
+
+  it('slugs exactly like github-slugger, whitespace and all', () => {
+    // [heading Markdown, the text GitHub renders for it]
+    const cases: [string, string][] = [
+      ['a  b', 'a  b'],
+      ['x\ty', 'x\ty'],
+      ['a\u00a0b', 'a\u00a0b'],
+      ['A \u2014 B', 'A \u2014 B'],
+      ['x\u00b2 and \u00bd', 'x\u00b2 and \u00bd'],
+      ['foo_bar_', 'foo_bar_'],
+      ['_foo_bar', '_foo_bar'],
+      ['a _ b', 'a _ b'],
+      ['snake_case_name', 'snake_case_name'],
+      ['_emphasis_ and __strong__', 'emphasis and strong'],
+      ['__init__ method', 'init method'],
+      ['`__init__` method', '__init__ method'],
+      ['__init__.py', 'init.py'],
+      ['foo\\_bar', 'foo_bar'],
+      ['***both*** and **_mixed_**', 'both and mixed'],
+      ['*a **b** c*', 'a b c'],
+      ['a * b * c', 'a * b * c'],
+      ['`` `code` ``', '`code`'],
+      ['[link](http://a) text', 'link text'],
+      ['C++ & C#', 'C++ & C#'],
+      ['emoji \u{1F389} test', 'emoji \u{1F389} test'],
+      ['Foo', 'Foo'],
+      ['Foo', 'Foo'],
+      ['Foo-1', 'Foo-1'],
+      ['', ''],
+      ['', ''],
+    ];
+    const ours = createSlugger();
+    const github = new GithubSlugger();
+    for (const [markdown, rendered] of cases) {
+      expect([markdown, ours(markdown)]).toEqual([markdown, github.slug(rendered)]);
+    }
+  });
+
+  it('agrees with github-slugger on any text without Markdown syntax', () => {
+    const random = seeded(7);
+    const alphabet = [
+      ...Array.from('aZ09 -.,!?:;\'"()/@&%$+='),
+      '  ',
+      '\t',
+      '\u00a0',
+      '\u3000',
+      '\u00e9',
+      'e\u0301',
+      '\u00b2',
+      '\u216b',
+      '\u0663',
+      '\u4e2d',
+      '\u{1F389}',
+      '\u2014',
+      '\u{31350}',
+      '\u0130',
+    ];
+    const ours = createSlugger();
+    const github = new GithubSlugger();
+    for (let i = 0; i < 2000; i += 1) {
+      let text = '';
+      for (let j = Math.floor(random() * 12); j >= 0; j -= 1) {
+        text += alphabet[Math.floor(random() * alphabet.length)] ?? '';
+      }
+      expect([text, ours(text)]).toEqual([text, github.slug(text)]);
+    }
+  });
+
+  it('anchors headings by their exact text, collapsing whitespace only for display', () => {
+    const chunks = chunkDocument(doc('## a  b\n\nA.\n\n## foo_bar_\n\nB.'));
+    expect(chunks.map((c) => [c.heading, c.anchor])).toEqual([
+      ['a b', 'a--b'],
+      ['foo_bar_', 'foo_bar_'],
+    ]);
   });
 
   it('accepts explicit ids with dots, colons and non-ASCII letters', () => {
