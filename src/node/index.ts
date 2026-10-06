@@ -77,10 +77,18 @@ export async function loadDirectory(
       fallbackTitle: titleFromPath(path),
     };
     const ext = extname(path).toLowerCase();
-    const document =
-      ext === '.html' || ext === '.htm'
-        ? fromHtml(source, meta)
-        : fromMarkdown(source, { ...meta, mdx: ext === '.mdx' });
+    let document: SourceDocument | null;
+    try {
+      document =
+        ext === '.html' || ext === '.htm'
+          ? fromHtml(source, meta)
+          : fromMarkdown(source, { ...meta, mdx: ext === '.mdx' });
+    } catch (error) {
+      // Invalid frontmatter YAML, most often: say which file.
+      throw new Error(`${path}: ${error instanceof Error ? error.message : String(error)}`, {
+        cause: error,
+      });
+    }
     if (document) documents.push(document);
   }
   return documents;

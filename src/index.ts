@@ -22,7 +22,13 @@ export { CHUNKER_VERSION, DEFAULT_CHUNKING, chunkDocument, chunkSearchText } fro
 export { createSlugger, slugify } from './text/slug';
 export { tokenize } from './text/tokenize';
 
-export { buildIndex, checkIndex, embeddingModelId, sameEmbeddingModel } from './build';
+export {
+  buildIndex,
+  checkIndex,
+  embeddingModelId,
+  embeddingSettingsKey,
+  sameEmbeddingModel,
+} from './build';
 export type {
   BuildIndexOptions,
   BuildIndexResult,

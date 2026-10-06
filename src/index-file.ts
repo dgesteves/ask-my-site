@@ -32,6 +32,11 @@ export interface IndexEmbedding {
   /** Model id as reported by the model (`text-embedding-3-small`, `openai/text-embedding-3-small`). */
   model: string;
   dimensions: number;
+  /**
+   * Fingerprint of the embedding provider options, when there were any. Vectors are only reused
+   * across builds when it matches, because options like `dimensions` change the vectors.
+   */
+  settings?: string;
 }
 
 export interface AskIndexFile {
@@ -73,7 +78,11 @@ export function validateIndexFile(value: unknown): AskIndexFile {
   }
   if (typeof value.contentHash !== 'string') fail('contentHash', 'a string');
   const { chunking, embedding, documents, chunks } = value;
-  if (!isRecord(chunking) || typeof chunking.maxChars !== 'number') {
+  if (
+    !isRecord(chunking) ||
+    typeof chunking.maxChars !== 'number' ||
+    typeof chunking.overlap !== 'number'
+  ) {
     fail('chunking', 'an object with numeric maxChars and overlap');
   }
   if (embedding !== null) {
@@ -82,6 +91,9 @@ export function validateIndexFile(value: unknown): AskIndexFile {
     }
     if (!Number.isInteger(embedding.dimensions) || Number(embedding.dimensions) <= 0) {
       fail('embedding.dimensions', 'a positive integer');
+    }
+    if (embedding.settings !== undefined && typeof embedding.settings !== 'string') {
+      fail('embedding.settings', 'a string');
     }
   }
   if (!Array.isArray(documents)) fail('documents', 'an array');
@@ -102,6 +114,10 @@ export function validateIndexFile(value: unknown): AskIndexFile {
       fail(`${at}.doc`, 'the index of an entry in documents');
     }
     if (typeof chunk.heading !== 'string') fail(`${at}.heading`, 'a string');
+    if (typeof chunk.hash !== 'string') fail(`${at}.hash`, 'a string');
+    if (chunk.anchor !== undefined && typeof chunk.anchor !== 'string') {
+      fail(`${at}.anchor`, 'a string when present');
+    }
     if (embedding !== null && typeof chunk.vector !== 'string') {
       fail(`${at}.vector`, 'a base64 string, because the index declares an embedding model');
     }
@@ -142,7 +158,13 @@ export function serializeIndexFile(index: AskIndexFile): string {
     `  "format": ${line(index.format)},`,
     `  "contentHash": ${line(index.contentHash)},`,
     `  "chunking": ${line({ maxChars: index.chunking.maxChars, overlap: index.chunking.overlap })},`,
-    `  "embedding": ${line(index.embedding && { model: index.embedding.model, dimensions: index.embedding.dimensions })},`,
+    `  "embedding": ${line(
+      index.embedding && {
+        model: index.embedding.model,
+        dimensions: index.embedding.dimensions,
+        ...(index.embedding.settings === undefined ? {} : { settings: index.embedding.settings }),
+      },
+    )},`,
     `  "documents": ${list(documents)},`,
     `  "chunks": ${list(chunks)}`,
     '}',
