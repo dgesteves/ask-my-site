@@ -1,0 +1,137 @@
+{
+  "name": "ask-my-site",
+  "version": "0.1.0",
+  "description": "A drop-in ⌘K ask agent for any website. Build-time static index, hybrid BM25 + vector retrieval in memory, streaming answers with citations. No vector database.",
+  "keywords": [
+    "rag",
+    "ai",
+    "ai-sdk",
+    "retrieval",
+    "bm25",
+    "embeddings",
+    "command-palette",
+    "docs-search",
+    "edge",
+    "react"
+  ],
+  "homepage": "https://github.com/dgesteves/ask-my-site#readme",
+  "bugs": "https://github.com/dgesteves/ask-my-site/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dgesteves/ask-my-site.git"
+  },
+  "license": "MIT",
+  "author": "Diogo Esteves (https://github.com/dgesteves)",
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./react/styles.css": "./dist/styles.css",
+    "./mock": {
+      "types": "./dist/mock.d.ts",
+      "default": "./dist/mock.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "ask-my-site": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint": "eslint --max-warnings 0 .",
+    "lint:fix": "eslint --fix .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:package": "publint --strict && attw --pack . --profile esm-only",
+    "bench": "pnpm build && node bench/run.mjs",
+    "assets": "node scripts/assets/architecture.mjs",
+    "screenshot": "node scripts/assets/screenshot.mjs",
+    "example:build": "pnpm build && pnpm --filter ask-my-site-example-nextjs build",
+    "example:dev": "pnpm build && pnpm --filter ask-my-site-example-nextjs dev",
+    "validate": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm check:package",
+    "changeset": "changeset",
+    "release": "pnpm build && changeset publish"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.23",
+    "cmdk": "^1.1.1",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@ai-sdk/openai": "^4.0.83",
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.3",
+    "@eslint/js": "^10.0.1",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^24.19.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "ai": "^7.0.127",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "jsdom": "^30.1.2",
+    "prettier": "^3.9.9",
+    "publint": "^0.3.25",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tsdown": "^0.23.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^5.0.3"
+  },
+  "peerDependencies": {
+    "@ai-sdk/openai": ">=4",
+    "ai": "^7.0.0",
+    "react": "^18.3.0 || ^19.0.0",
+    "react-dom": "^18.3.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@ai-sdk/openai": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "packageManager": "pnpm@12.9.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

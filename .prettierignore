@@ -1,0 +1,9 @@
+dist
+coverage
+pnpm-lock.yaml
+.next
+.changeset/*.md
+CHANGELOG.md
+*.svg
+examples/nextjs/ask-index.json
+test/fixtures/**/*.html
