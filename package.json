@@ -67,7 +67,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:package": "publint --strict && attw --pack . --profile esm-only",
-    "bench": "pnpm build && node bench/run.mjs",
+    "bench": "pnpm build && node --expose-gc bench/run.mjs",
     "assets": "node scripts/assets/architecture.mjs",
     "screenshot": "node scripts/assets/screenshot.mjs",
     "example:build": "pnpm build && pnpm --filter ask-my-site-example-nextjs build",
