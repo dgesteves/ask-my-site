@@ -22,9 +22,11 @@ ask-my-site indexes your pages at build time into one static JSON file that you 
 Install, then index your content into `ask-index.json`:
 
 ```sh
-npm i ask-my-site ai @ai-sdk/openai
+npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
 npx ask-my-site index ./content -e openai:text-embedding-3-small
 ```
+
+`@radix-ui/react-dialog` and `cmdk` (with React 18.3 or 19) are only for the dialog. They are optional peer dependencies, so a project that only mounts the handler can leave them out and installs no React.
 
 Mount the endpoint in `app/api/ask/route.ts` (any `Request → Response` runtime works):
 
@@ -150,14 +152,14 @@ Without `OPENAI_API_KEY` it runs in mock mode: `mockEmbeddingModel()` hashes wor
 
 Five imports and a CLI. Each import is tree-shakeable, and only `ask-my-site/node` and the CLI touch Node built-ins.
 
-| Import               | For                                                                    |
-| -------------------- | ---------------------------------------------------------------------- |
-| `ask-my-site`        | Loaders, chunking, `buildIndex`, `checkIndex`, `loadIndex`, `retrieve` |
-| `ask-my-site/node`   | `loadDirectory`, `readIndexFile`, `writeIndexFile`, config types       |
-| `ask-my-site/server` | `createAskHandler`, rate limiters, prompt helpers                      |
-| `ask-my-site/react`  | `AskDialog`, `useAsk`, `AskAnswer`                                     |
-| `ask-my-site/mock`   | `mockEmbeddingModel`, `mockLanguageModel`                              |
-| `ask-my-site` (bin)  | `ask-my-site index`                                                    |
+| Import               | For                                                                           |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `ask-my-site`        | Loaders, chunking, `buildIndex`, `checkIndex`, `loadIndex`, `retrieve`        |
+| `ask-my-site/node`   | `loadDirectory`, `readIndexFile`, `writeIndexFile`, config types              |
+| `ask-my-site/server` | `createAskHandler`, rate limiters, prompt helpers                             |
+| `ask-my-site/react`  | `AskDialog`, `useAsk`, `AskAnswer`; needs `@radix-ui/react-dialog` and `cmdk` |
+| `ask-my-site/mock`   | `mockEmbeddingModel`, `mockLanguageModel`                                     |
+| `ask-my-site` (bin)  | `ask-my-site index`                                                           |
 
 ### CLI
 
