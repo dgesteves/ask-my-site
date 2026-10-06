@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { AskAnswer, citedSourceIds } from './answer';
+import { AskAnswer, citedSourceIds, safeHref } from './answer';
 import { useAsk, type AskState, type UseAskOptions } from './use-ask';
 
 export type AskDialogSlot =
@@ -114,13 +114,12 @@ export function AskDialog({
 
   const setOpen = useCallback(
     (next: boolean) => {
-      if (next && !openRef.current) {
-        const active = document.activeElement;
-        returnFocusRef.current =
-          active instanceof HTMLElement && active !== document.body ? active : null;
+      // Controlled: the parent decides, and `openRef` follows the prop. Uncontrolled: update the
+      // ref now, so two shortcut presses in one tick cannot both open.
+      if (openProp === undefined) {
+        openRef.current = next;
+        setUncontrolledOpen(next);
       }
-      openRef.current = next;
-      if (openProp === undefined) setUncontrolledOpen(next);
       onOpenChange?.(next);
     },
     [openProp, onOpenChange],
@@ -173,13 +172,21 @@ export function AskDialog({
           className={cx('ask-dialog', classNames.content)}
           data-ask-theme={themeAttribute}
           aria-describedby={descriptionId}
+          onOpenAutoFocus={() => {
+            // Runs before focus moves in, however the dialog was opened (shortcut, trigger,
+            // controlled prop), so this is still the element to give focus back to.
+            const active = document.activeElement;
+            returnFocusRef.current =
+              active instanceof HTMLElement && active !== document.body ? active : null;
+          }}
           onCloseAutoFocus={(event) => {
             // Opened by the shortcut there is no trigger to return to, so Radix would drop focus
-            // on <body>. Return it to whatever had it instead.
+            // on <body>. Return it to whatever had it, without scrolling away from a citation
+            // target the visitor just jumped to.
             const target = returnFocusRef.current;
             if (target?.isConnected) {
               event.preventDefault();
-              target.focus();
+              target.focus({ preventScroll: true });
             }
           }}
         >
@@ -313,29 +320,32 @@ function AnswerPanel({
         <nav aria-label="Sources" className={cx('ask-sources', classNames.sources)}>
           <h2 className="ask-sources-heading">Sources</h2>
           <ol>
-            {state.sources.map((source) => (
-              <li key={source.id}>
-                <a
-                  href={source.url}
-                  className="ask-source"
-                  data-cited={cited ? cited.has(source.id) : undefined}
-                  onClick={(event) => {
-                    onNavigate(source.url, event);
-                  }}
-                >
-                  <span className="ask-source-id" aria-hidden="true">
-                    {source.id}
-                  </span>
-                  <span className="ask-source-text">
-                    <span className="ask-source-title">{source.title}</span>
-                    {source.heading ? (
-                      <span className="ask-source-heading">{source.heading}</span>
-                    ) : null}
-                  </span>
-                  <span className="ask-source-url">{source.url}</span>
-                </a>
-              </li>
-            ))}
+            {state.sources.map((source) => {
+              const href = safeHref(source.url);
+              return (
+                <li key={source.id}>
+                  <a
+                    {...(href ? { href } : {})}
+                    className="ask-source"
+                    data-cited={cited ? cited.has(source.id) : undefined}
+                    onClick={(event) => {
+                      if (href) onNavigate(href, event);
+                    }}
+                  >
+                    <span className="ask-source-id" aria-hidden="true">
+                      {source.id}
+                    </span>
+                    <span className="ask-source-text">
+                      <span className="ask-source-title">{source.title}</span>
+                      {source.heading ? (
+                        <span className="ask-source-heading">{source.heading}</span>
+                      ) : null}
+                    </span>
+                    <span className="ask-source-url">{source.url}</span>
+                  </a>
+                </li>
+              );
+            })}
           </ol>
         </nav>
       ) : null}
