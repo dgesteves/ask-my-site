@@ -47,7 +47,7 @@
     --ask-accent-line: rgb(34 211 238 / 0.35);
     --ask-accent-fg: #0d0f12;
     --ask-danger: #f0468a;
-    --ask-scrim: rgb(5 6 8 / 0.7);
+    --ask-scrim: rgb(5 6 8 / 0.55);
     --ask-shadow: 0 24px 80px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.02);
     color-scheme: dark;
   }
@@ -67,7 +67,7 @@
   --ask-accent-line: rgb(34 211 238 / 0.35);
   --ask-accent-fg: #0d0f12;
   --ask-danger: #f0468a;
-  --ask-scrim: rgb(5 6 8 / 0.7);
+  --ask-scrim: rgb(5 6 8 / 0.55);
   --ask-shadow: 0 24px 80px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.02);
   color-scheme: dark;
 }
@@ -89,7 +89,7 @@
   inset: 0;
   z-index: 1000;
   background: var(--ask-scrim);
-  backdrop-filter: blur(3px);
+  backdrop-filter: blur(2px);
 }
 
 .ask-dialog {
@@ -445,6 +445,15 @@
 .ask-source:hover {
   background: var(--ask-raised);
   border-color: var(--ask-accent-line);
+}
+
+.ask-source[data-cited='false'] {
+  opacity: 0.55;
+}
+
+.ask-source[data-cited='false']:hover,
+.ask-source[data-cited='false']:focus-visible {
+  opacity: 1;
 }
 
 .ask-source-id {
