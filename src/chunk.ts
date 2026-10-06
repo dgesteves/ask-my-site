@@ -1,31 +1,23 @@
+import { createFenceScanner, createFenceTracker, parseAtxHeading } from './text/markdown';
 import { createSlugger, plainHeading } from './text/slug';
 import type { Chunk, ChunkingOptions, SourceDocument } from './types';
 
 export const DEFAULT_CHUNKING = { maxChars: 1200, overlap: 150 } as const;
 
 /** Bumped whenever chunk boundaries change for the same input, which invalidates every index. */
-export const CHUNKER_VERSION = 1;
+export const CHUNKER_VERSION = 2;
 
-const HEADING = /^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/;
-const EXPLICIT_ANCHOR = /[ \t]*\{#([\w-]+)\}[ \t]*$/;
-const FENCE_OPEN = /^[ \t]{0,3}(`{3,}|~{3,})/;
-const FENCE_CLOSE = /^[ \t]{0,3}(`{3,}|~{3,})[ \t]*$/;
 const SENTENCE_END = /(?<=[.!?:;])\s+/;
+// Ids from `{#id}` and HTML `id` attributes: anything without whitespace or braces.
+const EXPLICIT_ID = /^[^\s{}]+$/;
+const FENCE_LINE = /^ {0,3}(?:`{3,}|~{3,})/m;
 
-/** Tracks fenced code blocks line by line. Returns true while `line` is inside (or opens) one. */
-function createFenceTracker(): (line: string) => boolean {
-  let fence: string | null = null;
-  return (line) => {
-    if (fence === null) {
-      const open = FENCE_OPEN.exec(line)?.[1];
-      if (open) fence = open;
-      return open !== undefined;
-    }
-    const close = FENCE_CLOSE.exec(line)?.[1];
-    if (close !== undefined && close.startsWith(fence.charAt(0)) && close.length >= fence.length)
-      fence = null;
-    return true;
-  };
+/** Splits `Title {#custom-id}` into the title and the id, if the id is present and valid. */
+function explicitAnchor(text: string): { text: string; id?: string } {
+  if (!text.endsWith('}')) return { text };
+  const open = text.lastIndexOf('{#');
+  const id = open === -1 ? '' : text.slice(open + 2, -1);
+  return EXPLICIT_ID.test(id) ? { text: text.slice(0, open).trimEnd(), id } : { text };
 }
 
 interface Section {
@@ -98,16 +90,20 @@ function splitSections(document: SourceDocument): Section[] {
   const inFence = createFenceTracker();
 
   for (const line of document.content.replace(/\r\n?/g, '\n').split('\n')) {
-    const heading = inFence(line) ? null : HEADING.exec(line);
-    if (!heading?.[1] || !heading[2]) {
+    const heading = inFence(line) ? null : parseAtxHeading(line);
+    if (!heading) {
       sections.at(-1)?.lines.push(line);
       continue;
     }
 
-    const level = heading[1].length;
-    const explicit = EXPLICIT_ANCHOR.exec(heading[2]);
-    const text = plainHeading(explicit ? heading[2].slice(0, explicit.index) : heading[2]);
-    const anchor = explicit?.[1] ?? slug(text);
+    const { level } = heading;
+    const explicit = explicitAnchor(heading.text);
+    const text = plainHeading(explicit.text);
+    if (!text) {
+      sections.at(-1)?.lines.push(line);
+      continue;
+    }
+    const anchor = explicit.id ?? slug(text);
     while (stack.length > 0 && (stack.at(-1)?.level ?? 0) >= level) stack.pop();
     // A level-one heading that repeats the page title adds nothing to a citation.
     if (!(level === 1 && text.toLowerCase() === title)) stack.push({ level, text, anchor });
@@ -174,7 +170,9 @@ function packSection(lines: string[], maxChars: number, overlap: number): string
       }
       const previous = current || chunks.at(-1) || '';
       flush();
-      const tail = overlapTail(previous, Math.min(overlap, maxChars - piece.length - 2));
+      let tail = overlapTail(previous, Math.min(overlap, maxChars - piece.length - 2));
+      // Never carry a fence line into the next chunk: it would flip code and prose there.
+      if (FENCE_LINE.test(tail)) tail = '';
       current = tail ? `${tail}\n\n${piece}` : piece;
     }
   }
@@ -184,9 +182,9 @@ function packSection(lines: string[], maxChars: number, overlap: number): string
 
 /** Splits an oversized block by line (lists, tables, code), then by sentence, then by word. */
 function splitBlock(block: Block, maxChars: number): string[] {
+  if (block.code) return splitCode(block.text, maxChars);
   const units = block.text.split('\n').flatMap((line) => {
     if (line.length <= maxChars) return [line];
-    if (block.code) return splitWords(line, maxChars);
     return pack(
       line.split(SENTENCE_END).flatMap((s) => splitWords(s, maxChars)),
       ' ',
@@ -194,6 +192,21 @@ function splitBlock(block: Block, maxChars: number): string[] {
     );
   });
   return pack(units, '\n', maxChars).filter((piece) => piece.trim());
+}
+
+/**
+ * Splits a fenced code block by line and re-fences every piece with the original opening line,
+ * so each chunk holds well-formed code that cannot flip the code and prose that follow it.
+ */
+function splitCode(text: string, maxChars: number): string[] {
+  const lines = text.split('\n');
+  const opener = lines[0] ?? '```';
+  const fence = /^ {0,3}(`{3,}|~{3,})/.exec(opener)?.[1] ?? '```';
+  const scan = createFenceScanner();
+  const body = lines.filter((line) => scan(line) === 'inside');
+  const budget = Math.max(40, maxChars - opener.length - fence.length - 2);
+  const units = body.flatMap((line) => (line.length > budget ? splitWords(line, budget) : [line]));
+  return pack(units, '\n', budget).map((piece) => `${opener}\n${piece}\n${fence}`);
 }
 
 /** Greedily joins units with `separator` into pieces no longer than `maxChars`. */
