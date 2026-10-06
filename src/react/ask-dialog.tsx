@@ -65,6 +65,7 @@ function statusMessage(state: AskState): string {
       return 'Writing an answer…';
     case 'done':
       if (state.refused) return 'No answer found on this site.';
+      if (state.truncated) return 'Answer ready, but cut short at its length limit.';
       return `Answer ready, citing ${String(state.sources.length)} ${state.sources.length === 1 ? 'source' : 'sources'}.`;
     case 'error':
       return state.error?.message ?? 'Something went wrong.';
@@ -111,6 +112,13 @@ export function AskDialog({
   useEffect(() => {
     openRef.current = open;
   }, [open]);
+
+  // Closing the dialog, however it happens, cancels the answer in flight: nobody is reading it,
+  // and the model would otherwise keep generating (and billing) to the end.
+  const { stop } = state;
+  useEffect(() => {
+    if (!open) stop();
+  }, [open, stop]);
 
   const setOpen = useCallback(
     (next: boolean) => {
@@ -300,6 +308,10 @@ function AnswerPanel({
         )}
         {streaming ? <span className="ask-caret" aria-hidden="true" /> : null}
       </div>
+
+      {state.status === 'done' && state.truncated ? (
+        <p className="ask-truncated">This answer reached its length limit and may be incomplete.</p>
+      ) : null}
 
       {state.error ? (
         <div className="ask-error" role="alert">

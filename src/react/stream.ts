@@ -5,8 +5,11 @@ export interface AskStreamHandlers {
   source?: (source: AskSource) => void;
   delta?: (text: string) => void;
   error?: (message: string) => void;
-  /** The server finished the message. A stream that ends without it was cut off. */
-  finish?: () => void;
+  /**
+   * The server finished the message, with the model's finish reason when it sent one (`"length"`
+   * means the answer hit the output limit). A stream that ends without it was cut off.
+   */
+  finish?: (finishReason?: string) => void;
 }
 
 type Part = Record<string, unknown> & { type?: unknown };
@@ -51,7 +54,7 @@ function dispatch(part: Part, on: AskStreamHandlers): void {
       on.error?.(typeof part.errorText === 'string' ? part.errorText : 'The stream failed.');
       break;
     case 'finish':
-      on.finish?.();
+      on.finish?.(typeof part.finishReason === 'string' ? part.finishReason : undefined);
       break;
     default:
       // Unknown parts (step markers, future additions) are ignored, not errors.

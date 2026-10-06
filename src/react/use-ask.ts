@@ -24,6 +24,11 @@ export interface AskState {
   sources: AskSource[];
   /** True when the server found nothing relevant and answered "I don't know". */
   refused: boolean;
+  /**
+   * True when the answer stopped at the model's output limit (`maxOutputTokens`), so it is
+   * probably incomplete even though `status` is `done`.
+   */
+  truncated: boolean;
   retrieval: 'hybrid' | 'keyword' | null;
   error: AskError | null;
 }
@@ -54,6 +59,7 @@ const INITIAL: AskState = {
   answer: '',
   sources: [],
   refused: false,
+  truncated: false,
   retrieval: null,
   error: null,
 };
@@ -186,8 +192,8 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     const frames = frameScheduler();
     let answer = '';
     let streamError: string | null = null;
-    // An object, so the flag set inside the stream callback is visible to control-flow analysis.
-    const progress = { finished: false };
+    // An object, so the flags set inside the stream callback are visible to control-flow analysis.
+    const progress = { finished: false, truncated: false };
     try {
       await readAskStream(response.body, {
         metadata: ({ refused, retrieval }) => {
@@ -206,8 +212,9 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
         error: (message) => {
           streamError = message;
         },
-        finish: () => {
+        finish: (finishReason) => {
           progress.finished = true;
+          progress.truncated = finishReason === 'length';
         },
       });
     } catch (error) {
@@ -223,7 +230,7 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     }
     commit(
       streamError === null
-        ? { status: 'done', answer }
+        ? { status: 'done', answer, truncated: progress.truncated }
         : { status: 'error', answer, error: { kind: 'stream', message: streamError } },
     );
     onFinish?.(current);

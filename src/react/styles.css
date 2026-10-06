@@ -392,6 +392,12 @@
   border-radius: 1px;
 }
 
+.ask-truncated {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--ask-muted);
+}
+
 .ask-error {
   display: flex;
   gap: 12px;
