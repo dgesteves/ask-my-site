@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { simulateReadableStream } from 'ai';
+import { MockLanguageModelV4 } from 'ai/test';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildIndex } from '../src';
@@ -69,6 +71,36 @@ describe('useAsk', () => {
     await act(() => result.current.ask('Who won the 1998 World Cup final?'));
     expect(result.current).toMatchObject({ status: 'done', refused: true, sources: [] });
     expect(result.current.answer).toContain("I don't know");
+  });
+
+  it('flags an answer the model cut off at its output limit', async () => {
+    const atLimit = new MockLanguageModelV4({
+      doStream: () =>
+        Promise.resolve({
+          stream: simulateReadableStream({
+            chunks: [
+              { type: 'text-start' as const, id: 't' },
+              { type: 'text-delta' as const, id: 't', delta: 'To install it, first run the' },
+              { type: 'text-end' as const, id: 't' },
+              {
+                type: 'finish' as const,
+                finishReason: { unified: 'length' as const, raw: 'max_tokens' },
+                usage: {
+                  inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+                  outputTokens: { total: 800, text: 800, reasoning: 0 },
+                },
+              },
+            ],
+          }),
+        }),
+    });
+    const { result } = renderHook(() => useAsk({ fetch: handlerFetch({ model: atLimit }) }));
+    await act(() => result.current.ask('How do I install with pnpm?'));
+    expect(result.current).toMatchObject({
+      status: 'done',
+      truncated: true,
+      answer: 'To install it, first run the',
+    });
   });
 
   it('maps rate limits, HTTP and network failures to typed errors', async () => {

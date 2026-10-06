@@ -24,4 +24,4 @@ Import `ask-my-site/react/styles.css` for the default theme, which follows the s
 
 ## The useAsk hook
 
-`useAsk()` returns `ask`, `stop` and `reset`, plus the current `status`, `question`, `answer`, `sources`, `refused` flag and a typed `error`. Errors distinguish rate limiting, HTTP failures, network failures and interrupted streams.
+`useAsk()` returns `ask`, `stop` and `reset`, plus the current `status`, `question`, `answer`, `sources`, `refused` flag, `truncated` flag (the answer hit the model's output limit) and a typed `error`. Errors distinguish rate limiting, HTTP failures, network failures and interrupted streams. Closing the dialog stops the answer in flight.

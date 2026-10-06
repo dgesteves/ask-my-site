@@ -171,6 +171,87 @@ describe('useAsk edge cases', () => {
   });
 });
 
+describe('answers that hit the output limit', () => {
+  const answer = (finishReason: string) =>
+    streamingFetch([
+      { type: 'start', messageMetadata: { refused: false, retrieval: 'hybrid' } },
+      { type: 'text-delta', id: 't', delta: 'To install it, first run the' },
+      { type: 'finish', finishReason },
+    ]);
+
+  it('flags a length-truncated answer, and only that', async () => {
+    const onFinish = vi.fn();
+    const truncated = renderHook(() => useAsk({ fetch: answer('length'), onFinish }));
+    await act(() => truncated.result.current.ask('q'));
+    expect(truncated.result.current).toMatchObject({
+      status: 'done',
+      truncated: true,
+      answer: 'To install it, first run the',
+      error: null,
+    });
+    expect(onFinish.mock.calls[0]?.[0]).toMatchObject({ truncated: true });
+
+    const complete = renderHook(() => useAsk({ fetch: answer('stop') }));
+    await act(() => complete.result.current.ask('q'));
+    expect(complete.result.current).toMatchObject({ status: 'done', truncated: false });
+  });
+
+  it('says so in the dialog', async () => {
+    const user = userEvent.setup();
+    render(<AskDialog defaultOpen fetch={answer('length')} />);
+    await user.type(screen.getByRole('combobox'), 'How do I install it?{Enter}');
+    expect(await screen.findByText(/reached its length limit/)).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toMatch(/cut short/);
+  });
+});
+
+describe('AskDialog closing', () => {
+  it('cancels the request in flight when it closes', async () => {
+    let signal: AbortSignal | undefined;
+    const fetch = vi.fn((_: unknown, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return streamingFetch(
+        [
+          { type: 'start', messageMetadata: { refused: false, retrieval: 'hybrid' } },
+          { type: 'text-delta', id: 't', delta: 'Hello ' },
+        ],
+        { close: false },
+      )();
+    });
+    const user = userEvent.setup();
+    render(<AskDialog defaultOpen fetch={fetch} />);
+    await user.type(screen.getByRole('combobox'), 'question{Enter}');
+    await waitFor(() => {
+      expect(signal).toBeDefined();
+    });
+    expect(signal?.aborted).toBe(false);
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('cancels it when a controlling parent closes the dialog', async () => {
+    let signal: AbortSignal | undefined;
+    const fetch = vi.fn((_: unknown, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return streamingFetch([], { close: false })();
+    });
+    const user = userEvent.setup();
+    const { rerender } = render(<AskDialog open fetch={fetch} />);
+    await user.type(screen.getByRole('combobox'), 'question{Enter}');
+    await waitFor(() => {
+      expect(signal).toBeDefined();
+    });
+    rerender(<AskDialog open={false} fetch={fetch} />);
+    await waitFor(() => {
+      expect(signal?.aborted).toBe(true);
+    });
+  });
+});
+
 describe('AskDialog in controlled mode', () => {
   it('returns focus to the opener when the parent opens and closes it', async () => {
     const user = userEvent.setup();
