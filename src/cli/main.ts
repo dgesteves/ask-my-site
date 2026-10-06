@@ -289,7 +289,9 @@ export async function main(args: string[], io: CliIO): Promise<number> {
 
     const chunking: ChunkingOptions = { ...config.chunking, ...flags.chunking };
     const out = resolve(io.cwd, flags.out);
-    const outLabel = relative(io.cwd, out) || flags.out;
+    // Paths inside the working directory print relative; anything else prints absolute.
+    const relativeOut = relative(io.cwd, out);
+    const outLabel = relativeOut && !relativeOut.startsWith('..') ? relativeOut : out;
 
     if (flags.check) {
       const existing = await readIndexFile(out);
