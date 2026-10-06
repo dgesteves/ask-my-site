@@ -1,6 +1,11 @@
 import { parse as parseYaml } from 'yaml';
 
-import { mapOutsideCodeSpans, parseAtxHeading, splitFenced } from '../text/markdown';
+import {
+  mapOutsideCodeSpans,
+  parseAtxHeading,
+  removeDelimited,
+  splitFenced,
+} from '../text/markdown';
 import { plainHeading } from '../text/slug';
 import type { SourceDocument } from '../types';
 
@@ -75,7 +80,7 @@ function firstH1(segments: ReturnType<typeof splitFenced>): string | undefined {
 }
 
 function cleanProse(prose: string, mdx: boolean): string {
-  return mapOutsideCodeSpans(prose.replace(/<!--[\s\S]*?-->/g, ''), (text) =>
+  return mapOutsideCodeSpans(removeDelimited(prose, '<!--', '-->'), (text) =>
     cleanText(text, mdx),
   ).replace(/\n{3,}/g, '\n\n');
 }
@@ -83,15 +88,140 @@ function cleanProse(prose: string, mdx: boolean): string {
 function cleanText(input: string, mdx: boolean): string {
   let text = input;
   if (mdx) {
-    text = text
-      .replace(/^(?:import|export)\s[^\n]*(?:\n(?![ \t]*\n)[^\n]*)*$/gm, '')
-      .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
-      .replace(/<\/?[A-Z][\w.]*(?:\s(?:[^<>{}]|\{[^{}]*\})*)?\/?>/g, '');
+    text = removeDelimited(
+      text.replace(/^(?:import|export)\s[^\n]*(?:\n(?![ \t]*\n)[^\n]*)*$/gm, ''),
+      '{/*',
+      '*/}',
+    ).replace(/<\/?[A-Z][\w.]*(?:\s(?:[^<>{}]|\{[^{}]*\})*)?\/?>/g, '');
   }
-  return text
-    .replace(/<\/?[a-z][\w-]*(?:\s[^<>]*)?\/?>/g, '')
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\((?:[^()]|\([^)]*\))*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
-    .replace(/^[ \t]{0,3}\[[^\]]+\]:[ \t]*\S+.*$/gm, '');
+  return removeDefinitions(
+    referenceLinks(inlineLinks(images(text.replace(/<\/?[a-z][\w-]*(?:\s[^<>]*)?\/?>/g, '')))),
+  );
+}
+
+/*
+ * Links and images become their text. Each function below matches what the regex in its comment
+ * matches, but in linear time. A label runs from `[` to the first `]` after it, so every `[`
+ * before that `]` has the same label end: when one fails, they all do, and the scan moves past
+ * the `]` instead of retrying from each `[` (which made the regexes quadratic).
+ */
+
+/** `![alt](src)` → `alt`, as `/!\[([^\]]*)\]\([^)]*\)/g`. */
+function images(text: string): string {
+  let out = '';
+  let last = 0;
+  for (let from = 0; ;) {
+    const start = text.indexOf('![', from);
+    const close = start === -1 ? -1 : text.indexOf(']', start + 2);
+    if (close === -1) break;
+    if (text[close + 1] !== '(') {
+      from = close + 1;
+      continue;
+    }
+    const end = text.indexOf(')', close + 2);
+    // No `)` here means none for any later image either.
+    if (end === -1) break;
+    out += text.slice(last, start) + text.slice(start + 2, close);
+    last = from = end + 1;
+  }
+  return out + text.slice(last);
+}
+
+/** `[label](url)` → `label`, as `/\[([^\]]+)\]\((?:[^()]|\([^)]*\))*\)/g`. */
+function inlineLinks(text: string): string {
+  if (!text.includes('](')) return text;
+  const ends = destinationEnds(text);
+  let out = '';
+  let last = 0;
+  for (let from = 0; ;) {
+    const start = text.indexOf('[', from);
+    const close = start === -1 ? -1 : text.indexOf(']', start + 1);
+    if (close === -1) break;
+    const end = close > start + 1 && text[close + 1] === '(' ? (ends[close + 2] ?? -1) : -1;
+    if (end === -1) {
+      from = close + 1;
+      continue;
+    }
+    out += text.slice(last, start) + text.slice(start + 1, close);
+    last = from = end + 1;
+  }
+  return out + text.slice(last);
+}
+
+/**
+ * For each position, the index of the `)` that ends a link destination starting there, or -1.
+ * A destination is any run of non-parentheses and `( … )` groups (which may hold `(` but not
+ * `)`), the language of `(?:[^()]|\([^)]*\))*\)`. Filled right to left, so each position is
+ * computed once from positions after it.
+ */
+function destinationEnds(text: string): Int32Array {
+  const ends = new Int32Array(text.length + 1).fill(-1);
+  let nextClose = -1;
+  for (let i = text.length - 1; i >= 0; i -= 1) {
+    const char = text[i];
+    if (char === ')') {
+      ends[i] = i;
+      nextClose = i;
+    } else if (char === '(') {
+      ends[i] = nextClose === -1 ? -1 : (ends[nextClose + 1] ?? -1);
+    } else {
+      ends[i] = ends[i + 1] ?? -1;
+    }
+  }
+  return ends;
+}
+
+/** `[label][ref]` → `label`, as `/\[([^\]]+)\]\[[^\]]*\]/g`. */
+function referenceLinks(text: string): string {
+  let out = '';
+  let last = 0;
+  for (let from = 0; ;) {
+    const start = text.indexOf('[', from);
+    const close = start === -1 ? -1 : text.indexOf(']', start + 1);
+    if (close === -1) break;
+    if (close === start + 1 || text[close + 1] !== '[') {
+      from = close + 1;
+      continue;
+    }
+    const end = text.indexOf(']', close + 2);
+    if (end === -1) break;
+    out += text.slice(last, start) + text.slice(start + 1, close);
+    last = from = end + 1;
+  }
+  return out + text.slice(last);
+}
+
+const LINE_BREAK = /[\n\r\u2028\u2029]/g;
+const DEFINITION_START = /[ \t]{0,3}\[/y;
+const DESTINATION = /[ \t]*\S/y;
+
+/** Drops link reference definitions (`[ref]: https://…`), as `/^[ \t]{0,3}\[[^\]]+\]:[ \t]*\S+.*$/gm`. */
+function removeDefinitions(text: string): string {
+  let out = '';
+  let last = 0;
+  // The first `]` after the current label's `[`. Lines only move forward, so a label starting
+  // before it shares it, and it is searched for again only once a label starts past it.
+  let bracket = text.indexOf(']');
+  for (let line = 0; line < text.length && bracket !== -1;) {
+    DEFINITION_START.lastIndex = line;
+    const opening = DEFINITION_START.exec(text);
+    if (opening) {
+      const start = line + opening[0].length - 1;
+      if (start > bracket) bracket = text.indexOf(']', start + 1);
+      DESTINATION.lastIndex = bracket + 2;
+      if (bracket > start + 1 && text[bracket + 1] === ':' && DESTINATION.test(text)) {
+        LINE_BREAK.lastIndex = bracket;
+        const end = LINE_BREAK.exec(text)?.index ?? text.length;
+        out += text.slice(last, line);
+        last = end;
+        line = end + 1;
+        continue;
+      }
+    }
+    LINE_BREAK.lastIndex = line;
+    const next = LINE_BREAK.exec(text);
+    if (!next) break;
+    line = next.index + 1;
+  }
+  return out + text.slice(last);
 }

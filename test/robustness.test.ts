@@ -32,6 +32,39 @@ describe('linear-time parsing of hostile input', () => {
   });
 });
 
+describe('linear-time loaders on unclosed constructs', () => {
+  // Quadratic before: 0.8 s (unclosed <pre>) to 70 s (unclosed link labels) at this size.
+  const n = 40_000;
+  const html = (source: string) => () => fromHtml(source, { id: 'x', url: '/x' });
+  const md =
+    (source: string, mdx = false) =>
+    () =>
+      fromMarkdown(source, { id: 'x', url: '/x', mdx });
+
+  it.each([
+    ['unclosed dropped elements', html(`<main>${'<nav>x '.repeat(n)}</main>`)],
+    ['unclosed headings', html(`<main>${'<h2>x '.repeat(n)}</main>`)],
+    ['unclosed <pre>', html(`<main>${'<pre>x '.repeat(n)}</main>`)],
+    ['unclosed <code>', html(`<main>${'<code>x '.repeat(n)}</main>`)],
+    ['unclosed HTML comments', html(`<main>${'<!-- x '.repeat(n)}</main>`)],
+    ['unclosed <main>', html('<main>x '.repeat(n))],
+    ['unclosed <article>', html('<article>x '.repeat(n))],
+    ['unclosed <title>', html('<title>x '.repeat(n))],
+    ['a heading link full of spaces', html(`<main><h2><a>${' '.repeat(5 * n)}</h2></main>`)],
+    ['Markdown links with unclosed destinations', md('[a](('.repeat(n))],
+    ['Markdown links without destinations', md('[a]('.repeat(n))],
+    ['Markdown images with unclosed destinations', md('![a]('.repeat(n))],
+    ['unclosed link labels', md(`${'['.repeat(4 * n)}]`)],
+    ['unclosed image labels', md(`!${'['.repeat(4 * n)}]`)],
+    ['link definitions with unclosed labels', md(`${'[x\n'.repeat(n)}]: /url`)],
+    ['labels before a far bracket', md(`${'[x'.repeat(n)}]: y`)],
+    ['unclosed Markdown comments', md('<!-- x '.repeat(n))],
+    ['unclosed MDX comments', md('{/* x '.repeat(n), true)],
+  ])('%s', (_, parse) => {
+    expect(timed(parse)).toBeLessThan(250);
+  });
+});
+
 describe('headings', () => {
   it('keeps a trailing # that is part of the text, and strips real closing sequences', () => {
     const chunks = chunkDocument(doc('## C#\n\nA.\n\n## F# and C# ##\n\nB.\n\n## Done ###\n\nC.'));

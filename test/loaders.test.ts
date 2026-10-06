@@ -50,6 +50,23 @@ describe('fromMarkdown', () => {
     expect(doc?.content).not.toContain('[ref]');
   });
 
+  it.each([
+    ['[a](x(y)z) b', 'a b'],
+    ['[a](x(y) and [b](c) later', '[a](x(y) and b later'],
+    ['[a](x(y', '[a](x(y'],
+    ['[a]((b)', '[a]((b)'],
+    ['![alt](i.png) [![badge](b.svg)](link)', 'alt badge'],
+    ['[a[b](c)', 'a[b'],
+    ['[x][ref] and [y][]', 'x and y'],
+    ['[ref]: https://x\n  [r2]: /y "t"\n    [code]: z\nText.', '[code]: z\nText.'],
+    ['See <!-- note --> this <!-- unclosed', 'See  this <!-- unclosed'],
+  ])(
+    'reads links, definitions and comments in %j as before the linear rewrite',
+    (source, content) => {
+      expect(fromMarkdown(source, meta)?.content).toBe(content);
+    },
+  );
+
   it('extracts text from MDX without evaluating it', () => {
     const doc = fromMarkdown(
       [
@@ -130,6 +147,19 @@ describe('fromHtml', () => {
       fromHtml('<meta name="robots" content="noindex, nofollow"><p>x</p>', { id: 'a', url: '/a' }),
     ).toBeNull();
     expect(decodeEntities('&#x2192; &#8594; &rarr; &bogus;')).toBe('→ → → &bogus;');
+  });
+});
+
+describe('fromHtml on unclosed elements', () => {
+  it.each([
+    [
+      '<main><h2 id="x"><a href="#x"> ¶ </a>Title</h2><nav>menu</nav><p>Body <code>x</code></p><h3>open',
+      '## Title {#x}\n\nBody `x`\n\nopen',
+    ],
+    ['<article>A</article><article>B', 'A'],
+    ['<main>x<main>y</main>', 'xy'],
+  ])('reads %j as before the linear rewrite', (source, content) => {
+    expect(fromHtml(source, { id: 'a', url: '/a' })?.content).toBe(content);
   });
 });
 

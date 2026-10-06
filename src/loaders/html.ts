@@ -1,3 +1,4 @@
+import { removeDelimited } from '../text/markdown';
 import type { SourceDocument } from '../types';
 
 export interface HtmlMeta {
@@ -102,13 +103,82 @@ function attribute(tag: string, name: string): string | undefined {
   return match ? (match[1] ?? match[2] ?? match[3]) : undefined;
 }
 
+interface Element {
+  /** The opening tag's match, with its capture groups. */
+  open: RegExpExecArray;
+  /** Where the opening tag starts and where the closing tag ends. */
+  start: number;
+  end: number;
+  inner: string;
+}
+
+/**
+ * The elements in `html`, left to right: an opening tag matched by `open` (a global, case
+ * insensitive pattern), up to the first closing tag `close(match)` after it. The same matches as
+ * `/<tag …>([\s\S]*?)<\/tag>/gi`, in linear time: once a closing tag is missing after some
+ * point it is missing after every later point too, so it is never searched for again (the regex
+ * searches again from every opening tag, which is quadratic).
+ */
+function* elements(
+  html: string,
+  open: RegExp,
+  close: (match: RegExpExecArray) => string,
+): Generator<Element> {
+  const pattern = new RegExp(open);
+  const closers = new Map<string, RegExp>();
+  const missingFrom = new Map<string, number>();
+  for (let match = pattern.exec(html); match !== null; match = pattern.exec(html)) {
+    const tag = close(match);
+    const innerStart = match.index + match[0].length;
+    if (innerStart >= (missingFrom.get(tag) ?? Number.POSITIVE_INFINITY)) continue;
+    let closer = closers.get(tag);
+    if (!closer) {
+      closer = new RegExp(tag, 'gi');
+      closers.set(tag, closer);
+    }
+    closer.lastIndex = innerStart;
+    const end = closer.exec(html);
+    if (!end) {
+      missingFrom.set(tag, innerStart);
+      continue;
+    }
+    pattern.lastIndex = end.index + end[0].length;
+    yield {
+      open: match,
+      start: match.index,
+      end: pattern.lastIndex,
+      inner: html.slice(innerStart, end.index),
+    };
+  }
+}
+
+/** `html` with each element `elements` finds replaced by `replace(element)`. */
+function replaceElements(
+  html: string,
+  open: RegExp,
+  close: (match: RegExpExecArray) => string,
+  replace: (element: Element) => string,
+): string {
+  let out = '';
+  let last = 0;
+  for (const element of elements(html, open, close)) {
+    out += html.slice(last, element.start) + replace(element);
+    last = element.end;
+  }
+  return out + html.slice(last);
+}
+
+const openTag = (tag: string): RegExp => new RegExp(`<${tag}${NAME_END}[^<>]*>`, 'gi');
+
 function innerOf(html: string, tag: string): string | undefined {
-  return new RegExp(`<${tag}${NAME_END}[^<>]*>([\\s\\S]*?)</${tag}>`, 'i').exec(html)?.[1];
+  for (const element of elements(html, openTag(tag), () => `</${tag}>`)) return element.inner;
+  return undefined;
 }
 
 function innerOfAll(html: string, tag: string): string[] {
-  return [...html.matchAll(new RegExp(`<${tag}${NAME_END}[^<>]*>([\\s\\S]*?)</${tag}>`, 'gi'))].map(
-    (match) => match[1] ?? '',
+  return Array.from(
+    elements(html, openTag(tag), () => `</${tag}>`),
+    (element) => element.inner,
   );
 }
 
@@ -154,9 +224,14 @@ export function fromHtml(source: string, meta: HtmlMeta): SourceDocument | null 
     (articles.length > 0 ? articles.join('\n\n') : undefined) ??
     innerOf(source, 'body') ??
     source;
-  html = html.replace(/<!--[\s\S]*?-->/g, '');
+  html = removeDelimited(html, '<!--', '-->');
   for (const tag of DROP_ELEMENTS) {
-    html = html.replace(new RegExp(`<${tag}${NAME_END}[^<>]*>[\\s\\S]*?</${tag}>`, 'gi'), ' ');
+    html = replaceElements(
+      html,
+      openTag(tag),
+      () => `</${tag}>`,
+      () => ' ',
+    );
   }
 
   // The first <h1> beats <title>, which usually carries a " | Site name" suffix.
@@ -178,46 +253,57 @@ function fenceFor(code: string): string {
   return '`'.repeat(Math.max(3, longest + 1));
 }
 
-/** Permalink anchors (`#`, `¶`, an invisible entity, or an emptied icon) are not heading text. */
-const PERMALINK = /<a(?=[\s>])[^<>]*>\s*(?:[#¶§]|&[A-Za-z]+;|&#x?[\da-fA-F]+;)?\s*<\/a>/gi;
+/**
+ * Permalink anchors (`#`, `¶`, an invisible entity, or an emptied icon) are not heading text.
+ * The second `\s*` sits inside the optional group, so whitespace has one way to match.
+ */
+const PERMALINK = /<a(?=[\s>])[^<>]*>\s*(?:(?:[#¶§]|&[A-Za-z]+;|&#x?[\da-fA-F]+;)\s*)?<\/a>/gi;
 
 function htmlToText(html: string): string {
   // Code blocks are swapped out first so whitespace normalization never touches them.
   const blocks: string[] = [];
-  const text = html
-    .replace(/<pre(?=[\s>])[^<>]*>([\s\S]*?)<\/pre>/gi, (_, code: string) => {
-      const body = stripTags(code.replace(/<br\s*\/?>/gi, '\n')).replace(/^\n+|\s+$/g, '');
+  const withoutCode = replaceElements(
+    html,
+    /<pre(?=[\s>])[^<>]*>/gi,
+    () => '</pre>',
+    ({ inner }) => {
+      const body = stripTags(inner.replace(/<br\s*\/?>/gi, '\n')).replace(/^\n+|\s+$/g, '');
       const fence = fenceFor(body);
       blocks.push(`${fence}\n${body}\n${fence}`);
       return `\n\n\uE000${String(blocks.length - 1)}\uE000\n\n`;
-    })
-    .replace(
-      /<h([1-6])(?=[\s>])([^<>]*)>([\s\S]*?)<\/h\1>/gi,
-      (_, level: string, attrs: string, inner: string) => {
-        // Entities are decoded once, at the end, for everything outside code blocks.
-        const heading = inner
-          .replace(PERMALINK, '')
-          .replace(/<[^<>]*>/g, '')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .replace(/^[#¶§] | [#¶§]$/g, '');
-        if (!heading) return '\n\n';
-        const id = attribute(` ${attrs}`, 'id');
-        return `\n\n${'#'.repeat(Number(level))} ${heading}${id ? ` {#${id}}` : ''}\n\n`;
-      },
-    )
-    .replace(/<li(?=[\s>])[^<>]*>/gi, '\n- ')
-    .replace(
-      /<\/(?:p|div|section|article|header|ul|ol|table|blockquote|dl|figure|details|summary)>/gi,
-      '\n\n',
-    )
-    .replace(/<tr(?=[\s>])[^<>]*>/gi, '\n| ')
-    .replace(/<(?:p|div|section|br|dt|dd|hr|blockquote|figcaption)(?=[\s/>])[^<>]*>/gi, '\n')
-    .replace(/<\/t[dh]>/gi, ' | ')
-    .replace(
-      /<code(?=[\s>])[^<>]*>([\s\S]*?)<\/code>/gi,
-      (_, code: string) => `\`${code.replace(/<[^<>]*>/g, '')}\``,
-    );
+    },
+  );
+  const withHeadings = replaceElements(
+    withoutCode,
+    /<h([1-6])(?=[\s>])([^<>]*)>/gi,
+    (open) => `</h${open[1] ?? ''}>`,
+    ({ open, inner }) => {
+      // Entities are decoded once, at the end, for everything outside code blocks.
+      const heading = inner
+        .replace(PERMALINK, '')
+        .replace(/<[^<>]*>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/^[#¶§] | [#¶§]$/g, '');
+      if (!heading) return '\n\n';
+      const id = attribute(` ${open[2] ?? ''}`, 'id');
+      return `\n\n${'#'.repeat(Number(open[1]))} ${heading}${id ? ` {#${id}}` : ''}\n\n`;
+    },
+  );
+  const text = replaceElements(
+    withHeadings
+      .replace(/<li(?=[\s>])[^<>]*>/gi, '\n- ')
+      .replace(
+        /<\/(?:p|div|section|article|header|ul|ol|table|blockquote|dl|figure|details|summary)>/gi,
+        '\n\n',
+      )
+      .replace(/<tr(?=[\s>])[^<>]*>/gi, '\n| ')
+      .replace(/<(?:p|div|section|br|dt|dd|hr|blockquote|figcaption)(?=[\s/>])[^<>]*>/gi, '\n')
+      .replace(/<\/t[dh]>/gi, ' | '),
+    /<code(?=[\s>])[^<>]*>/gi,
+    () => '</code>',
+    ({ inner }) => `\`${inner.replace(/<[^<>]*>/g, '')}\``,
+  );
 
   return decodeEntities(text.replace(/<[^<>]*>/g, ''))
     .split('\n')
