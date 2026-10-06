@@ -18,7 +18,7 @@ The two rankings are merged with reciprocal rank fusion. Each chunk scores the s
 
 ## Saying "I don't know"
 
-Before fusion, every candidate must clear a relevance gate: a cosine similarity of at least 0.25, or keyword coverage of at least 0.5. Keyword coverage is the share of the question's IDF weight that a chunk contains, so it is bounded between 0 and 1 and comparable across sites.
+Before fusion, every candidate must clear a relevance gate: a cosine similarity of at least 0.25, or keyword coverage of at least 0.5. Keyword coverage is the share of the question's IDF weight that a chunk contains, so it is bounded between 0 and 1 and comparable across questions of any length. It still depends on the site: a word that appears on no page carries the most weight, so a question with one off-site word can fall short on keywords alone. The similarity side of the gate catches those; with a keyword-only index, lower `minKeywordCoverage`.
 
 When no chunk clears the gate, the handler answers "I don't know" immediately and never calls the language model. That makes refusals fast, free and deterministic. The system prompt adds a second layer: the model must answer only from the sources and say it does not know when they are insufficient.
 

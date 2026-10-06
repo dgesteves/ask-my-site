@@ -45,7 +45,8 @@ export interface RetrievalOptions {
   minSimilarity?: number;
   /**
    * Minimum share of the query's IDF mass a chunk must contain to count as relevant on keywords
-   * alone. Default 0.5.
+   * alone. Default 0.5, which is conservative: a question word found on no page carries the most
+   * IDF, so one such word can sink a reasonable question when retrieval is keyword-only.
    */
   minKeywordCoverage?: number;
 }

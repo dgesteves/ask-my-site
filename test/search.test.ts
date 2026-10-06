@@ -79,6 +79,9 @@ describe('Bm25Index', () => {
     expect(coverage[2]).toBeLessThan(0.75);
     expect(index.search(tokenize('token bucket')).coverage[2]).toBeCloseTo(1, 5);
     expect(index.search(tokenize('weather forecast')).ranked).toEqual([]);
+    // So coverage is not corpus-independent, and the keyword gate is conservative: one word that
+    // no document contains outweighs a matched one, keeping the pair below the 0.5 default.
+    expect(index.search(tokenize('bucket weather')).coverage[2]).toBeLessThan(0.5);
   });
 
   it('handles an empty query and an empty corpus', () => {
