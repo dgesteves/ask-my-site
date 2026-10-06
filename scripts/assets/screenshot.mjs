@@ -19,12 +19,15 @@ const shots = [
     page: '/docs/retrieval',
     question: 'When does it answer "I don\'t know"?',
     viewport: { width: 1280, height: 720 },
+    // Tight around the dialog so its text stays legible at README width, with page context.
+    clip: { x: 150, y: 0, width: 980, height: 640 },
   },
   {
     file: 'refusal.png',
     page: '/docs/introduction',
     question: 'Who won the 1998 World Cup?',
     viewport: { width: 1280, height: 330 },
+    clip: { x: 150, y: 0, width: 980, height: 300 },
   },
 ];
 
@@ -48,7 +51,7 @@ try {
     await page.locator('.ask-answer[data-status="done"]').waitFor({ timeout: 15_000 });
     // Park the pointer away from hover styles.
     await page.mouse.move(2, 2);
-    await page.screenshot({ path: `${out}${shot.file}`, type: 'png' });
+    await page.screenshot({ path: `${out}${shot.file}`, type: 'png', clip: shot.clip });
     console.log(`wrote .github/assets/${shot.file}`);
     await context.close();
   }
