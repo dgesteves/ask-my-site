@@ -1,0 +1,570 @@
+/*
+ * ask-my-site default theme.
+ *
+ * Every color, radius and font is a custom property on .ask-overlay / .ask-dialog, so a theme is
+ * a handful of overrides:
+ *
+ *   .ask-dialog { --ask-accent: #7c3aed; --ask-radius: 8px; }
+ *
+ * Light and dark follow prefers-color-scheme unless the dialog's `theme` prop pins one.
+ */
+
+.ask-overlay,
+.ask-dialog {
+  --ask-bg: #ffffff;
+  --ask-raised: #f5f7fa;
+  --ask-border: #e2e6eb;
+  --ask-border-strong: #cdd3db;
+  --ask-fg: #0d0f12;
+  --ask-muted: #556070;
+  --ask-subtle: #7a8594;
+  --ask-accent: #0e7490;
+  --ask-accent-soft: rgb(14 116 144 / 0.1);
+  --ask-accent-line: rgb(14 116 144 / 0.35);
+  --ask-accent-fg: #ffffff;
+  --ask-danger: #c2185b;
+  --ask-scrim: rgb(13 15 18 / 0.45);
+  --ask-shadow: 0 24px 64px -12px rgb(13 15 18 / 0.28), 0 2px 6px rgb(13 15 18 / 0.06);
+  --ask-radius: 14px;
+  --ask-radius-sm: 8px;
+  --ask-font: inherit;
+  --ask-mono: ui-monospace, 'Geist Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ask-overlay:not([data-ask-theme='light']),
+  .ask-dialog:not([data-ask-theme='light']) {
+    --ask-bg: #0d0f12;
+    --ask-raised: #181c22;
+    --ask-border: #262b33;
+    --ask-border-strong: #353c47;
+    --ask-fg: #f5f7fa;
+    --ask-muted: #9aa6b4;
+    --ask-subtle: #6f7b89;
+    --ask-accent: #22d3ee;
+    --ask-accent-soft: rgb(34 211 238 / 0.1);
+    --ask-accent-line: rgb(34 211 238 / 0.35);
+    --ask-accent-fg: #0d0f12;
+    --ask-danger: #f0468a;
+    --ask-scrim: rgb(5 6 8 / 0.7);
+    --ask-shadow: 0 24px 80px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.02);
+    color-scheme: dark;
+  }
+}
+
+.ask-overlay[data-ask-theme='dark'],
+.ask-dialog[data-ask-theme='dark'] {
+  --ask-bg: #0d0f12;
+  --ask-raised: #181c22;
+  --ask-border: #262b33;
+  --ask-border-strong: #353c47;
+  --ask-fg: #f5f7fa;
+  --ask-muted: #9aa6b4;
+  --ask-subtle: #6f7b89;
+  --ask-accent: #22d3ee;
+  --ask-accent-soft: rgb(34 211 238 / 0.1);
+  --ask-accent-line: rgb(34 211 238 / 0.35);
+  --ask-accent-fg: #0d0f12;
+  --ask-danger: #f0468a;
+  --ask-scrim: rgb(5 6 8 / 0.7);
+  --ask-shadow: 0 24px 80px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.02);
+  color-scheme: dark;
+}
+
+.ask-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ask-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--ask-scrim);
+  backdrop-filter: blur(3px);
+}
+
+.ask-dialog {
+  position: fixed;
+  top: 12vh;
+  left: 50%;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(640px, 80vh);
+  overflow: hidden;
+  transform: translateX(-50%);
+  font-family: var(--ask-font);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ask-fg);
+  background: var(--ask-bg);
+  border: 1px solid var(--ask-border-strong);
+  border-radius: var(--ask-radius);
+  box-shadow: var(--ask-shadow);
+  outline: none;
+}
+
+.ask-dialog *,
+.ask-dialog *::before,
+.ask-dialog *::after {
+  box-sizing: border-box;
+}
+
+.ask-command {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ask-input-row {
+  display: flex;
+  flex: none;
+  gap: 12px;
+  align-items: center;
+  height: 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--ask-border);
+}
+
+.ask-icon {
+  flex: none;
+  color: var(--ask-accent);
+}
+
+.ask-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font: inherit;
+  /* 16px stops iOS Safari from zooming into the field. */
+  font-size: 16px;
+  color: var(--ask-fg);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.ask-input::placeholder {
+  color: var(--ask-subtle);
+}
+
+.ask-kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  font-family: var(--ask-mono);
+  font-size: 11px;
+  color: var(--ask-muted);
+  background: var(--ask-raised);
+  border: 1px solid var(--ask-border);
+  border-radius: 5px;
+}
+
+.ask-stop,
+.ask-retry {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ask-fg);
+  cursor: pointer;
+  background: var(--ask-raised);
+  border: 1px solid var(--ask-border-strong);
+  border-radius: 6px;
+}
+
+.ask-stop:hover,
+.ask-retry:hover {
+  border-color: var(--ask-accent-line);
+}
+
+.ask-list {
+  max-height: 360px;
+  padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ask-list:empty {
+  display: none;
+}
+
+.ask-group [cmdk-group-heading] {
+  padding: 10px 12px 6px;
+  font-family: var(--ask-mono);
+  font-size: 11px;
+  color: var(--ask-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ask-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 12px;
+  color: var(--ask-muted);
+  cursor: pointer;
+  border-radius: var(--ask-radius-sm);
+}
+
+.ask-item[data-selected='true'] {
+  color: var(--ask-fg);
+  background: var(--ask-raised);
+  box-shadow: inset 2px 0 0 var(--ask-accent);
+}
+
+.ask-item-label {
+  flex: none;
+  padding: 1px 7px;
+  font-family: var(--ask-mono);
+  font-size: 11px;
+  color: var(--ask-accent);
+  background: var(--ask-accent-soft);
+  border: 1px solid var(--ask-accent-line);
+  border-radius: 5px;
+}
+
+.ask-item-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ask-item-primary .ask-item-text {
+  color: var(--ask-fg);
+}
+
+.ask-panel {
+  flex: 1;
+  min-height: 0;
+  padding: 18px 20px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ask-answer {
+  min-height: 24px;
+}
+
+.ask-answer[data-refused] {
+  color: var(--ask-muted);
+}
+
+.ask-thinking {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0;
+  color: var(--ask-muted);
+}
+
+.ask-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--ask-border-strong);
+  border-top-color: var(--ask-accent);
+  border-radius: 50%;
+}
+
+.ask-markdown {
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.ask-markdown > :first-child {
+  margin-top: 0;
+}
+
+.ask-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+/* Let the caret sit at the end of the last streaming paragraph rather than on a new line. */
+.ask-answer > .ask-markdown {
+  display: contents;
+}
+
+.ask-answer[data-status='streaming'] .ask-markdown > p:last-child {
+  display: inline;
+}
+
+.ask-markdown p,
+.ask-markdown ul,
+.ask-markdown ol {
+  margin: 0 0 0.8em;
+}
+
+.ask-markdown ul,
+.ask-markdown ol {
+  padding-left: 1.25em;
+}
+
+.ask-markdown li + li {
+  margin-top: 0.25em;
+}
+
+.ask-markdown li::marker {
+  color: var(--ask-subtle);
+}
+
+.ask-markdown code {
+  padding: 0.1em 0.35em;
+  font-family: var(--ask-mono);
+  font-size: 0.88em;
+  background: var(--ask-raised);
+  border: 1px solid var(--ask-border);
+  border-radius: 4px;
+}
+
+.ask-pre {
+  margin: 0 0 0.8em;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.55;
+  background: var(--ask-raised);
+  border: 1px solid var(--ask-border);
+  border-radius: var(--ask-radius-sm);
+}
+
+.ask-pre code {
+  padding: 0;
+  font-size: inherit;
+  background: none;
+  border: 0;
+}
+
+.ask-markdown a:not(.ask-citation) {
+  color: var(--ask-accent);
+  text-underline-offset: 2px;
+}
+
+.ask-citation {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.45em;
+  height: 1.45em;
+  margin: 0 0.12em;
+  padding: 0 0.3em;
+  font-family: var(--ask-mono);
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ask-accent);
+  text-decoration: none;
+  vertical-align: 0.15em;
+  background: var(--ask-accent-soft);
+  border: 1px solid var(--ask-accent-line);
+  border-radius: 5px;
+}
+
+.ask-citation:hover {
+  color: var(--ask-accent-fg);
+  background: var(--ask-accent);
+}
+
+.ask-caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--ask-accent);
+  border-radius: 1px;
+}
+
+.ask-error {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--ask-danger);
+  border: 1px solid currentcolor;
+  border-radius: var(--ask-radius-sm);
+}
+
+.ask-sources {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ask-border);
+}
+
+.ask-sources-heading {
+  margin: 0 0 10px;
+  font-family: var(--ask-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ask-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ask-sources ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ask-source {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px 8px 8px;
+  color: inherit;
+  text-decoration: none;
+  background: var(--ask-bg);
+  border: 1px solid var(--ask-border);
+  border-radius: var(--ask-radius-sm);
+}
+
+.ask-source:hover {
+  background: var(--ask-raised);
+  border-color: var(--ask-accent-line);
+}
+
+.ask-source-id {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-family: var(--ask-mono);
+  font-size: 11px;
+  color: var(--ask-accent);
+  background: var(--ask-accent-soft);
+  border-radius: 6px;
+}
+
+.ask-source-text {
+  display: grid;
+  min-width: 0;
+}
+
+.ask-source-title,
+.ask-source-heading,
+.ask-source-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ask-source-title {
+  font-size: 14px;
+}
+
+.ask-source-heading {
+  font-size: 12px;
+  color: var(--ask-muted);
+}
+
+.ask-source-url {
+  max-width: 220px;
+  font-family: var(--ask-mono);
+  font-size: 11px;
+  color: var(--ask-subtle);
+}
+
+.ask-footer {
+  display: flex;
+  flex: none;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--ask-subtle);
+  border-top: 1px solid var(--ask-border);
+}
+
+.ask-footer-keys {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+}
+
+.ask-dialog a:focus-visible,
+.ask-dialog button:focus-visible {
+  outline: 2px solid var(--ask-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .ask-dialog {
+    top: 8px;
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .ask-source-url,
+  .ask-footer-keys {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ask-overlay[data-state='open'] {
+    animation: ask-fade 160ms ease-out;
+  }
+
+  .ask-dialog[data-state='open'] {
+    animation: ask-enter 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  .ask-caret {
+    animation: ask-blink 1s steps(2, start) infinite;
+  }
+
+  .ask-spinner {
+    animation: ask-spin 0.8s linear infinite;
+  }
+}
+
+@keyframes ask-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ask-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px) scale(0.985);
+  }
+}
+
+@keyframes ask-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+@keyframes ask-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
