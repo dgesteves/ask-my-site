@@ -25,15 +25,20 @@ export function citedSourceIds(text: string): Set<number> {
 }
 
 /**
- * Allows http(s), mailto, root-relative, relative and hash links; anything else (`javascript:`,
- * `data:`) is dropped. Protocol-relative tricks are rejected too: browsers read `/\\evil.com`
- * and `/<tab>/evil.com` as `//evil.com`, so backslashes and control characters never pass.
+ * Allows http(s) and mailto URLs and every relative reference (`/docs`, `docs/a`, `../a`, `?q=1`,
+ * `#top`); anything else (`javascript:`, `data:`) is dropped. Protocol-relative tricks are rejected
+ * too: browsers read `//evil.com`, `/\\evil.com` and `/<tab>/evil.com` as another host, so a
+ * leading `//`, backslashes and control characters never pass. A relative reference whose first
+ * segment has a colon would read as a scheme to some parsers, so it is dropped as well.
  */
 export function safeHref(href: string): string | null {
   const trimmed = href.trim();
   // eslint-disable-next-line no-control-regex
-  if (/[\\\u0000-\u001f\u007f]/.test(trimmed)) return null;
-  if (/^(?:\/(?!\/)|#|\.{1,2}\/)/.test(trimmed)) return trimmed;
+  if (!trimmed || /[\\\u0000-\u001f\u007f]/.test(trimmed)) return null;
+  if (!/^[a-z][a-z\d+.-]*:/i.test(trimmed)) {
+    const firstSegment = /^[^/?#]*/.exec(trimmed)?.[0] ?? '';
+    return trimmed.startsWith('//') || firstSegment.includes(':') ? null : trimmed;
+  }
   try {
     const { protocol } = new URL(trimmed);
     return protocol === 'http:' || protocol === 'https:' || protocol === 'mailto:' ? trimmed : null;

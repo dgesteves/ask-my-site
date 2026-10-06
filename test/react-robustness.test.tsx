@@ -93,6 +93,38 @@ describe('AskAnswer rendering', () => {
     expect(safeHref('/\t/evil.example')).toBeNull();
     expect(safeHref('data:text/html,hi')).toBeNull();
   });
+
+  it('allows every relative reference, rejecting anything that could carry a scheme', () => {
+    for (const href of ['docs/a', 'docs/a#b', 'docs/a:b', './a', '../a', '?q=1', '#top', 'a b']) {
+      expect(safeHref(href)).toBe(href);
+    }
+    for (const href of [
+      '',
+      ' ',
+      'javascript:alert(1)',
+      ' JaVaScRiPt:alert(1)',
+      '\ufeffjavascript:alert(1)',
+      'java\u200bscript:alert(1)',
+      'java\tscript:alert(1)',
+      'vbscript:x',
+      '//evil.example',
+      '\\\\evil.example',
+    ]) {
+      expect(safeHref(href)).toBeNull();
+    }
+  });
+
+  it('links citations to sources indexed with a relative base URL', () => {
+    render(
+      <AskAnswer
+        text="See [1]."
+        sources={[{ id: 1, url: 'docs/install#pnpm', title: 'Install', heading: '' }]}
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'Source 1: Install' }).getAttribute('href')).toBe(
+      'docs/install#pnpm',
+    );
+  });
 });
 
 describe('useAsk edge cases', () => {
