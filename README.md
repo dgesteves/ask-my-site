@@ -168,7 +168,7 @@ ask-my-site index [dir] [options]
       --check                  Exit 1 if the index is stale. Never calls a model.
       --base-url <url>         URL prefix for pages (default: /)
   -e, --embedding <spec>       openai:<model> | <provider>/<model> (AI Gateway) | mock[:<dims>] | none
-      --dimensions <n>         Vector size, for models that support it
+      --dimensions <n>         Vector size, for models that support it; with --check, the size the index must have
       --chunk-size <chars>     Max characters per chunk (default: 1200)
       --chunk-overlap <chars>  Characters shared by consecutive chunks (default: 150)
       --ignore <glob>          Skip matching files; repeatable
