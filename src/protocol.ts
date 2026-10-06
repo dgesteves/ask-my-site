@@ -49,7 +49,8 @@ export interface AskErrorBody {
       | 'invalid_json'
       | 'invalid_request'
       | 'rate_limited'
-      | 'internal_error';
+      | 'internal_error'
+      | 'service_unavailable';
     message: string;
   };
 }

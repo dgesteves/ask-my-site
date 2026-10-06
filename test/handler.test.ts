@@ -4,7 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { buildIndex, fromMarkdown, serializeIndexFile } from '../src';
 import { MOCK_MIN_SIMILARITY, mockEmbeddingModel, mockLanguageModel } from '../src/mock';
-import { createAskHandler, formatPrompt, type AskHandlerOptions } from '../src/server';
+import {
+  createAskHandler,
+  formatPrompt,
+  upstashRateLimit,
+  type AskHandlerOptions,
+} from '../src/server';
 import { corpus } from './helpers';
 
 const embeddingModel = mockEmbeddingModel();
@@ -374,6 +379,40 @@ describe('createAskHandler', () => {
     expect(response.headers.get('ratelimit-remaining')).toBe('0');
     expect(rateLimit).toHaveBeenCalledOnce();
     expect(model.doStreamCalls).toHaveLength(0);
+  });
+
+  it('fails closed, with a JSON 503, when the rate limiter throws', async () => {
+    const outage = new Error('ECONNREFUSED redis://10.0.0.3');
+    for (const rateLimit of [
+      () => {
+        throw outage;
+      },
+      upstashRateLimit({ limit: () => Promise.reject(outage) }),
+    ]) {
+      const { handler, model, onError } = setup({ rateLimit });
+      const response = await handler(post({ question: 'How are int8 vectors stored?' }));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: {
+          code: 'service_unavailable',
+          message: 'The service is unavailable. Try again shortly.',
+        },
+      });
+      expect(onError.mock.calls).toEqual([[outage]]);
+      expect(model.doStreamCalls).toHaveLength(0);
+    }
+  });
+
+  it('answers anyway when told to fail open, still reporting the failure', async () => {
+    const outage = new Error('ECONNREFUSED');
+    const { handler, onError } = setup({
+      rateLimit: () => Promise.reject(outage),
+      rateLimitFailure: 'open',
+    });
+    const response = await handler(post({ question: 'How are int8 vectors stored?' }));
+    expect(response.status).toBe(200);
+    expect(answerOf((await readParts(response)).parts)).toBe('Vectors are stored as int8 [1].');
+    expect(onError.mock.calls).toEqual([[outage]]);
   });
 
   it('falls back to keyword retrieval when the embedding call fails', async () => {
