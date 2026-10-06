@@ -40,6 +40,8 @@ jobs:
           # Re-link the workspace now that dist/cli.js exists, so the example gets its bin.
           pnpm install --frozen-lockfile --offline
           pnpm --filter ask-my-site-example-nextjs build
+      - name: Lint the example app
+        run: pnpm --filter ask-my-site-example-nextjs lint
 
   node-compat:
     name: Test on Node ${{ matrix.node }}
