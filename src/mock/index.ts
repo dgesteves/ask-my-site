@@ -93,38 +93,55 @@ export function extractiveAnswer(prompt: string): string {
   }));
   if (sources.length === 0) return "I don't know. No sources were provided.";
 
-  const sentences: string[] = [];
-  for (const source of sources.slice(0, 3)) {
-    const best = bestSentence(source.text, question);
-    if (best && (sentences.length === 0 || best.score > 0)) {
-      sentences.push(`${best.sentence} [${String(source.id)}]`);
-    }
+  // Score every sentence of the top sources by how many question terms it shares, keep the
+  // best few that are at least half as relevant as the best one, and cite each.
+  const candidates = sources.slice(0, 4).flatMap((source, rank) =>
+    sentencesOf(source.text).map((sentence, position) => ({
+      sentence,
+      id: source.id,
+      order: rank * 1000 + position,
+      score: overlap(sentence, question),
+    })),
+  );
+  const top = Math.max(0, ...candidates.map((c) => c.score));
+  const chosen = candidates
+    .filter((c) => c.score >= Math.max(1, Math.ceil(top / 2)))
+    .sort((a, b) => b.score - a.score || a.order - b.order)
+    .slice(0, 3)
+    .sort((a, b) => a.order - b.order);
+  if (chosen.length === 0) {
+    const first = candidates[0];
+    return first
+      ? `${first.sentence} [${String(first.id)}]`
+      : `See source [${String(sources[0]?.id ?? 1)}].`;
   }
-  return sentences.length > 0
-    ? sentences.join(' ')
-    : `The closest match is in source [${String(sources[0]?.id ?? 1)}].`;
+  // Consecutive sentences from one source share a single citation.
+  return chosen
+    .map((c, i) => (chosen[i + 1]?.id === c.id ? c.sentence : `${c.sentence} [${String(c.id)}]`))
+    .join(' ');
 }
 
-function bestSentence(
-  text: string,
-  question: Set<string>,
-): { sentence: string; score: number } | null {
-  const prose = text
-    .replace(/(`{3,}|~{3,})[\s\S]*?\1/g, ' ')
-    .replace(/^#{1,6}\s+.*$/gm, ' ')
+function overlap(sentence: string, question: Set<string>): number {
+  let score = 0;
+  for (const term of new Set(tokenize(sentence))) if (question.has(term)) score += 1;
+  return score;
+}
+
+/** Prose sentences of a source: code, headings and list markers removed, paragraphs kept apart. */
+function sentencesOf(text: string): string[] {
+  return text
+    .replace(/(`{3,}|~{3,})[\s\S]*?\1/g, '\n\n')
+    .replace(/^#{1,6}\s+.*$/gm, '')
     .replace(/^\s*(?:[-*+]|\d+\.)\s+/gm, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  let best: { sentence: string; score: number } | null = null;
-  for (const raw of prose.split(/(?<=[.!?])\s+(?=[A-Z0-9`"(])/)) {
-    const sentence = raw.trim().replace(/[:;,]$/, '.');
-    if (sentence.length < 20) continue;
-    const terms = new Set(tokenize(sentence));
-    let score = 0;
-    for (const term of question) if (terms.has(term)) score += 1;
-    if (!best || score > best.score) best = { sentence: clip(sentence, 260), score };
-  }
-  return best;
+    .split(/\n{2,}/)
+    .flatMap((paragraph) =>
+      paragraph
+        .replace(/\s+/g, ' ')
+        .trim()
+        .split(/(?<=[.!?])\s+(?=[A-Z0-9`"(])/),
+    )
+    .map((sentence) => clip(sentence.trim().replace(/[:;,]$/, '.'), 260))
+    .filter((sentence) => sentence.length >= 20);
 }
 
 function clip(text: string, max: number): string {
