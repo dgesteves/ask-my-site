@@ -81,7 +81,7 @@ interface ParsedSource {
   text: string;
 }
 
-const SOURCE = /<source id="(\d+)"[^>]*>\n?([\s\S]*?)\n?<\/source>/g;
+const SOURCE = /<source id="(\d+)"[^<>]*>\n?([\s\S]*?)\n?<\/source>/g;
 const QUESTION = /<question>\n?([\s\S]*?)\n?<\/question>/;
 
 /** The answer the mock model gives for a prompt produced by `formatPrompt`. */

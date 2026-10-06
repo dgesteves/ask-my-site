@@ -1,5 +1,6 @@
 import { parse as parseYaml } from 'yaml';
 
+import { mapOutsideCodeSpans, parseAtxHeading, splitFenced } from '../text/markdown';
 import { plainHeading } from '../text/slug';
 import type { SourceDocument } from '../types';
 
@@ -20,11 +21,6 @@ export interface Frontmatter {
 }
 
 const FRONTMATTER = /^\uFEFF?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
-const FENCED_BLOCK =
-  /(^|\n)([ \t]{0,3})(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:\n\2?\3[`~]*[ \t]*(?=\n|$)|$)/g;
-const FIRST_H1 = /^#[ \t]+(.+?)[ \t]*#*[ \t]*$/m;
-const INLINE_CODE = /(`+)(?:(?!\1)[\s\S])+?\1/g;
-
 /** Splits YAML frontmatter from the body. A document without frontmatter has empty `data`. */
 export function parseFrontmatter(source: string): Frontmatter {
   const match = FRONTMATTER.exec(source);
@@ -50,13 +46,13 @@ export function fromMarkdown(source: string, meta: MarkdownMeta): SourceDocument
   const { data, body } = parseFrontmatter(source);
   if (data.draft === true || data.ask === false || data.noindex === true) return null;
 
-  const content = mapProse(body, (prose) => cleanProse(prose, meta.mdx ?? false)).trim();
-  const h1 = FIRST_H1.exec(content.replace(FENCED_BLOCK, '$1'));
+  const segments = splitFenced(body.replace(/\r\n?/g, '\n'));
+  const content = segments
+    .map((segment) => (segment.code ? segment.text : cleanProse(segment.text, meta.mdx ?? false)))
+    .join('\n')
+    .trim();
   const title =
-    stringField(data.title) ??
-    (h1?.[1] ? plainHeading(h1[1]) : undefined) ??
-    meta.fallbackTitle ??
-    meta.id;
+    stringField(data.title) ?? firstH1(splitFenced(content)) ?? meta.fallbackTitle ?? meta.id;
   const url = stringField(data.url) ?? stringField(data.permalink) ?? meta.url;
 
   return { id: meta.id, url, title, content };
@@ -66,32 +62,20 @@ function stringField(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-/** Applies `transform` to everything outside fenced code blocks. */
-function mapProse(markdown: string, transform: (prose: string) => string): string {
-  let out = '';
-  let last = 0;
-  for (const match of markdown.matchAll(FENCED_BLOCK)) {
-    const start = match.index + (match[1]?.length ?? 0);
-    const end = match.index + match[0].length;
-    out += transform(markdown.slice(last, start)) + markdown.slice(start, end);
-    last = end;
+/** The text of the first `# Heading` outside code blocks. */
+function firstH1(segments: ReturnType<typeof splitFenced>): string | undefined {
+  for (const segment of segments) {
+    if (segment.code) continue;
+    for (const line of segment.text.split('\n')) {
+      const heading = parseAtxHeading(line);
+      if (heading?.level === 1) return plainHeading(heading.text) || undefined;
+    }
   }
-  return out + transform(markdown.slice(last));
-}
-
-/** Applies `transform` to everything outside inline code spans. */
-function mapOutsideInlineCode(text: string, transform: (prose: string) => string): string {
-  let out = '';
-  let last = 0;
-  for (const match of text.matchAll(INLINE_CODE)) {
-    out += transform(text.slice(last, match.index)) + match[0];
-    last = match.index + match[0].length;
-  }
-  return out + transform(text.slice(last));
+  return undefined;
 }
 
 function cleanProse(prose: string, mdx: boolean): string {
-  return mapOutsideInlineCode(prose.replace(/<!--[\s\S]*?-->/g, ''), (text) =>
+  return mapOutsideCodeSpans(prose.replace(/<!--[\s\S]*?-->/g, ''), (text) =>
     cleanText(text, mdx),
   ).replace(/\n{3,}/g, '\n\n');
 }
