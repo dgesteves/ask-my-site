@@ -103,7 +103,8 @@ function splitSections(document: SourceDocument): Section[] {
       sections.at(-1)?.lines.push(line);
       continue;
     }
-    const anchor = explicit.id ?? slug(text);
+    // Slugged from the heading as written: GitHub keeps every space (`a  b` → `a--b`).
+    const anchor = explicit.id ?? slug(explicit.text);
     while (stack.length > 0 && (stack.at(-1)?.level ?? 0) >= level) stack.pop();
     // A level-one heading that repeats the page title adds nothing to a citation.
     if (!(level === 1 && text.toLowerCase() === title)) stack.push({ level, text, anchor });

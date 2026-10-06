@@ -47,7 +47,7 @@ That is the whole integration: five lines, imports aside. [Full setup](#full-set
 - **`--check` for CI.** Fails the build when the committed index no longer matches the content. Offline: no model call, no API key.
 - **Hybrid retrieval in memory.** BM25 and cosine similarity over int8 vectors, merged with reciprocal rank fusion. No vector database, no network hop.
 - **Says "I don't know".** A relevance gate refuses before the model is called when nothing relevant is found; the grounded prompt is the second line of defense.
-- **Citations that land.** Every chunk belongs to exactly one heading, so `[1]` links to the section, not the page. Anchors match GitHub-style slugs, or your own `{#id}` and HTML `id`s.
+- **Citations that land.** Every chunk belongs to exactly one heading, so `[1]` links to the section, not the page. Anchors are the slugs GitHub, rehype-slug and Docusaurus generate (github-slugger, applied to the heading as CommonMark renders it), or your own `{#id}` and HTML `id`s.
 - **Any AI SDK model.** Embeddings through `embedMany`/`embed` and answers through `streamText`, from any provider package or an AI Gateway model string.
 - **Web-standard handler.** `(Request) => Promise<Response>` built on Web APIs only, so it mounts in Next.js route handlers, Hono, Bun, Deno or Cloudflare Workers. It streams the AI SDK UI message protocol, so `useChat` can consume it too.
 - **Accessible ⌘K dialog.** Radix Dialog and cmdk; focus management, `aria-live` answer, reduced motion, light and dark themes, unstyled-friendly.
