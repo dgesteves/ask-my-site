@@ -6,19 +6,77 @@ const from = (ip: string, headers: Record<string, string> = {}): Request =>
   new Request('http://localhost/api/ask', { headers: { 'x-forwarded-for': ip, ...headers } });
 
 describe('clientKey', () => {
-  it('prefers platform headers and never trusts the client-supplied start of X-Forwarded-For', () => {
+  it('reads the last X-Forwarded-For entry, never the client-supplied start of it', () => {
     // Proxies append, so the first entry is whatever the client sent.
     expect(clientKey(from('spoofed-123, 198.51.100.1'))).toBe('198.51.100.1');
-    expect(clientKey(from('spoofed-123, 1.2.3.4', { 'cf-connecting-ip': '198.51.100.9' }))).toBe(
-      '198.51.100.9',
-    );
-    expect(clientKey(new Request('http://x', { headers: { 'x-real-ip': '198.51.100.2' } }))).toBe(
-      '198.51.100.2',
-    );
-    expect(
-      clientKey(new Request('http://x', { headers: { 'cf-connecting-ip': '198.51.100.3' } })),
-    ).toBe('198.51.100.3');
+    expect(clientKey(from('198.51.100.1'))).toBe('198.51.100.1');
     expect(clientKey(new Request('http://x'))).toBe('anonymous');
+  });
+
+  it('ignores platform headers nobody said to trust', () => {
+    // On Vercel, `x-forwarded-for` is the platform's; the others pass through from the client.
+    for (const header of [
+      'cf-connecting-ip',
+      'fly-client-ip',
+      'x-nf-client-connection-ip',
+      'x-real-ip',
+    ]) {
+      expect(clientKey(from('198.51.100.1', { [header]: 'attacker' }))).toBe('198.51.100.1');
+    }
+  });
+
+  it('reads only the header the deployer trusts', () => {
+    const request = from('spoofed', { 'cf-connecting-ip': '198.51.100.3', 'x-real-ip': 'spoofed' });
+    expect(clientKey(request, { trustedHeader: 'cf-connecting-ip' })).toBe('198.51.100.3');
+    expect(clientKey(request, { trustedHeader: 'CF-Connecting-IP' })).toBe('198.51.100.3');
+    // A proxy that appends to its own header: the last entry is the one it added.
+    const appended = new Request('http://x', {
+      headers: { 'x-client-ip': 'spoofed, 198.51.100.4' },
+    });
+    expect(clientKey(appended, { trustedHeader: 'x-client-ip' })).toBe('198.51.100.4');
+    // Missing: one shared bucket, never a fallback to a header the client controls.
+    expect(clientKey(from('198.51.100.5'), { trustedHeader: 'fly-client-ip' })).toBe('anonymous');
+  });
+});
+
+describe('rate limit keys under spoofing', () => {
+  it('a client rotating headers the platform does not set stays in one bucket', () => {
+    const limit = memoryRateLimit({ limit: 2, windowMs: 60_000, now: () => 0 });
+    let allowed = 0;
+    for (let i = 0; i < 100; i += 1) {
+      // What reaches the function on Vercel: the platform's x-forwarded-for and x-real-ip, plus
+      // whatever else the client chose to send.
+      const request = new Request('http://localhost/api/ask', {
+        headers: {
+          'x-forwarded-for': '198.51.100.1',
+          'x-real-ip': '198.51.100.1',
+          'cf-connecting-ip': `spoof-${String(i)}`,
+          'fly-client-ip': `spoof-${String(i)}`,
+          'x-nf-client-connection-ip': `spoof-${String(i)}`,
+        },
+      });
+      if (limit(request).success) allowed += 1;
+    }
+    expect(allowed).toBe(2);
+  });
+
+  it('keys on the trusted header, so a forged X-Forwarded-For changes nothing', () => {
+    const limit = memoryRateLimit({ limit: 2, trustedHeader: 'cf-connecting-ip', now: () => 0 });
+    const results = Array.from(
+      { length: 5 },
+      (_, i) => limit(from(`spoof-${String(i)}`, { 'cf-connecting-ip': '198.51.100.9' })).success,
+    );
+    expect(results).toEqual([true, true, false, false, false]);
+    // A custom key wins over the header.
+    const perUser = memoryRateLimit({
+      limit: 1,
+      trustedHeader: 'cf-connecting-ip',
+      key: (request) => request.headers.get('authorization') ?? 'anonymous',
+      now: () => 0,
+    });
+    expect(perUser(from('a', { authorization: 'user-1' })).success).toBe(true);
+    expect(perUser(from('a', { authorization: 'user-2' })).success).toBe(true);
+    expect(perUser(from('b', { authorization: 'user-1' })).success).toBe(false);
   });
 });
 
@@ -80,5 +138,14 @@ describe('upstashRateLimit', () => {
     });
     expect(ratelimit.limit).toHaveBeenCalledWith('203.0.113.9');
     expect(waitUntil).toHaveBeenCalledWith(pending);
+  });
+
+  it('keys on the trusted header', async () => {
+    const ratelimit = {
+      limit: vi.fn(() => Promise.resolve({ success: true, limit: 10, remaining: 9, reset: 0 })),
+    };
+    const limiter = upstashRateLimit(ratelimit, { trustedHeader: 'fly-client-ip' });
+    await limiter(from('spoofed', { 'fly-client-ip': '203.0.113.10' }));
+    expect(ratelimit.limit).toHaveBeenCalledWith('203.0.113.10');
   });
 });

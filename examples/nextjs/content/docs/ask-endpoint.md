@@ -24,6 +24,8 @@ The response is an AI SDK UI message stream over Server-Sent Events. It starts w
 
 Pass `rateLimit` to limit requests per client. `memoryRateLimit({ limit: 10, windowMs: 60_000 })` keeps a token bucket per IP inside one server instance. For a limit shared across instances and regions, wrap an `@upstash/ratelimit` instance with `upstashRateLimit`. Rejected requests get a 429 with a `Retry-After` header.
 
+The client IP comes from one header, and only a header your platform sets on every request can be trusted: a client can send any other. The default is the last `X-Forwarded-For` entry, which is right on Vercel and behind a proxy that appends to it. On Netlify, Cloudflare or Fly.io, name the platform's header, for example `memoryRateLimit({ trustedHeader: 'cf-connecting-ip' })`, or pass `key` to choose the bucket yourself.
+
 ## Errors
 
 Model errors are masked in the stream so provider details never reach the browser, and reported through `onError`. A misconfigured embedding model, one that does not match the index, fails loudly with a 500 rather than returning poor answers.

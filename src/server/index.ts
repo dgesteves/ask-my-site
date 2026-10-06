@@ -8,6 +8,7 @@ export { buildSources, defaultInstructions, formatPrompt } from './prompt';
 export type { PromptSource } from './prompt';
 export { clientKey, memoryRateLimit, upstashRateLimit } from './rate-limit';
 export type {
+  ClientKeyOptions,
   MemoryRateLimitOptions,
   RateLimiter,
   RateLimitResult,
