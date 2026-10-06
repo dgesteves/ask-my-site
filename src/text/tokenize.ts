@@ -20,15 +20,44 @@ const STOPWORDS = new Set(
 );
 
 const WORD = /[\p{L}\p{N}]+/gu;
+// Hot path: most text is ASCII plus typographic punctuation (› — “ ” → …), and the Unicode work
+// below is the slow part of loading an index. Punctuation only ever separates words, so text whose
+// only non-ASCII characters are punctuation can take the ASCII scanner and tokenize identically.
+// eslint-disable-next-line no-control-regex
+const NEEDS_UNICODE = /[^\x00-\x7f\u00a0\u00ab\u00b7\u00bb\u2000-\u206f\u2190-\u21ff]/;
+const HAS_CAMEL = /[\p{Ll}\p{N}]\p{Lu}|\p{Lu}\p{Lu}\p{Ll}/u;
 const CAMEL_BOUNDARY = /(?<=[\p{Ll}\p{N}])(?=\p{Lu})|(?<=\p{Lu})(?=\p{Lu}\p{Ll})/u;
 const DIACRITICS = /\p{M}+/gu;
-const PLURAL_GUARD = /(?:ss|us|is)$/;
+// "don't" and "dont" should match, so apostrophes inside a word are dropped rather than split on.
+const INNER_APOSTROPHE = /(?<=[\p{L}\p{N}])['\u2019](?=[\p{L}\p{N}])/gu;
 
-function normalizeTerm(raw: string): string | null {
-  const term = raw.toLowerCase();
-  if (term.length < 2 || STOPWORDS.has(term)) return null;
-  if (term.length > 3 && term.endsWith('s') && !PLURAL_GUARD.test(term)) return term.slice(0, -1);
+const CHAR_S = 115;
+const CHAR_U = 117;
+const CHAR_I = 105;
+
+/** Stopword removal and plural stripping (`-s`, but not `-ss`, `-us` or `-is`) on a lowercase word. */
+function normalizeTerm(term: string): string | null {
+  const length = term.length;
+  if (length < 2 || STOPWORDS.has(term)) return null;
+  if (length > 3 && term.charCodeAt(length - 1) === CHAR_S) {
+    const previous = term.charCodeAt(length - 2);
+    if (previous !== CHAR_S && previous !== CHAR_U && previous !== CHAR_I) {
+      return term.slice(0, -1);
+    }
+  }
   return term;
+}
+
+function pushWord(terms: string[], word: string, hasUpper: boolean): void {
+  const lower = hasUpper ? word.toLowerCase() : word;
+  const whole = normalizeTerm(lower);
+  if (whole) terms.push(whole);
+  if (hasUpper && HAS_CAMEL.test(word)) {
+    for (const part of word.split(CAMEL_BOUNDARY)) {
+      const term = normalizeTerm(part.toLowerCase());
+      if (term && term !== whole) terms.push(term);
+    }
+  }
 }
 
 /**
@@ -38,19 +67,38 @@ function normalizeTerm(raw: string): string | null {
  * an identifier whole or by its parts.
  */
 export function tokenize(text: string): string[] {
+  let input = text;
+  if (input.includes("'") || input.includes('\u2019')) input = input.replace(INNER_APOSTROPHE, '');
   const terms: string[] = [];
-  const folded = text.normalize('NFKD').replace(DIACRITICS, '');
-  for (const match of folded.matchAll(WORD)) {
-    const word = match[0];
-    const whole = normalizeTerm(word);
-    if (whole) terms.push(whole);
-    const parts = word.split(CAMEL_BOUNDARY);
-    if (parts.length > 1) {
-      for (const part of parts) {
-        const term = normalizeTerm(part);
-        if (term && term !== whole) terms.push(term);
-      }
+
+  if (NEEDS_UNICODE.test(input)) {
+    input = input.normalize('NFKD').replace(DIACRITICS, '');
+    for (const match of input.matchAll(WORD)) {
+      const word = match[0];
+      pushWord(terms, word, word !== word.toLowerCase());
     }
+    return terms;
+  }
+
+  // ASCII fast path: a character scanner, no regex match objects. Loading an index tokenizes
+  // every chunk, so this loop dominates cold-start time.
+  const length = input.length;
+  let i = 0;
+  while (i < length) {
+    let code = input.charCodeAt(i);
+    while (i < length && !isWordChar(code)) code = input.charCodeAt(++i);
+    const start = i;
+    let hasUpper = false;
+    while (i < length && isWordChar(code)) {
+      if (code <= 90 && code >= 65) hasUpper = true;
+      code = input.charCodeAt(++i);
+    }
+    if (i > start) pushWord(terms, input.slice(start, i), hasUpper);
   }
   return terms;
+}
+
+/** [A-Za-z0-9] */
+function isWordChar(code: number): boolean {
+  return (code >= 97 && code <= 122) || (code >= 65 && code <= 90) || (code >= 48 && code <= 57);
 }

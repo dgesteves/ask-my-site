@@ -14,6 +14,22 @@ describe('tokenize', () => {
     ]);
   });
 
+  it('treats typographic punctuation as a separator on the fast path', () => {
+    expect(tokenize('Guide › Install — “quick” setup → done…')).toEqual([
+      'guide',
+      'install',
+      'quick',
+      'setup',
+      'done',
+    ]);
+    expect(tokenize('Résumé › Café')).toEqual(['resume', 'cafe']);
+  });
+
+  it('joins contractions and possessives instead of splitting them', () => {
+    expect(tokenize("I don't know")).toEqual(tokenize('I dont know'));
+    expect(tokenize('the site’s index')).toEqual(['site', 'index']);
+  });
+
   it('indexes identifiers whole and by camelCase parts', () => {
     expect(tokenize('createAskHandler()')).toEqual([
       'createaskhandler',
