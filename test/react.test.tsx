@@ -5,7 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildIndex } from '../src';
 import { MOCK_MIN_SIMILARITY, mockEmbeddingModel, mockLanguageModel } from '../src/mock';
-import { AskAnswer, AskDialog, useAsk } from '../src/react';
+import { AskAnswer, AskDialog, citedSourceIds, useAsk } from '../src/react';
 import { createAskHandler } from '../src/server';
 import { corpus } from './helpers';
 
@@ -144,6 +144,10 @@ describe('AskAnswer', () => {
     );
   });
 
+  it('extracts cited source numbers', () => {
+    expect([...citedSourceIds('A [1]. B [2][3]. C [1, 4]. Not [x].')]).toEqual([1, 2, 3, 4]);
+  });
+
   it('renders lists, code and emphasis', () => {
     render(
       <AskAnswer
@@ -200,7 +204,10 @@ describe('AskDialog', () => {
     );
 
     const sources = within(dialog).getByRole('navigation', { name: 'Sources' });
-    expect(within(sources).getAllByRole('link').length).toBeGreaterThan(0);
+    const sourceLinks = within(sources).getAllByRole('link');
+    expect(sourceLinks.length).toBeGreaterThan(0);
+    // Sources the finished answer cites are marked; the rest are de-emphasized.
+    expect(sourceLinks.some((link) => link.getAttribute('data-cited') === 'true')).toBe(true);
 
     const citation = within(answer).getAllByRole('link', { name: /^Source \d+:/ })[0]!;
     await user.click(citation);

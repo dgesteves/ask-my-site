@@ -15,6 +15,15 @@ const FENCE = /^(`{3,}|~{3,})[^\n]*\n([\s\S]*?)(?:\n\1[`~]*[ \t]*(?=\n|$)|$)/gm;
 const INLINE =
   /`([^`\n]+)`|\*\*([^*\n]+)\*\*|\[([^\]\n]+)\]\(([^)\s]+)\)|\[(\d{1,3}(?:\s*,\s*\d{1,3})*)\]/g;
 
+/** The source numbers an answer cites, e.g. `[1]`, `[2][3]` or `[1, 4]`. */
+export function citedSourceIds(text: string): Set<number> {
+  const ids = new Set<number>();
+  for (const match of text.matchAll(/\[(\d{1,3}(?:\s*,\s*\d{1,3})*)\]/g)) {
+    for (const id of (match[1] ?? '').split(',')) ids.add(Number(id.trim()));
+  }
+  return ids;
+}
+
 /** Allows http(s), mailto, relative and hash links; anything else (javascript:, data:) is dropped. */
 export function safeHref(href: string): string | null {
   const trimmed = href.trim();

@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { AskAnswer } from './answer';
+import { AskAnswer, citedSourceIds } from './answer';
 import { useAsk, type AskState, type UseAskOptions } from './use-ask';
 
 export type AskDialogSlot =
@@ -272,6 +272,8 @@ function AnswerPanel({
   classNames: Partial<Record<AskDialogSlot, string>>;
 }): ReactNode {
   const streaming = state.status === 'streaming';
+  // Once the answer is complete, sources it never cites are de-emphasized.
+  const cited = state.status === 'done' ? citedSourceIds(state.answer) : null;
   return (
     <div className="ask-panel">
       <div
@@ -316,6 +318,7 @@ function AnswerPanel({
                 <a
                   href={source.url}
                   className="ask-source"
+                  data-cited={cited ? cited.has(source.id) : undefined}
                   onClick={(event) => {
                     onNavigate(source.url, event);
                   }}

@@ -7,7 +7,7 @@
 
 export { AskDialog } from './ask-dialog';
 export type { AskDialogProps, AskDialogSlot } from './ask-dialog';
-export { AskAnswer, safeHref } from './answer';
+export { AskAnswer, citedSourceIds, safeHref } from './answer';
 export type { AskAnswerProps } from './answer';
 export { useAsk } from './use-ask';
 export type { AskError, AskState, AskStatus, UseAsk, UseAskOptions } from './use-ask';
