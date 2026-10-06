@@ -5,6 +5,8 @@ export interface AskStreamHandlers {
   source?: (source: AskSource) => void;
   delta?: (text: string) => void;
   error?: (message: string) => void;
+  /** The server finished the message. A stream that ends without it was cut off. */
+  finish?: () => void;
 }
 
 type Part = Record<string, unknown> & { type?: unknown };
@@ -47,6 +49,9 @@ function dispatch(part: Part, on: AskStreamHandlers): void {
       break;
     case 'error':
       on.error?.(typeof part.errorText === 'string' ? part.errorText : 'The stream failed.');
+      break;
+    case 'finish':
+      on.finish?.();
       break;
     default:
       // Unknown parts (step markers, future additions) are ignored, not errors.

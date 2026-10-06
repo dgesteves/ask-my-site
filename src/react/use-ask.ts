@@ -128,6 +128,8 @@ function frameScheduler(): { schedule: (fn: () => void) => void; flush: () => vo
 export function useAsk(options: UseAskOptions = {}): UseAsk {
   const [state, setState] = useState<AskState>(INITIAL);
   const controllerRef = useRef<AbortController | null>(null);
+  // The in-flight answer, ahead of state by up to one animation frame; stop() keeps all of it.
+  const liveAnswerRef = useRef('');
   const optionsRef = useRef(options);
   useEffect(() => {
     optionsRef.current = options;
@@ -141,6 +143,7 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
+    liveAnswerRef.current = '';
     const { endpoint = '/api/ask', headers, fetch: fetcher = fetch, onFinish } = optionsRef.current;
 
     let current: AskState = { ...INITIAL, status: 'loading', question };
@@ -173,6 +176,8 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
       const error = response.ok
         ? { kind: 'stream' as const, message: 'The response had no body.' }
         : await errorFrom(response);
+      // A newer question may have started while the error body was being read.
+      if (controller.signal.aborted) return;
       commit({ status: 'error', error });
       onFinish?.(current);
       return;
@@ -181,6 +186,8 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     const frames = frameScheduler();
     let answer = '';
     let streamError: string | null = null;
+    // An object, so the flag set inside the stream callback is visible to control-flow analysis.
+    const progress = { finished: false };
     try {
       await readAskStream(response.body, {
         metadata: ({ refused, retrieval }) => {
@@ -191,12 +198,16 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
         },
         delta: (text) => {
           answer += text;
+          if (controllerRef.current === controller) liveAnswerRef.current = answer;
           frames.schedule(() => {
             commit({ status: 'streaming', answer });
           });
         },
         error: (message) => {
           streamError = message;
+        },
+        finish: () => {
+          progress.finished = true;
         },
       });
     } catch (error) {
@@ -205,6 +216,11 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     }
     frames.flush();
     if (controller.signal.aborted) return;
+    // A stream that ends without `finish` was cut off by a proxy, a timeout or a crash: an
+    // incomplete answer must not look complete.
+    if (streamError === null && !progress.finished) {
+      streamError = 'The answer was cut off. Please try again.';
+    }
     commit(
       streamError === null
         ? { status: 'done', answer }
@@ -215,11 +231,12 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
 
   const stop = useCallback((): void => {
     controllerRef.current?.abort();
-    setState((previous) =>
-      previous.status === 'loading' || previous.status === 'streaming'
-        ? { ...previous, status: previous.answer ? 'done' : 'idle' }
-        : previous,
-    );
+    const answer = liveAnswerRef.current;
+    setState((previous) => {
+      if (previous.status !== 'loading' && previous.status !== 'streaming') return previous;
+      const kept = answer.length > previous.answer.length ? answer : previous.answer;
+      return { ...previous, answer: kept, status: kept ? 'done' : 'idle' };
+    });
   }, []);
 
   const reset = useCallback((): void => {

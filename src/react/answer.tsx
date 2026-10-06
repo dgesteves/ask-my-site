@@ -1,6 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react';
 
 import type { AskSource } from '../protocol';
+import { fenceBody, splitFenced } from '../text/markdown';
 
 export interface AskAnswerProps {
   /** The answer text, possibly still streaming. */
@@ -11,7 +12,6 @@ export interface AskAnswerProps {
   className?: string;
 }
 
-const FENCE = /^(`{3,}|~{3,})[^\n]*\n([\s\S]*?)(?:\n\1[`~]*[ \t]*(?=\n|$)|$)/gm;
 const INLINE =
   /`([^`\n]+)`|\*\*([^*\n]+)\*\*|\[([^\]\n]+)\]\(([^)\s]+)\)|\[(\d{1,3}(?:\s*,\s*\d{1,3})*)\]/g;
 
@@ -24,9 +24,15 @@ export function citedSourceIds(text: string): Set<number> {
   return ids;
 }
 
-/** Allows http(s), mailto, relative and hash links; anything else (javascript:, data:) is dropped. */
+/**
+ * Allows http(s), mailto, root-relative, relative and hash links; anything else (`javascript:`,
+ * `data:`) is dropped. Protocol-relative tricks are rejected too: browsers read `/\\evil.com`
+ * and `/<tab>/evil.com` as `//evil.com`, so backslashes and control characters never pass.
+ */
 export function safeHref(href: string): string | null {
   const trimmed = href.trim();
+  // eslint-disable-next-line no-control-regex
+  if (/[\\\u0000-\u001f\u007f]/.test(trimmed)) return null;
   if (/^(?:\/(?!\/)|#|\.{1,2}\/)/.test(trimmed)) return trimmed;
   try {
     const { protocol } = new URL(trimmed);
@@ -47,55 +53,63 @@ export function safeHref(href: string): string | null {
 export function AskAnswer({ text, sources, onNavigate, className }: AskAnswerProps): ReactNode {
   const byId = new Map(sources.map((source) => [source.id, source]));
   const blocks: ReactNode[] = [];
-  let last = 0;
   let key = 0;
-  for (const match of text.matchAll(FENCE)) {
-    blocks.push(...prose(text.slice(last, match.index), byId, onNavigate, () => key++));
-    blocks.push(
-      <pre key={`b${String(key++)}`} className="ask-pre">
-        <code>{match[2]}</code>
-      </pre>,
-    );
-    last = match.index + match[0].length;
+  for (const segment of splitFenced(text)) {
+    if (segment.code) {
+      // Streaming: an unclosed fence is still a code block, so code renders as it arrives.
+      blocks.push(
+        <pre key={`b${String(key++)}`} className="ask-pre">
+          <code>{fenceBody(segment.text)}</code>
+        </pre>,
+      );
+    } else {
+      blocks.push(...prose(segment.text, byId, onNavigate, () => key++));
+    }
   }
-  blocks.push(...prose(text.slice(last), byId, onNavigate, () => key++));
   return <div className={className ?? 'ask-markdown'}>{blocks}</div>;
 }
 
+const BULLET = /^[-*+]\s+/;
+const NUMBERED = /^\d+[.)]\s+/;
+type LineKind = 'ul' | 'ol' | 'p';
+const kindOf = (line: string): LineKind =>
+  BULLET.test(line) ? 'ul' : NUMBERED.test(line) ? 'ol' : 'p';
+
+/**
+ * Paragraphs and lists. Within a paragraph block, consecutive lines of one kind are grouped, so
+ * "To install:" directly followed by "1. …" lines renders as a paragraph and then a list.
+ */
 function prose(
   text: string,
   sources: Map<number, AskSource>,
   onNavigate: AskAnswerProps['onNavigate'],
   nextKey: () => number,
 ): ReactNode[] {
-  return text
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block) => {
-      const lines = block.split('\n').map((line) => line.trim());
+  const inline = (line: string): ReactNode[] => renderInline(line, sources, onNavigate);
+  const out: ReactNode[] = [];
+  for (const block of text.split(/\n{2,}/)) {
+    const runs: { kind: LineKind; lines: string[] }[] = [];
+    for (const line of block
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)) {
+      const kind = kindOf(line);
+      const run = runs.at(-1);
+      if (run?.kind === kind) run.lines.push(line);
+      else runs.push({ kind, lines: [line] });
+    }
+    for (const run of runs) {
       const key = `b${String(nextKey())}`;
-      const inline = (line: string): ReactNode[] => renderInline(line, sources, onNavigate);
-      if (lines.every((line) => /^[-*+]\s+/.test(line))) {
-        return (
-          <ul key={key}>
-            {lines.map((line, i) => (
-              <li key={i}>{inline(line.replace(/^[-*+]\s+/, ''))}</li>
-            ))}
-          </ul>
-        );
+      if (run.kind === 'p') {
+        out.push(<p key={key}>{inline(run.lines.join(' '))}</p>);
+        continue;
       }
-      if (lines.every((line) => /^\d+[.)]\s+/.test(line))) {
-        return (
-          <ol key={key}>
-            {lines.map((line, i) => (
-              <li key={i}>{inline(line.replace(/^\d+[.)]\s+/, ''))}</li>
-            ))}
-          </ol>
-        );
-      }
-      return <p key={key}>{inline(lines.join(' '))}</p>;
-    });
+      const marker = run.kind === 'ul' ? BULLET : NUMBERED;
+      const items = run.lines.map((line, i) => <li key={i}>{inline(line.replace(marker, ''))}</li>);
+      out.push(run.kind === 'ul' ? <ul key={key}>{items}</ul> : <ol key={key}>{items}</ol>);
+    }
+  }
+  return out;
 }
 
 function renderInline(
@@ -135,15 +149,19 @@ function renderInline(
       if (ids.every((id) => sources.has(id))) {
         for (const id of ids) {
           const source = sources.get(id);
-          if (!source) continue;
+          const href = source ? safeHref(source.url) : null;
+          if (!source || !href) {
+            out.push(`[${String(id)}]`);
+            continue;
+          }
           out.push(
             <a
               key={key++}
               className="ask-citation"
-              href={source.url}
+              href={href}
               title={source.heading ? `${source.title} › ${source.heading}` : source.title}
               aria-label={`Source ${String(id)}: ${source.title}`}
-              onClick={(event) => onNavigate?.(source.url, event)}
+              onClick={(event) => onNavigate?.(href, event)}
             >
               {id}
             </a>,
