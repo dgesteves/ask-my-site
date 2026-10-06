@@ -26,7 +26,7 @@ import {
   type RetrievalResult,
 } from '../search/retrieve';
 import { buildSources, defaultInstructions, formatPrompt } from './prompt';
-import type { RateLimiter } from './rate-limit';
+import type { RateLimiter, RateLimitResult } from './rate-limit';
 
 type StreamTextOptions = Parameters<typeof streamText>[0];
 
@@ -82,6 +82,12 @@ export interface AskHandlerOptions {
   /** Answer used when retrieval finds nothing relevant. The model is not called. */
   noAnswerMessage?: string;
   rateLimit?: RateLimiter;
+  /**
+   * What to do when `rateLimit` throws or rejects, e.g. because Redis is unreachable. `"closed"`
+   * (the default) answers 503 without calling the model; `"open"` answers as if the request were
+   * allowed. Either way the error goes to `onError`.
+   */
+  rateLimitFailure?: 'closed' | 'open';
   generation?: GenerationOptions;
   /** Extra headers on every response, e.g. for CORS. */
   headers?: Record<string, string>;
@@ -246,7 +252,24 @@ export function createAskHandler(
     }
 
     if (options.rateLimit) {
-      const limit = await options.rateLimit(request);
+      let limit: RateLimitResult;
+      try {
+        limit = await options.rateLimit(request);
+      } catch (error) {
+        // Failing closed by default: the limiter is what stands between the endpoint and an
+        // unbounded model bill, and its outage can be provoked (a flood can exhaust a Redis
+        // plan's request quota), so an error should not quietly switch it off.
+        reportError(error);
+        if (options.rateLimitFailure !== 'open') {
+          return json(503, {
+            error: {
+              code: 'service_unavailable',
+              message: 'The service is unavailable. Try again shortly.',
+            },
+          });
+        }
+        limit = { success: true };
+      }
       if (!limit.success) {
         const headers: Record<string, string> = {};
         if (limit.reset !== undefined) {
