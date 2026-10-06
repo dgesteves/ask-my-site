@@ -4,7 +4,7 @@ import { buildIndex, loadIndex, retrieve, serializeIndexFile } from '../src';
 import { MOCK_MIN_SIMILARITY, hashEmbedding, mockEmbeddingModel } from '../src/mock';
 import { corpus } from './helpers';
 
-const DIMS = 256;
+const DIMS = 512;
 
 async function setup() {
   const { index } = await buildIndex({

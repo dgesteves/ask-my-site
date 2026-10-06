@@ -16,13 +16,14 @@ import { MockEmbeddingModelV4, MockLanguageModelV4 } from 'ai/test';
 import { tokenize } from '../text/tokenize';
 
 /**
- * A `minSimilarity` that suits {@link mockEmbeddingModel}. Hashed bag-of-words vectors score
- * lower than neural embeddings for the same relatedness.
+ * A `minSimilarity` that suits {@link mockEmbeddingModel} at its default size. Chance similarity
+ * between hashed vectors has a standard deviation of about 1/sqrt(dimensions), 0.044 at 512, so
+ * 0.2 sits well clear of noise. Most relevant matches pass on keyword coverage instead.
  */
-export const MOCK_MIN_SIMILARITY = 0.12;
+export const MOCK_MIN_SIMILARITY = 0.2;
 
 export interface MockEmbeddingModelOptions {
-  /** Vector size. Default 256. */
+  /** Vector size. Default 512. */
   dimensions?: number;
 }
 
@@ -53,7 +54,7 @@ export function hashEmbedding(text: string, dimensions: number): number[] {
 
 /** A deterministic, offline embedding model. Its id is `mock-hash-<dimensions>`. */
 export function mockEmbeddingModel(options: MockEmbeddingModelOptions = {}): MockEmbeddingModelV4 {
-  const dimensions = options.dimensions ?? 256;
+  const dimensions = options.dimensions ?? 512;
   return new MockEmbeddingModelV4({
     provider: 'ask-my-site',
     modelId: `mock-hash-${String(dimensions)}`,
