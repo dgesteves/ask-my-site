@@ -19,23 +19,27 @@ ask-my-site indexes your pages at build time into one static JSON file that you 
 
 ## Quickstart
 
+Install, then index your content into `ask-index.json`:
+
 ```sh
-npm i ask-my-site ai @ai-sdk/openai && npx ask-my-site index ./content -e openai:text-embedding-3-small
+npm i ask-my-site ai @ai-sdk/openai
+npx ask-my-site index ./content -e openai:text-embedding-3-small
 ```
+
+Mount the endpoint in `app/api/ask/route.ts` (any `Request → Response` runtime works):
 
 ```ts
-export const POST = createAskHandler({
-  index,
-  model: openai('gpt-5.4-mini'),
-  embeddingModel: openai.embedding('text-embedding-3-small'),
-}); // app/api/ask/route.ts
+const embeddingModel = openai.embedding('text-embedding-3-small');
+export const POST = createAskHandler({ index, model: openai('gpt-5.4-mini'), embeddingModel });
 ```
+
+Render the dialog in your layout, with `import 'ask-my-site/react/styles.css'`:
 
 ```tsx
-<AskDialog /> // in your layout, with `import 'ask-my-site/react/styles.css'`
+<AskDialog />
 ```
 
-That is the whole integration. [Full setup with imports](#full-setup) below; no API key is needed to [try the example](#try-it-without-an-api-key).
+That is the whole integration: five lines, imports aside. [Full setup](#full-setup) is below, and no API key is needed to [try the example](#try-it-without-an-api-key).
 
 ## Features
 
@@ -143,7 +147,7 @@ Without `OPENAI_API_KEY` it runs in mock mode: `mockEmbeddingModel()` hashes wor
 
 ## API
 
-Six entry points; each is tree-shakeable, and only `ask-my-site/node` and the CLI touch Node built-ins.
+Five imports and a CLI. Each import is tree-shakeable, and only `ask-my-site/node` and the CLI touch Node built-ins.
 
 | Import               | For                                                                    |
 | -------------------- | ---------------------------------------------------------------------- |
@@ -203,7 +207,7 @@ export default {
 | `embeddingProviderOptions` | none                        | Must match the build, e.g. `{ openai: { dimensions: 512 } }` (dimension mismatches are reported).                                                    |
 | `siteName`                 | `"this site"`               | Used in the instructions and the refusal.                                                                                                            |
 | `instructions`             | grounded defaults           | A string, or `(defaults) => string` to extend them.                                                                                                  |
-| `retrieval`                | see below                   | `{ topK: 6, candidates: 40, rrfK: 60, minSimilarity: 0.25, minKeywordCoverage: 0.5 }`                                                                |
+| `retrieval`                | tuned                       | `{ topK: 6, candidates: 40, rrfK: 60, minSimilarity: 0.25, minKeywordCoverage: 0.5 }`                                                                |
 | `maxContextChars`          | `8000`                      | Source text sent to the model.                                                                                                                       |
 | `maxQuestionLength`        | `500`                       | Longer questions get a 400.                                                                                                                          |
 | `noAnswerMessage`          | "I don't know. I couldn't…" | Streamed when nothing is relevant.                                                                                                                   |
@@ -263,7 +267,7 @@ Also exported: `fromHtml`, `fromDocuments`, `chunkDocument`, `checkIndex`, `pars
 
 **Static over hosted.** Content that changes on deploy does not need a database that changes at runtime. A committed index removes the vector store, its sync job and its outage modes, and it versions with the pages it cites, so a citation can never point at a section that was deleted in the same release. The cost is freshness: content changes need a rebuild, which is the point of `--check`.
 
-**int8, without a scale.** Each vector is scaled so its largest component is ±127 and rounded: one byte per dimension, a quarter of float32 and about a tenth of float JSON. No per-vector scale is stored because retrieval only needs cosine similarity, and cosine is scale-invariant. Measured recall@10 against exact float32 is 99% at 10,000 chunks, with similarities within 0.005. Binary (1-bit) quantization would shrink the vectors another 8× but loses too much recall at 512 dimensions without a re-ranking pass; product quantization needs trained codebooks. Neither pays off at this scale.
+**int8, without a scale.** Each vector is scaled so its largest component is ±127 and rounded: one byte per dimension, a quarter of float32 and about a tenth of float JSON. No per-vector scale is stored because retrieval only needs cosine similarity, and cosine is scale-invariant. Measured recall@10 against exact float32 is 99% at 10,000 chunks, with similarities within 0.005. Binary (1-bit) quantization would shrink the vectors another 8×, but on the same benchmark vectors it keeps only 27% of the exact top 10 (66% even after rescoring a 4× shortlist), and rescoring means shipping full vectors anyway. Product quantization needs trained codebooks. Neither pays off at this scale.
 
 **Hybrid retrieval, fused by rank.** Embeddings are good at paraphrase and bad at exact tokens: function names, flags, error codes. BM25 is the reverse. Docs questions mix both. Reciprocal rank fusion (k = 60) merges the two rankings using ranks alone, so there is no fragile attempt to put BM25 scores and cosines on one scale, and a chunk both retrievers like beats one only a single retriever loves. camelCase identifiers are indexed whole and split, so `createAskHandler` matches "create ask handler".
 
@@ -271,7 +275,7 @@ Also exported: `fromHtml`, `fromDocuments`, `chunkDocument`, `checkIndex`, `pars
 
 **An exact scan, not an ANN index.** At 10,000 chunks a full int8 cosine scan takes under 5 ms, recall is perfect, and there is nothing to build at cold start. HNSW and friends earn their memory and build time well past the sizes a static site produces.
 
-**One function, one stream.** Retrieval runs inside the request handler instead of a separate service, and the response is the AI SDK's UI message stream rather than a bespoke format: sources first, then text. `useAsk` parses it with a small SSE reader, keeping `ai` and zod out of the client bundle; `useChat` users get it for free.
+**One function, one stream.** Retrieval runs inside the request handler instead of a separate service, and the response is the AI SDK's UI message stream rather than a bespoke format: sources first, then text. `useAsk` parses it with a small SSE reader, keeping `ai` and zod out of the client bundle, and the same stream is readable by `useChat`.
 
 **Untrusted output stays text.** The answer is rendered from a small Markdown subset into React nodes, never HTML. Links are allow-listed to http(s), mailto and relative URLs, and `[n]` becomes a link only if the server actually sent source `n`. Sources and the question are wrapped in explicit delimiters and the instructions tell the model to treat them as data.
 
@@ -307,7 +311,7 @@ At 10,000 chunks, the BM25 half of a query takes 2.3 ms and the vector scan 4.6 
 ```sh
 pnpm install
 pnpm test        # Vitest, offline: mock models from ai/test, no keys
-pnpm validate    # lint, format, typecheck, test, build, publint + are-the-types-wrong
+pnpm validate    # lint, format, typecheck, test, build, package checks, example build + lint
 pnpm bench       # benchmarks
 pnpm assets      # regenerate the architecture diagram
 ```

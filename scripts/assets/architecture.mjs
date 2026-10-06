@@ -100,6 +100,8 @@ const W = 1280;
 const H = 600;
 const X = 48;
 const INNER = W - 2 * X;
+// Type scale. The SVG is shown at ~70% in a README, so nothing goes below 14px.
+const T = { title: 19, sub: 14, label: 14, pill: 15 };
 
 const SPARK =
   'M12 2.5c.6 4.9 3.6 7.9 8.5 8.5-4.9.6-7.9 3.6-8.5 8.5-.6-4.9-3.6-7.9-8.5-8.5 4.9-.6 7.9-3.6 8.5-8.5Z';
@@ -109,14 +111,14 @@ function row(specs, y) {
   const widths = specs.map(({ title, sub }) =>
     Math.max(
       150,
-      Math.ceil(Math.max(measure(F.medium, title, 17), measure(F.mono, sub, 12.5)) + 40),
+      Math.ceil(Math.max(measure(F.medium, title, T.title), measure(F.mono, sub, T.sub)) + 36),
     ),
   );
   const gap = (INNER - widths.reduce((a, b) => a + b, 0)) / (specs.length - 1);
-  if (gap < 28) throw new Error(`row too wide (gap ${gap})`);
+  if (gap < 24) throw new Error(`row too wide (gap ${gap})`);
   let x = X;
   return specs.map((spec, i) => {
-    const node = { ...spec, x, y, w: widths[i], h: 76 };
+    const node = { ...spec, x, y, w: widths[i], h: 84 };
     node.cx = x + node.w / 2;
     node.cy = y + node.h / 2;
     x += node.w + gap;
@@ -128,14 +130,14 @@ function node(n) {
   const stroke = n.highlight ? C.cyan : C.edgeStrong;
   const strokeOpacity = n.highlight ? 0.6 : 1;
   const icon = n.icon
-    ? `<path transform="translate(${n.x + 18} ${n.y + 17}) scale(0.72)" d="${SPARK}" fill="${C.cyan}"/>`
+    ? `<path transform="translate(${n.x + 16} ${n.y + 19}) scale(0.8)" d="${SPARK}" fill="${C.cyan}"/>`
     : '';
-  const titleX = n.x + 20 + (n.icon ? 22 : 0);
+  const titleX = n.x + 18 + (n.icon ? 25 : 0);
   return `
     <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="12" fill="${C.raised}" stroke="${stroke}" stroke-opacity="${strokeOpacity}"/>
     ${icon}
-    ${text(F.medium, n.title, titleX, n.y + 32, 17, { fill: n.highlight ? C.cyanBright : C.fg })}
-    ${text(F.mono, n.sub, n.x + 20, n.y + 56, 12.5, { fill: C.muted })}`;
+    ${text(F.medium, n.title, titleX, n.y + 36, T.title, { fill: n.highlight ? C.cyanBright : C.fg })}
+    ${text(F.mono, n.sub, n.x + 18, n.y + 62, T.sub, { fill: C.muted })}`;
 }
 
 function arrowHead(x, y, direction) {
@@ -176,10 +178,10 @@ function chain(nodes, pulseClass) {
 }
 
 function laneLabel(label, detail, y) {
-  const labelWidth = measure(F.monoMedium, label, 12.5, 1.6);
+  const labelWidth = measure(F.monoMedium, label, T.label, 1.6);
   return `
-    ${text(F.monoMedium, label, X + 2, y, 12.5, { tracking: 1.6, fill: C.cyan })}
-    ${text(F.mono, detail, X + labelWidth + 16, y, 12.5, { fill: C.subtle })}`;
+    ${text(F.monoMedium, label, X + 2, y, T.label, { tracking: 1.6, fill: C.cyan })}
+    ${text(F.mono, detail, X + labelWidth + 16, y, T.label, { fill: C.muted })}`;
 }
 
 const build = row(
@@ -218,7 +220,7 @@ const loadLabelX = (index.cx + search.cx) / 2;
 
 // Refusal branch.
 const refusal = 'nothing relevant → “I don’t know”, model never called';
-const refusalWidth = measure(F.regular, refusal, 13.5) + 36;
+const refusalWidth = measure(F.regular, refusal, T.pill) + 36;
 const pillY = 446;
 const pillX = Math.min(gate.cx - refusalWidth / 2, W - X - refusalWidth);
 
@@ -253,26 +255,26 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
     ${build.map(node).join('')}
 
     <rect x="${X - 20}" y="276" width="${INNER + 40}" height="${H - 276 - 24}" rx="16" fill="${C.panel}" fill-opacity=".72" stroke="${C.edge}"/>
-    ${laneLabel('REQUEST TIME', 'createAskHandler · per question, all in one function', 310)}
+    ${laneLabel('REQUEST TIME', 'createAskHandler · per question', 310)}
 
     <path d="${loadPath}" stroke="${C.cyan}" stroke-opacity=".55" stroke-width="1.5" stroke-dasharray="5 5" fill="none"/>
     ${arrowHead(search.cx, search.y - 6, 'down').replace(C.edgeStrong, C.cyan)}
-    <rect x="${num(loadLabelX - measure(F.mono, loadLabel, 12.5) / 2 - 12)}" y="${busY - 12}" width="${num(measure(F.mono, loadLabel, 12.5) + 24)}" height="24" rx="12" fill="${C.ink}" stroke="${C.edge}"/>
-    ${text(F.mono, loadLabel, loadLabelX, busY + 4.5, 12.5, { anchor: 'middle', fill: C.muted })}
+    <rect x="${num(loadLabelX - measure(F.mono, loadLabel, T.label) / 2 - 12)}" y="${busY - 14}" width="${num(measure(F.mono, loadLabel, T.label) + 24)}" height="28" rx="14" fill="${C.ink}" stroke="${C.edge}"/>
+    ${text(F.mono, loadLabel, loadLabelX, busY + 5, T.label, { anchor: 'middle', fill: C.muted })}
 
     ${chain(request, 'request')}
 
     <path d="M${num(gate.cx)} ${gate.y + gate.h + 6}V${pillY - 6}" stroke="${C.magenta}" stroke-opacity=".6" stroke-width="1.5" fill="none"/>
     ${arrowHead(gate.cx, pillY - 6, 'down').replace(C.edgeStrong, C.magenta)}
-    <rect x="${num(pillX)}" y="${pillY}" width="${num(refusalWidth)}" height="34" rx="17" fill="#1a1016" stroke="${C.magenta}" stroke-opacity=".55"/>
-    ${text(F.regular, refusal, pillX + refusalWidth / 2, pillY + 22, 13.5, { anchor: 'middle', fill: C.fgSoft })}
-    <path d="M${num(gate.cx)} ${pillY + 34}V${returnY}" stroke="${C.magenta}" stroke-opacity=".45" stroke-width="1.5" stroke-dasharray="4 4" fill="none"/>
+    <rect x="${num(pillX)}" y="${pillY}" width="${num(refusalWidth)}" height="38" rx="19" fill="#1a1016" stroke="${C.magenta}" stroke-opacity=".55"/>
+    ${text(F.regular, refusal, pillX + refusalWidth / 2, pillY + 24, T.pill, { anchor: 'middle', fill: C.fgSoft })}
+    <path d="M${num(gate.cx)} ${pillY + 38}V${returnY}" stroke="${C.magenta}" stroke-opacity=".45" stroke-width="1.5" stroke-dasharray="4 4" fill="none"/>
 
     <path d="${returnPath}" stroke="${C.edgeStrong}" stroke-width="1.5" fill="none"/>
     ${arrowHead(dialog.cx, dialog.y + dialog.h + 6, 'up')}
     <path class="pulse request" style="animation-delay:1.9s" d="${returnPath}" pathLength="100" stroke="${C.cyanBright}" stroke-width="2" stroke-linecap="round" fill="none"/>
-    <rect x="${num(returnLabelX - measure(F.mono, returnLabel, 12.5) / 2 - 12)}" y="${returnY - 12}" width="${num(measure(F.mono, returnLabel, 12.5) + 24)}" height="24" rx="12" fill="${C.panel}" stroke="${C.edge}"/>
-    ${text(F.mono, returnLabel, returnLabelX, returnY + 4.5, 12.5, { anchor: 'middle', fill: C.muted })}
+    <rect x="${num(returnLabelX - measure(F.mono, returnLabel, T.label) / 2 - 12)}" y="${returnY - 14}" width="${num(measure(F.mono, returnLabel, T.label) + 24)}" height="28" rx="14" fill="${C.panel}" stroke="${C.edge}"/>
+    ${text(F.mono, returnLabel, returnLabelX, returnY + 5, T.label, { anchor: 'middle', fill: C.muted })}
 
     ${request.map(node).join('')}
     <rect y="${H - 2}" width="${W}" height="2" fill="${C.cyan}" fill-opacity=".45"/>
