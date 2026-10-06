@@ -199,25 +199,26 @@ export default {
 
 ### `createAskHandler(options)` from `ask-my-site/server`
 
-| Option                     | Default                     | Notes                                                                                                                                                |
-| -------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `index`                    | required                    | Parsed JSON, its text, a `loadIndex` result, or a (sync or async) function returning one. Loaded once; a failed load is retried on the next request. |
-| `model`                    | required                    | Any AI SDK `LanguageModel`.                                                                                                                          |
-| `embeddingModel`           | none                        | Must match the index (checked). Without it, retrieval is keyword-only.                                                                               |
-| `embeddingProviderOptions` | none                        | Must match the build, e.g. `{ openai: { dimensions: 512 } }` (dimension mismatches are reported).                                                    |
-| `siteName`                 | `"this site"`               | Used in the instructions and the refusal.                                                                                                            |
-| `instructions`             | grounded defaults           | A string, or `(defaults) => string` to extend them.                                                                                                  |
-| `retrieval`                | tuned                       | `{ topK: 6, candidates: 40, rrfK: 60, minSimilarity: 0.25, minKeywordCoverage: 0.5 }`                                                                |
-| `maxContextChars`          | `8000`                      | Source text sent to the model.                                                                                                                       |
-| `maxQuestionLength`        | `500`                       | Longer questions get a 400.                                                                                                                          |
-| `noAnswerMessage`          | "I don't know. I couldn't…" | Streamed when nothing is relevant.                                                                                                                   |
-| `rateLimit`                | none                        | `(request) => { success, limit?, remaining?, reset? }`, sync or async.                                                                               |
-| `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`, …                                                                  |
-| `headers`                  | none                        | Added to every response (CORS).                                                                                                                      |
-| `onFinish`                 | none                        | `{ question, answer, sources, refused, retrieval, usage }` after each answer.                                                                        |
-| `onError`                  | `console.error`             | Handled errors: embedding fallbacks, model failures, misconfiguration.                                                                               |
+| Option                     | Default                     | Notes                                                                                                                                                                       |
+| -------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index`                    | required                    | Parsed JSON, its text, a `loadIndex` result, or a (sync or async) function returning one. Loaded once; a failed load is retried on the next request.                        |
+| `model`                    | required                    | Any AI SDK `LanguageModel`.                                                                                                                                                 |
+| `embeddingModel`           | none                        | Must match the index (checked). Without it, retrieval is keyword-only.                                                                                                      |
+| `embeddingProviderOptions` | none                        | Must match the build, e.g. `{ openai: { dimensions: 512 } }` (dimension mismatches are reported).                                                                           |
+| `siteName`                 | `"this site"`               | Used in the instructions and the refusal.                                                                                                                                   |
+| `instructions`             | grounded defaults           | A string, or `(defaults) => string` to extend them.                                                                                                                         |
+| `retrieval`                | tuned                       | `{ topK: 6, candidates: 40, rrfK: 60, minSimilarity: 0.25, minKeywordCoverage: 0.5 }`                                                                                       |
+| `maxContextChars`          | `8000`                      | Source text sent to the model.                                                                                                                                              |
+| `maxQuestionLength`        | `500`                       | Longer questions get a 400.                                                                                                                                                 |
+| `maxBodyBytes`             | 64 KiB                      | Counted while reading, so a chunked upload cannot exhaust memory.                                                                                                           |
+| `noAnswerMessage`          | "I don't know. I couldn't…" | Streamed when nothing is relevant.                                                                                                                                          |
+| `rateLimit`                | none                        | `(request) => { success, limit?, remaining?, reset? }`, sync or async.                                                                                                      |
+| `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`, …                                                                                         |
+| `headers`                  | none                        | Added to every response, including the 204 that answers a CORS preflight. Cross-origin: set `access-control-allow-origin` and `access-control-allow-headers: content-type`. |
+| `onFinish`                 | none                        | `{ question, answer, sources, refused, retrieval, usage }` after each answer.                                                                                               |
+| `onError`                  | `console.error`             | Handled errors: embedding fallbacks, model failures, misconfiguration.                                                                                                      |
 
-The body is `{ "question": string }`; the `{ messages }` body that `useChat` sends is accepted too, using the last user message. Errors are JSON `{ error: { code, message } }` with 400, 405, 413, 429 (with `Retry-After` and `RateLimit-*` headers) or 500.
+The body is `{ "question": string }`; the `{ messages }` body that `useChat` sends is accepted too, using the last user message. Errors are JSON `{ error: { code, message } }` with 400, 405, 413, 429 (with `Retry-After` and `RateLimit-*` headers) or 500. A client that disconnects before the answer starts gets a bare 499 and is not reported as an error.
 
 The response is an [AI SDK UI message stream](https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol) (SSE):
 
@@ -230,7 +231,7 @@ data: {"type":"finish"}
 data: [DONE]
 ```
 
-Rate limiters: `memoryRateLimit({ limit, windowMs })` is a per-instance token bucket keyed by client IP; `upstashRateLimit(new Ratelimit({ … }))` adapts `@upstash/ratelimit` for a shared limit without ask-my-site depending on it.
+Rate limiters: `memoryRateLimit({ limit, windowMs })` is a per-instance token bucket keyed by client IP; `upstashRateLimit(new Ratelimit({ … }))` adapts `@upstash/ratelimit` for a shared limit without ask-my-site depending on it. The default key reads platform headers first (Cloudflare, Fly, Netlify), then `x-real-ip`, then the last `x-forwarded-for` entry, never the client-controlled first one; pass `key` for any other proxy setup.
 
 ### `<AskDialog />` and `useAsk()` from `ask-my-site/react`
 

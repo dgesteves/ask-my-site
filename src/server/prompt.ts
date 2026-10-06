@@ -56,8 +56,12 @@ export function buildSources(
   return sources;
 }
 
-const escapeTag = (text: string, tag: string): string =>
-  text.replace(new RegExp(`</?${tag}\\b`, 'gi'), (match) => match.replace('<', '‹'));
+/**
+ * Neutralizes anything in indexed content or the question that looks like one of the prompt's
+ * own delimiters, so neither can close the sources block or open a fake question.
+ */
+const escapeDelimiters = (text: string): string =>
+  text.replace(/<(\/?)(sources?|question)\b/gi, '‹$1$2');
 
 const escapeAttribute = (text: string): string =>
   text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -68,7 +72,7 @@ export function formatPrompt(question: string, sources: readonly PromptSource[])
     const label = source.heading ? `${source.title} › ${source.heading}` : source.title;
     return [
       `<source id="${String(source.id)}" title="${escapeAttribute(label)}" url="${escapeAttribute(source.url)}">`,
-      escapeTag(source.text, 'source'),
+      escapeDelimiters(source.text),
       '</source>',
     ].join('\n');
   });
@@ -78,7 +82,7 @@ export function formatPrompt(question: string, sources: readonly PromptSource[])
     '</sources>',
     '',
     '<question>',
-    escapeTag(question, 'question'),
+    escapeDelimiters(question),
     '</question>',
   ].join('\n');
 }

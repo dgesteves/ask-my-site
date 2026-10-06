@@ -6,8 +6,12 @@ const from = (ip: string, headers: Record<string, string> = {}): Request =>
   new Request('http://localhost/api/ask', { headers: { 'x-forwarded-for': ip, ...headers } });
 
 describe('clientKey', () => {
-  it('reads the first forwarded address, then other proxy headers', () => {
-    expect(clientKey(from('198.51.100.1, 10.0.0.1'))).toBe('198.51.100.1');
+  it('prefers platform headers and never trusts the client-supplied start of X-Forwarded-For', () => {
+    // Proxies append, so the first entry is whatever the client sent.
+    expect(clientKey(from('spoofed-123, 198.51.100.1'))).toBe('198.51.100.1');
+    expect(clientKey(from('spoofed-123, 1.2.3.4', { 'cf-connecting-ip': '198.51.100.9' }))).toBe(
+      '198.51.100.9',
+    );
     expect(clientKey(new Request('http://x', { headers: { 'x-real-ip': '198.51.100.2' } }))).toBe(
       '198.51.100.2',
     );
@@ -47,6 +51,13 @@ describe('memoryRateLimit', () => {
     expect(limit(from('c')).success).toBe(true);
     expect(limit(from('a')).success).toBe(false);
     expect(limit(from('b')).success).toBe(true);
+  });
+});
+
+describe('memoryRateLimit options', () => {
+  it('rejects limits and windows that cannot work', () => {
+    expect(() => memoryRateLimit({ limit: 0 })).toThrow(RangeError);
+    expect(() => memoryRateLimit({ windowMs: 0 })).toThrow(RangeError);
   });
 });
 
