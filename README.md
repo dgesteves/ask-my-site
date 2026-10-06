@@ -7,6 +7,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square&labelColor=181c22)](./LICENSE)
 [![Types](https://img.shields.io/badge/types-included-22d3ee?style=flat-square&labelColor=181c22)](#api)
 
+**[Try the live demo →](https://ask-my-site-demo.vercel.app)** A docs site that answers questions about this library. It runs in mock mode (offline embeddings, scripted extractive answers), so no API key is involved.
+
 <p align="center">
   <img src=".github/assets/hero.png" alt="The ask dialog over a docs page: a streamed answer with numbered citation chips, and a list of three sources linking to the exact sections it came from." width="900">
 </p>
