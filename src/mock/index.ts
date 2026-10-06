@@ -81,15 +81,16 @@ interface ParsedSource {
   text: string;
 }
 
-const SOURCE = /<source id="(\d+)"[^<>]*>\n?([\s\S]*?)\n?<\/source>/g;
-const QUESTION = /<question>\n?([\s\S]*?)\n?<\/question>/;
+// `formatPrompt` tags end in a per-prompt suffix; a back-reference matches the closing tag.
+const SOURCE = /<source-([\da-f]+) id="(\d+)"[^\n]*>\n([\s\S]*?)\n<\/source-\1>/g;
+const QUESTION = /<question-([\da-f]+)>\n([\s\S]*?)\n<\/question-\1>/;
 
 /** The answer the mock model gives for a prompt produced by `formatPrompt`. */
 export function extractiveAnswer(prompt: string): string {
-  const question = new Set(tokenize(QUESTION.exec(prompt)?.[1] ?? ''));
+  const question = new Set(tokenize(QUESTION.exec(prompt)?.[2] ?? ''));
   const sources: ParsedSource[] = [...prompt.matchAll(SOURCE)].map((match) => ({
-    id: Number(match[1]),
-    text: match[2] ?? '',
+    id: Number(match[2]),
+    text: match[3] ?? '',
   }));
   if (sources.length === 0) return "I don't know. No sources were provided.";
 
