@@ -52,10 +52,40 @@ export function embeddingModelId(model: EmbeddingModel): string {
   return typeof model === 'string' ? model : model.modelId;
 }
 
-/** Compares model ids, ignoring a gateway-style provider prefix (`openai/`). */
+/**
+ * Compares model ids. A gateway id (`openai/text-embedding-3-small`) matches the provider's bare
+ * id (`text-embedding-3-small`), but two ids that both name a provider must match exactly, so
+ * `orgA/bge-base` and `orgB/bge-base` are different models.
+ */
 export function sameEmbeddingModel(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.includes('/') && b.includes('/')) return false;
   const bare = (id: string): string => id.slice(id.lastIndexOf('/') + 1);
   return bare(a) === bare(b);
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+      .join(',')}}`;
+  }
+  return value === undefined ? 'null' : JSON.stringify(value);
+}
+
+/**
+ * A short fingerprint of embedding provider options, recorded in the index. Options such as
+ * `{ openai: { dimensions: 512 } }` change the vectors a model returns, so vectors are only reused
+ * when the fingerprint matches. `undefined` when there are no options.
+ */
+export async function embeddingSettingsKey(
+  options: EmbeddingProviderOptions | undefined,
+): Promise<string | undefined> {
+  if (!options || Object.keys(options).length === 0) return undefined;
+  return (await sha256(stableStringify(options))).slice(0, 16);
 }
 
 interface PreparedCorpus {
@@ -104,6 +134,7 @@ export async function buildIndex(options: BuildIndexOptions): Promise<BuildIndex
   const hashes = await Promise.all(searchTexts.map(async (t) => (await sha256(t)).slice(0, 16)));
 
   const model = options.embeddingModel ?? null;
+  const settings = await embeddingSettingsKey(options.embeddingProviderOptions);
   const vectors: (string | undefined)[] = Array.from({ length: chunks.length });
   let dimensions: number | null = null;
   let embedded = 0;
@@ -113,9 +144,13 @@ export async function buildIndex(options: BuildIndexOptions): Promise<BuildIndex
     const modelId = embeddingModelId(model);
     const previous = options.previous;
     const reusable = new Map<string, string>();
-    if (previous?.embedding && sameEmbeddingModel(previous.embedding.model, modelId)) {
+    const compatible =
+      previous?.embedding &&
+      sameEmbeddingModel(previous.embedding.model, modelId) &&
+      previous.embedding.settings === settings;
+    if (compatible) {
       for (const chunk of previous.chunks) if (chunk.vector) reusable.set(chunk.hash, chunk.vector);
-      dimensions = previous.embedding.dimensions;
+      dimensions = previous.embedding?.dimensions ?? null;
     }
 
     const missing: number[] = [];
@@ -140,7 +175,7 @@ export async function buildIndex(options: BuildIndexOptions): Promise<BuildIndex
       batch.forEach((chunkIndex, j) => {
         const embedding = embeddings[j];
         if (!embedding)
-          throw new Error(`Embedding model returned no vector for chunk ${String(j)}.`);
+          throw new Error(`Embedding model returned no vector for chunk ${String(chunkIndex)}.`);
         dimensions ??= embedding.length;
         if (embedding.length !== dimensions) {
           throw new Error(
@@ -154,7 +189,7 @@ export async function buildIndex(options: BuildIndexOptions): Promise<BuildIndex
       options.onProgress?.({ embedded, total: missing.length });
     }
     // An empty corpus still records which model it was built for.
-    dimensions ??= previous?.embedding?.dimensions ?? null;
+    if (compatible) dimensions ??= previous.embedding?.dimensions ?? null;
   }
 
   const indexChunks: IndexChunk[] = chunks.map((chunk, i) => ({
@@ -174,7 +209,7 @@ export async function buildIndex(options: BuildIndexOptions): Promise<BuildIndex
       chunking,
       embedding:
         model !== null && dimensions !== null
-          ? { model: embeddingModelId(model), dimensions }
+          ? { model: embeddingModelId(model), dimensions, ...(settings ? { settings } : {}) }
           : null,
       documents: documents.map(({ id, url, title }) => ({ id, url, title })),
       chunks: indexChunks,
@@ -194,6 +229,8 @@ export interface CheckIndexOptions {
   embeddingModel?: EmbeddingModel | null;
   /** When given, the check also fails if the index vectors have a different size. */
   embeddingDimensions?: number;
+  /** When given, the check also fails if the index was embedded with different provider options. */
+  embeddingProviderOptions?: EmbeddingProviderOptions;
 }
 
 export interface CheckIndexResult {
@@ -255,6 +292,12 @@ export async function checkIndex(options: CheckIndexOptions): Promise<CheckIndex
     }
   } else if (model === null && index.embedding) {
     problems.push(`Index has embeddings from "${index.embedding.model}"; expected keyword-only.`);
+  }
+  if (options.embeddingProviderOptions !== undefined && index.embedding) {
+    const expected = await embeddingSettingsKey(options.embeddingProviderOptions);
+    if (index.embedding.settings !== expected) {
+      problems.push('Index was embedded with different provider options (e.g. dimensions).');
+    }
   }
   const dimensions = options.embeddingDimensions;
   if (dimensions && index.embedding && index.embedding.dimensions !== dimensions) {

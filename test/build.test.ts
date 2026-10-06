@@ -8,6 +8,7 @@ import {
   checkIndex,
   loadIndex,
   parseIndexFile,
+  sameEmbeddingModel,
   serializeIndexFile,
   validateIndexFile,
 } from '../src';
@@ -80,6 +81,54 @@ describe('buildIndex', () => {
     expect(third.embedded()).toBe(index.chunks.length);
   });
 
+  it('re-embeds everything when provider options such as dimensions change', async () => {
+    const first = countingModel('m');
+    const { index: previous } = await buildIndex({
+      documents: corpus,
+      embeddingModel: first.model,
+      embeddingProviderOptions: { openai: { dimensions: 64, user: 'docs' } },
+    });
+    expect(previous.embedding?.settings).toMatch(/^[0-9a-f]{16}$/);
+
+    // Same options, keys in a different order: everything is reused.
+    const same = countingModel('m');
+    await buildIndex({
+      documents: corpus,
+      embeddingModel: same.model,
+      embeddingProviderOptions: { openai: { user: 'docs', dimensions: 64 } },
+      previous,
+    });
+    expect(same.embedded()).toBe(0);
+
+    // Different options: nothing is reused, even though model and text are unchanged.
+    const changed = countingModel('m');
+    const { index, stats } = await buildIndex({
+      documents: corpus,
+      embeddingModel: changed.model,
+      embeddingProviderOptions: { openai: { dimensions: 32 } },
+      previous,
+    });
+    expect(stats.reused).toBe(0);
+    expect(changed.embedded()).toBe(index.chunks.length);
+    expect(index.embedding?.settings).not.toBe(previous.embedding?.settings);
+
+    const check = await checkIndex({
+      documents: corpus,
+      index,
+      embeddingProviderOptions: { openai: { dimensions: 64 } },
+    });
+    expect(check.problems).toEqual([
+      'Index was embedded with different provider options (e.g. dimensions).',
+    ]);
+  });
+
+  it('matches gateway ids to bare ids, but not across providers', () => {
+    expect(sameEmbeddingModel('openai/text-embedding-3-small', 'text-embedding-3-small')).toBe(
+      true,
+    );
+    expect(sameEmbeddingModel('orgA/bge-base', 'orgB/bge-base')).toBe(false);
+  });
+
   it('embeds the heading path with the text, so context reaches the vector', async () => {
     const { model, calls } = countingModel();
     await buildIndex({ documents: corpus, embeddingModel: model });
@@ -117,6 +166,19 @@ describe('index file validation', () => {
       /chunks\[0\]\.vector/,
     );
     expect(() => parseIndexFile('{nope')).toThrow(AskIndexError);
+  });
+
+  it('reports malformed vectors and fields as AskIndexError', async () => {
+    const { model } = countingModel('m', 16);
+    const { index } = await buildIndex({ documents: corpus, embeddingModel: model });
+    const broken = {
+      ...index,
+      chunks: index.chunks.map((c, i) => (i === 0 ? { ...c, vector: '%%%' } : c)),
+    };
+    expect(() => loadIndex(broken)).toThrow(AskIndexError);
+    expect(() => loadIndex(broken)).toThrow(/chunks\[0\]\.vector/);
+    const noHash = { ...index, chunks: [{ ...index.chunks[0], hash: undefined }] };
+    expect(() => validateIndexFile(noHash)).toThrow(/chunks\[0\]\.hash/);
   });
 
   it('checks vector lengths on load', async () => {

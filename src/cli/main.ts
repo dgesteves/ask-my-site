@@ -303,9 +303,13 @@ export async function main(args: string[], io: CliIO): Promise<number> {
       const result = await checkIndex({
         documents,
         index: existing,
-        chunking,
+        // Options not given again default to what the index was built with.
+        chunking: { ...existing.chunking, ...chunking },
         ...(embedding.model !== undefined ? { embeddingModel: embedding.model } : {}),
         ...(embedding.dimensions ? { embeddingDimensions: embedding.dimensions } : {}),
+        ...(embedding.providerOptions
+          ? { embeddingProviderOptions: embedding.providerOptions }
+          : {}),
       });
       if (result.upToDate) {
         log(`✓ ${outLabel} is up to date (${String(existing.chunks.length)} chunks).`);

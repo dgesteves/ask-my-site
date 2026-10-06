@@ -98,6 +98,23 @@ describe('ask-my-site index', () => {
     expect((await run('index', 'content', '--check')).code).toBe(0);
   });
 
+  it('--check defaults to the chunking the index was built with', async () => {
+    expect(
+      (await run('index', 'content', '-e', 'none', '--chunk-size', '400', '--chunk-overlap', '50'))
+        .code,
+    ).toBe(0);
+    expect((await run('index', 'content', '--check')).code).toBe(0);
+    // Passing different options explicitly is still a failure.
+    expect((await run('index', 'content', '--check', '--chunk-size', '1200')).code).toBe(1);
+  });
+
+  it('names the file when its frontmatter is invalid', async () => {
+    await writeFile(join(cwd, 'content/broken.md'), '---\ntitle: "unterminated\n---\nBody');
+    const result = await run('index', 'content', '-e', 'none');
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('broken.md:');
+  });
+
   it('--check fails when the index is missing', async () => {
     const result = await run('index', 'content', '--check');
     expect(result.code).toBe(1);

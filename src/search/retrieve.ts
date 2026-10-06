@@ -108,7 +108,15 @@ export function loadIndex(input: unknown): LoadedIndex {
     const { dimensions } = file.embedding;
     const matrix = new Int8Array(file.chunks.length * dimensions);
     file.chunks.forEach((chunk, i) => {
-      matrix.set(decodeVector(chunk.vector ?? '', dimensions), i * dimensions);
+      let vector: Int8Array;
+      try {
+        vector = decodeVector(chunk.vector ?? '', dimensions);
+      } catch (error) {
+        throw new AskIndexError(
+          `Invalid ask-my-site index: chunks[${String(i)}].vector: ${(error as Error).message}`,
+        );
+      }
+      matrix.set(vector, i * dimensions);
     });
     vectors = new VectorIndex(matrix, dimensions);
   }
