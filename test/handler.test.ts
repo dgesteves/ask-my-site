@@ -267,6 +267,42 @@ describe('createAskHandler', () => {
     if (status === 405) expect(response.headers.get('allow')).toBe('POST, OPTIONS');
   });
 
+  it('refuses bodies that are not JSON, so cross-site pages cannot post without a preflight', async () => {
+    const rateLimit = vi.fn(() => ({ success: true }));
+    const { handler, model } = setup({ rateLimit });
+    const body = JSON.stringify({ question: 'How are int8 vectors stored?' });
+    // What `fetch(url, { method: 'POST', mode: 'no-cors', body })` on another site sends: a
+    // CORS-safelisted type, or none at all, and no preflight.
+    const simple: Record<string, string>[] = [
+      { 'content-type': 'text/plain;charset=UTF-8', origin: 'https://evil.example' },
+      { 'content-type': 'application/x-www-form-urlencoded' },
+      { 'content-type': 'multipart/form-data; boundary=x' },
+      { 'content-type': 'application/jsonx' },
+      { origin: 'https://evil.example' },
+    ];
+    for (const headers of simple) {
+      const request = new Request('http://localhost/api/ask', {
+        method: 'POST',
+        headers,
+        body: new Blob([body]),
+      });
+      const response = await handler(request);
+      expect(response.status).toBe(415);
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+        'unsupported_media_type',
+      );
+    }
+    expect(rateLimit).not.toHaveBeenCalled();
+    expect(model.doStreamCalls).toHaveLength(0);
+
+    // Parameters and case do not matter.
+    for (const type of ['application/json; charset=utf-8', 'Application/JSON']) {
+      const response = await handler(post(body, { headers: { 'content-type': type } }));
+      expect(response.status).toBe(200);
+      await response.text();
+    }
+  });
+
   it('stops reading a streamed body as soon as it passes the limit', async () => {
     const { handler } = setup({ maxBodyBytes: 1024 });
     let pulled = 0;
@@ -280,6 +316,7 @@ describe('createAskHandler', () => {
     // A chunked request: no content-length to trust.
     const request = new Request('http://localhost/api/ask', {
       method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body,
       duplex: 'half',
     } as RequestInit);

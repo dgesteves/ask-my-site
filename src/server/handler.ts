@@ -130,6 +130,11 @@ async function readBody(request: Request, limit: number): Promise<string | null>
   }
   return new TextDecoder().decode(bytes);
 }
+
+/** `application/json`, with any parameters (`; charset=utf-8`). */
+const isJson = (contentType: string | null): boolean =>
+  contentType?.split(';')[0]?.trim().toLowerCase() === 'application/json';
+
 const MODEL_ERROR_MESSAGE = 'The answer could not be generated. Please try again.';
 
 const requestSchema = z.union([
@@ -219,6 +224,16 @@ export function createAskHandler(
         { error: { code: 'method_not_allowed', message: 'Use POST.' } },
         { allow: 'POST, OPTIONS' },
       );
+    }
+
+    // Browsers send a cross-origin POST without a CORS preflight only if its content type is
+    // text/plain, a form encoding or absent. Requiring JSON forces the preflight, which fails
+    // unless `headers` allows the origin, so other sites cannot spend your model budget through
+    // their visitors' browsers.
+    if (!isJson(request.headers.get('content-type'))) {
+      return json(415, {
+        error: { code: 'unsupported_media_type', message: 'Send the body as application/json.' },
+      });
     }
 
     if (options.rateLimit) {
