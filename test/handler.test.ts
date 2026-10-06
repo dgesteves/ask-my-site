@@ -404,6 +404,53 @@ describe('createAskHandler', () => {
     expect(onError).toHaveBeenCalled();
   });
 
+  it.each([
+    ['an answer', 'How are int8 vectors stored?', false],
+    ['a refusal', 'Who won the 1998 World Cup final?', true],
+  ])(
+    'reports an onFinish that throws after %s, without failing the stream',
+    async (_, question, refused) => {
+      const failure = new Error('analytics DB down');
+      const { handler, onError } = setup({
+        model: mockLanguageModel({ initialDelayMs: 0, wordDelayMs: 0 }),
+        onFinish: () => Promise.reject(failure),
+      });
+      const { parts, done } = await readParts(await handler(post({ question })));
+
+      expect(parts[0]).toMatchObject({ messageMetadata: { refused } });
+      expect(parts.some((p) => p.type === 'error')).toBe(false);
+      expect(parts.at(-1)).toMatchObject({ type: 'finish', finishReason: 'stop' });
+      expect(done).toBe(true);
+      expect(onError.mock.calls).toEqual([[failure]]);
+    },
+  );
+
+  it('reports a generation that times out, but not a client that hangs up', async () => {
+    const slow = () => mockLanguageModel({ initialDelayMs: 0, wordDelayMs: 40 });
+    const timedOut = setup({ model: slow(), generation: { timeout: 60 } });
+    const { parts } = await readParts(
+      await timedOut.handler(post({ question: 'How are int8 vectors stored?' })),
+    );
+    expect(parts.some((p) => p.type === 'abort')).toBe(true);
+    expect(timedOut.onFinish).not.toHaveBeenCalled();
+    expect(timedOut.onError).toHaveBeenCalledOnce();
+    expect(String(timedOut.onError.mock.calls[0]![0])).toMatch(/aborted/i);
+
+    const controller = new AbortController();
+    const hungUp = setup({ model: slow() });
+    const response = await hungUp.handler(
+      post({ question: 'How are int8 vectors stored?' }, { signal: controller.signal }),
+    );
+    const reader = response.body!.getReader();
+    let seen = '';
+    while (!seen.includes('text-delta'))
+      seen += new TextDecoder().decode((await reader.read()).value);
+    controller.abort();
+    await reader.cancel().catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(hungUp.onError).not.toHaveBeenCalled();
+  });
+
   it('refuses to serve an index embedded with a different model', async () => {
     const other = mockEmbeddingModel({ dimensions: 64 });
     const { handler, onError } = setup({ embeddingModel: other });

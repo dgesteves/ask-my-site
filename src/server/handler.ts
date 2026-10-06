@@ -195,6 +195,15 @@ export function createAskHandler(
       console.error('[ask-my-site]', error);
     });
   const baseHeaders = { 'cache-control': 'no-store', ...options.headers };
+  // The answer has already streamed when `onFinish` runs, so its failure (an analytics write,
+  // say) is reported, never turned into an error part the visitor sees.
+  const finish = async (event: AskFinishEvent): Promise<void> => {
+    try {
+      await options.onFinish?.(event);
+    } catch (error) {
+      reportError(error);
+    }
+  };
 
   let indexPromise: Promise<LoadedIndex> | null = null;
   const getIndex = (): Promise<LoadedIndex> => {
@@ -332,7 +341,7 @@ export function createAskHandler(
           writer.write({ type: 'text-delta', id, delta: noAnswerMessage });
           writer.write({ type: 'text-end', id });
           writer.write({ type: 'finish', finishReason: 'stop' });
-          return options.onFinish?.({
+          return finish({
             question,
             answer: noAnswerMessage,
             sources,
@@ -351,15 +360,19 @@ export function createAskHandler(
           onError: ({ error }) => {
             reportError(error);
           },
-          onEnd: async (event) => {
-            await options.onFinish?.({
+          onEnd: (event) =>
+            finish({
               question,
               answer: event.text,
               sources,
               refused: false,
               retrieval,
               usage: event.usage,
-            });
+            }),
+          // A client that hung up is not an error; `generation.timeout` firing is.
+          onAbort: ({ reason }) => {
+            if (request.signal.aborted) return;
+            reportError(new Error('The answer was aborted before it finished.', { cause: reason }));
           },
         });
         writer.merge(
