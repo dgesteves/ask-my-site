@@ -77,8 +77,6 @@
     "release": "pnpm build && changeset publish"
   },
   "dependencies": {
-    "@radix-ui/react-dialog": "^1.1.23",
-    "cmdk": "^1.1.1",
     "github-slugger": "^2.0.0",
     "yaml": "^2.9.1",
     "zod": "^4.6.5"
@@ -89,6 +87,7 @@
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@eslint/js": "^10.0.1",
+    "@radix-ui/react-dialog": "^1.1.23",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
@@ -96,6 +95,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "ai": "^7.0.127",
+    "cmdk": "^1.1.1",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -115,12 +115,20 @@
   },
   "peerDependencies": {
     "@ai-sdk/openai": ">=4",
+    "@radix-ui/react-dialog": "^1.1.23",
     "ai": "^7.0.0",
+    "cmdk": "^1.1.1",
     "react": "^18.3.0 || ^19.0.0",
     "react-dom": "^18.3.0 || ^19.0.0"
   },
   "peerDependenciesMeta": {
     "@ai-sdk/openai": {
+      "optional": true
+    },
+    "@radix-ui/react-dialog": {
+      "optional": true
+    },
+    "cmdk": {
       "optional": true
     },
     "react": {

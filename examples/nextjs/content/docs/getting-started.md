@@ -8,10 +8,10 @@ Setup takes four steps and works with any AI SDK provider.
 
 ## Install
 
-Install the package with the AI SDK and a provider:
+Install the package with the AI SDK, a provider, and the two packages the dialog is built on (leave those out if you only need the endpoint):
 
 ```sh
-pnpm add ask-my-site ai @ai-sdk/openai
+pnpm add ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
 ```
 
 ## Build the index
