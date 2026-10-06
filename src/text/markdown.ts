@@ -183,3 +183,25 @@ export function mapOutsideCodeSpans(text: string, transform: (prose: string) => 
   }
   return out + transform(text.slice(last));
 }
+
+/**
+ * Removes every `open … close` span, shortest first and left to right, like
+ * `text.replace(/open[\s\S]*?close/g, replacement)` but in linear time: when one `open` has no
+ * `close` after it, neither has any later one, so the scan stops instead of retrying each.
+ */
+export function removeDelimited(
+  text: string,
+  open: string,
+  close: string,
+  replacement = '',
+): string {
+  let out = '';
+  let last = 0;
+  for (let start = text.indexOf(open); start !== -1; start = text.indexOf(open, last)) {
+    const end = text.indexOf(close, start + open.length);
+    if (end === -1) break;
+    out += text.slice(last, start) + replacement;
+    last = end + close.length;
+  }
+  return out + text.slice(last);
+}
