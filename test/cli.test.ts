@@ -98,6 +98,44 @@ describe('ask-my-site index', () => {
     expect((await run('index', 'content', '--check')).code).toBe(0);
   });
 
+  it('--check compares --dimensions even without --embedding', async () => {
+    expect((await run('index', 'content', '-e', 'mock')).code).toBe(0);
+    const mismatch = await run('index', 'content', '--check', '--dimensions', '256');
+    expect(mismatch.code).toBe(1);
+    expect(mismatch.stderr).toContain('Index vectors have 512 dimensions, expected 256.');
+    expect((await run('index', 'content', '--check', '--dimensions', '512')).code).toBe(0);
+
+    // The same with the model taken from a config module.
+    await writeFile(
+      join(cwd, 'ask.config.mjs'),
+      `import { mockEmbeddingModel } from ${JSON.stringify(new URL('../src/mock/index.ts', import.meta.url).href)};
+      export default { embeddingModel: mockEmbeddingModel() };`,
+    );
+    const viaConfig = await run(
+      'index',
+      'content',
+      '-c',
+      'ask.config.mjs',
+      '--check',
+      '--dimensions',
+      '256',
+    );
+    expect(viaConfig.code).toBe(1);
+    expect(viaConfig.stderr).toContain('expected 256');
+  });
+
+  it('refuses --dimensions it could not apply to a build', async () => {
+    await writeFile(join(cwd, 'ask.config.mjs'), 'export default { embeddingModel: null };');
+    for (const args of [
+      ['-c', 'ask.config.mjs', '--dimensions', '256'],
+      ['-e', 'none', '--dimensions', '256'],
+    ]) {
+      const result = await run('index', 'content', ...args);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('--dimensions');
+    }
+  });
+
   it('--check defaults to the chunking the index was built with', async () => {
     expect(
       (await run('index', 'content', '-e', 'none', '--chunk-size', '400', '--chunk-overlap', '50'))

@@ -33,7 +33,8 @@ Options:
                                mock[:<dims>]     deterministic, offline
                                none              keyword-only index
                                (default: openai:text-embedding-3-small if OPENAI_API_KEY is set)
-      --dimensions <n>         Vector size, for models that support it (e.g. 512)
+      --dimensions <n>         Vector size, for models that support it (e.g. 512).
+                               With --check, the size the index must have.
       --chunk-size <chars>     Max characters per chunk (default: ${String(DEFAULT_CHUNKING.maxChars)})
       --chunk-overlap <chars>  Characters shared by consecutive chunks (default: ${String(DEFAULT_CHUNKING.overlap)})
       --ignore <glob>          Skip matching files; repeatable
@@ -86,6 +87,24 @@ interface EmbeddingChoice {
 }
 
 async function resolveEmbedding(
+  flags: Flags,
+  config: AskConfig,
+  io: CliIO,
+  mode: 'build' | 'check',
+): Promise<EmbeddingChoice> {
+  const choice = await chooseEmbedding(flags, config, io, mode);
+  const dims = flags.dimensions;
+  if (dims === undefined || choice.dimensions !== undefined) return choice;
+  // A check compares the size on its own, whatever the model. A build cannot apply it to a
+  // config's model (or none), and silently ignoring it would build the wrong vectors.
+  if (mode === 'check') return { ...choice, dimensions: dims };
+  throw new UsageError(
+    '--dimensions applies to the model given with --embedding. With a config module, set ' +
+      'embeddingProviderOptions there instead.',
+  );
+}
+
+async function chooseEmbedding(
   flags: Flags,
   config: AskConfig,
   io: CliIO,
