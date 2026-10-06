@@ -74,6 +74,11 @@ export interface AskHandlerOptions {
   maxContextChars?: number;
   /** Longest accepted question, in characters. Default 500. */
   maxQuestionLength?: number;
+  /**
+   * Largest accepted request body, in bytes, enforced while reading. Default 64 KiB, which fits
+   * the conversation history `useChat` sends for many turns.
+   */
+  maxBodyBytes?: number;
   /** Answer used when retrieval finds nothing relevant. The model is not called. */
   noAnswerMessage?: string;
   rateLimit?: RateLimiter;
@@ -95,7 +100,36 @@ export interface AskFinishEvent {
   usage?: LanguageModelUsage;
 }
 
-const MAX_BODY_BYTES = 32 * 1024;
+/** Status for a request the client abandoned (nginx's convention); nobody reads the body. */
+const CLIENT_CLOSED = 499;
+
+/**
+ * Reads the body as UTF-8, giving up as soon as it exceeds `limit` bytes. `Content-Length` is
+ * advisory (chunked requests have none), so the bytes are counted as they arrive.
+ */
+async function readBody(request: Request, limit: number): Promise<string | null> {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    parts.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const part of parts) {
+    bytes.set(part, offset);
+    offset += part.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
 const MODEL_ERROR_MESSAGE = 'The answer could not be generated. Please try again.';
 
 const requestSchema = z.union([
@@ -143,6 +177,7 @@ export function createAskHandler(
   const siteName = options.siteName ?? 'this site';
   const maxQuestionLength = options.maxQuestionLength ?? 500;
   const maxContextChars = options.maxContextChars ?? 8000;
+  const maxBodyBytes = options.maxBodyBytes ?? 64 * 1024;
   const noAnswerMessage =
     options.noAnswerMessage ?? `I don't know. I couldn't find anything about that on ${siteName}.`;
   const instructions =
@@ -170,11 +205,19 @@ export function createAskHandler(
     Response.json(body, { status, headers: { ...baseHeaders, ...headers } });
 
   return async function handleAsk(request: Request): Promise<Response> {
+    // CORS preflight: `useAsk` posts JSON, so cross-origin requests are always preflighted.
+    // Answer with the configured headers (put the access-control-* ones in `headers`).
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: { ...baseHeaders, allow: 'POST, OPTIONS' },
+      });
+    }
     if (request.method !== 'POST') {
       return json(
         405,
         { error: { code: 'method_not_allowed', message: 'Use POST.' } },
-        { allow: 'POST' },
+        { allow: 'POST, OPTIONS' },
       );
     }
 
@@ -197,23 +240,16 @@ export function createAskHandler(
       }
     }
 
-    const declaredLength = Number(request.headers.get('content-length') ?? 0);
-    if (declaredLength > MAX_BODY_BYTES) {
-      return json(413, {
-        error: { code: 'payload_too_large', message: 'Request body too large.' },
-      });
-    }
-    let raw: string;
+    const tooLarge = (): Response =>
+      json(413, { error: { code: 'payload_too_large', message: 'Request body too large.' } });
+    if (Number(request.headers.get('content-length') ?? 0) > maxBodyBytes) return tooLarge();
+    let raw: string | null;
     try {
-      raw = await request.text();
+      raw = await readBody(request, maxBodyBytes);
     } catch {
       return json(400, { error: { code: 'invalid_json', message: 'Could not read the body.' } });
     }
-    if (raw.length > MAX_BODY_BYTES) {
-      return json(413, {
-        error: { code: 'payload_too_large', message: 'Request body too large.' },
-      });
-    }
+    if (raw === null) return tooLarge();
     let body: unknown;
     try {
       body = JSON.parse(raw);
@@ -242,6 +278,8 @@ export function createAskHandler(
       index = await getIndex();
       queryVector = await embedQuery(question, index, options, request.signal, reportError);
     } catch (error) {
+      // A client that hung up mid-embedding is not an error worth reporting.
+      if (request.signal.aborted) return new Response(null, { status: CLIENT_CLOSED });
       reportError(error);
       return json(500, {
         error: { code: 'internal_error', message: 'The ask endpoint is misconfigured.' },
@@ -382,6 +420,7 @@ async function embedQuery(
         : {}),
     }));
   } catch (error) {
+    if (abortSignal.aborted) throw error;
     // Degrade to keyword retrieval rather than failing the request.
     reportError(error);
     return null;

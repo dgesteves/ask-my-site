@@ -15,21 +15,26 @@ export interface RateLimitResult {
 
 export type RateLimiter = (request: Request) => RateLimitResult | Promise<RateLimitResult>;
 
+/** Headers that a platform sets itself and a client cannot forge through it. */
+const PLATFORM_HEADERS = ['cf-connecting-ip', 'fly-client-ip', 'x-nf-client-connection-ip'];
+
 /**
- * The client's IP from the usual proxy headers, or `"anonymous"`.
+ * The client's IP, or `"anonymous"`.
  *
- * Only trust this behind a proxy that sets these headers (Vercel, Cloudflare, Fly, Netlify do).
- * Without one, a client can send any value it likes.
+ * Platform-set headers win (Cloudflare, Fly, Netlify), then `x-real-ip`, then the *last*
+ * `x-forwarded-for` entry: proxies append to that header, so its first entry is whatever the
+ * client sent and must never be trusted. Vercel overwrites both headers, so they are safe there.
+ * Behind any other setup, pass your own `key`.
  */
 export function clientKey(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-  return (
-    forwarded ||
-    request.headers.get('x-real-ip') ||
-    request.headers.get('cf-connecting-ip') ||
-    request.headers.get('fly-client-ip') ||
-    'anonymous'
-  );
+  for (const name of PLATFORM_HEADERS) {
+    const value = request.headers.get(name)?.trim();
+    if (value) return value;
+  }
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+  const forwarded = request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim();
+  return forwarded || 'anonymous';
 }
 
 export interface MemoryRateLimitOptions {
@@ -61,6 +66,14 @@ export function memoryRateLimit(
   const key = options.key ?? clientKey;
   const maxKeys = options.maxKeys ?? 10_000;
   const now = options.now ?? Date.now;
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new RangeError(
+      `memoryRateLimit: limit must be a positive integer (got ${String(limit)}).`,
+    );
+  }
+  if (!(windowMs > 0) || !Number.isFinite(windowMs)) {
+    throw new RangeError(`memoryRateLimit: windowMs must be positive (got ${String(windowMs)}).`);
+  }
   const refillPerMs = limit / windowMs;
   const buckets = new Map<string, { tokens: number; updatedAt: number }>();
 
