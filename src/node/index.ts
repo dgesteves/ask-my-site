@@ -2,8 +2,8 @@
  * ask-my-site/node: file-system helpers for build scripts and the CLI. Node.js only.
  */
 
-import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
-import { basename, dirname, extname, join, matchesGlob, relative, sep } from 'node:path';
+import { mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, extname, join, sep } from 'node:path';
 
 import type { EmbeddingModel } from 'ai';
 
@@ -12,6 +12,7 @@ import { parseIndexFile, serializeIndexFile, type AskIndexFile } from '../index-
 import { fromHtml } from '../loaders/html';
 import { fromMarkdown } from '../loaders/markdown';
 import type { ChunkingOptions, SourceDocument } from '../types';
+import { matchesGlob } from './glob';
 
 export const DEFAULT_EXTENSIONS = ['.md', '.mdx', '.markdown', '.html', '.htm'] as const;
 
@@ -20,7 +21,10 @@ export interface LoadDirectoryOptions {
   baseUrl?: string;
   /** File extensions to read. Default Markdown, MDX and HTML. */
   extensions?: readonly string[];
-  /** Glob patterns, relative to the directory, of files to skip. */
+  /**
+   * Glob patterns, relative to the directory, of files to skip: `*`, `**`, `?`, `[...]` and
+   * `{a,b}`, matched case-sensitively.
+   */
   ignore?: readonly string[];
 }
 
@@ -47,9 +51,48 @@ function titleFromPath(relativePath: string): string {
 }
 
 /**
+ * The files under `directory` with one of `extensions`, as `/`-separated paths relative to it:
+ * `file` as named on disk, `path` in NFC. Symlinks are followed, except one that leads back into
+ * a directory being walked (a cycle); broken links, dot-entries and `node_modules` are skipped.
+ */
+async function listFiles(
+  directory: string,
+  extensions: ReadonlySet<string>,
+): Promise<{ file: string; path: string }[]> {
+  const files: { file: string; path: string }[] = [];
+  const walk = async (relativeDir: string, ancestors: ReadonlySet<string>): Promise<void> => {
+    const absolute = join(directory, relativeDir);
+    const real = await realpath(absolute);
+    if (ancestors.has(real)) return;
+    const within = new Set(ancestors).add(real);
+    for (const entry of await readdir(absolute, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const file = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+      let isDirectory = entry.isDirectory();
+      let isFile = entry.isFile();
+      if (entry.isSymbolicLink()) {
+        const target = await stat(join(directory, file)).catch(() => null);
+        isDirectory = target?.isDirectory() ?? false;
+        isFile = target?.isFile() ?? false;
+      }
+      if (isDirectory) await walk(file, within);
+      else if (isFile && extensions.has(extname(entry.name).toLowerCase())) {
+        // macOS can hand back decomposed names (`e` + U+0301) where Linux has composed ones (`é`).
+        // Ids and URLs use NFC, so an index checks out the same everywhere.
+        files.push({ file, path: file.normalize('NFC') });
+      }
+    }
+  };
+  await walk('', new Set());
+  return files;
+}
+
+/**
  * Reads every Markdown, MDX and HTML file under `directory` (recursively, in a stable order) and
  * returns them as documents. Dot-directories and `node_modules` are skipped, as are pages that
- * opt out (`draft: true`, `ask: false`, `noindex`).
+ * opt out (`draft: true`, `ask: false`, `noindex`). Symlinked files and directories are followed;
+ * a link back into a directory that is already being read is skipped. Ids and URLs are the
+ * relative path in Unicode NFC.
  */
 export async function loadDirectory(
   directory: string,
@@ -58,19 +101,14 @@ export async function loadDirectory(
   const extensions = new Set(
     (options.extensions ?? DEFAULT_EXTENSIONS).map((e) => e.toLowerCase()),
   );
-  const entries = await readdir(directory, { recursive: true, withFileTypes: true });
-  const files = entries
-    .filter((entry) => entry.isFile() && extensions.has(extname(entry.name).toLowerCase()))
-    .map((entry) => relative(directory, join(entry.parentPath, entry.name)).split(sep).join('/'))
-    .filter(
-      (path) => !path.split('/').some((part) => part.startsWith('.') || part === 'node_modules'),
-    )
-    .filter((path) => !(options.ignore ?? []).some((pattern) => matchesGlob(path, pattern)))
-    .sort();
+  const ignore = options.ignore ?? [];
+  const files = (await listFiles(directory, extensions))
+    .filter(({ path }) => !ignore.some((pattern) => matchesGlob(path, pattern)))
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
   const documents: SourceDocument[] = [];
-  for (const path of files) {
-    const source = await readFile(join(directory, path), 'utf8');
+  for (const { file, path } of files) {
+    const source = await readFile(join(directory, file), 'utf8');
     const meta = {
       id: path,
       url: pathToUrl(path, options.baseUrl),
