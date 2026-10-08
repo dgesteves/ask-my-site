@@ -261,6 +261,17 @@ describe('ask-my-site index', () => {
     expect(result.stderr).toContain(message);
   });
 
+  it('documents every option of --help in the README', async () => {
+    const help = (await run('--help')).stdout;
+    const readme = await readFile(join(import.meta.dirname, '../README.md'), 'utf8');
+    const block = /### CLI\n\n```\n([\s\S]*?)```/.exec(readme)?.[1] ?? '';
+    const options = help.match(/^ +(?:-\w, )?--[\w-]+/gm) ?? [];
+    expect(options.length).toBeGreaterThan(10);
+    for (const option of options.map((line) => line.trim())) {
+      expect([option, block.includes(option)]).toEqual([option, true]);
+    }
+  });
+
   it('prints help and version', async () => {
     expect((await run('--help')).stdout).toContain('Usage: ask-my-site index [dir] [options]');
     expect((await run('--version')).stdout).toMatch(/^\d+\.\d+\.\d+$/);

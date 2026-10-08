@@ -12,6 +12,8 @@
 
 ## 0.3.0
 
+0.3.0 was never published to npm: its changes first shipped in 0.4.0.
+
 ### Minor Changes
 
 - [#4](https://github.com/dgesteves/ask-my-site/pull/4) [`20a74bc`](https://github.com/dgesteves/ask-my-site/commit/20a74bc596e624ff82ddd71c3175b74ecb1f5d57) Thanks [@dgesteves](https://github.com/dgesteves)! - Add `ask-my-site/docusaurus`, a Docusaurus 3 plugin. After `docusaurus build` it indexes the docs, blog posts and MDX pages into `build/ask-index.json` (one per locale) at the URLs Docusaurus generated: each page's Markdown, without breadcrumbs, doc cards or a post's byline, and without the pages that only list others (blog lists, tag and author pages, generated category indexes). It reuses the previous build's vectors for unchanged pages from `node_modules/.cache`, embeds with OpenAI or AI Gateway when their keys are set at build time, and builds a keyword-only index (with a warning) otherwise. In the browser it renders the ask dialog from `@theme/AskMySite`: a floating "Ask AI" button beside the back-to-top button and ⌘/Ctrl+I, the site's light or dark mode, and citations routed without a reload. The README has endpoint recipes for Vercel, Netlify and Cloudflare Pages, and `examples/docusaurus` is a working site.
