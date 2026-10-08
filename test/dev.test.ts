@@ -1,0 +1,268 @@
+import { mkdir, mkdtemp, rm, utimes } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+
+import { createOpenAI } from '@ai-sdk/openai';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { startOpenAIStub } from '../scripts/openai-stub.mjs';
+import { buildIndex } from '../src';
+import { devModels, DevError, findIndexFile, startDevServer, type DevServer } from '../src/cli/dev';
+import { main } from '../src/cli/main';
+import { mockEmbeddingModel } from '../src/mock';
+import { writeIndexFile } from '../src/node';
+import { corpus } from './helpers';
+
+let root: string;
+const servers: DevServer[] = [];
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'ask-my-site-dev-'));
+});
+afterEach(async () => {
+  await Promise.all(servers.splice(0).map((server) => server.close()));
+  await rm(root, { recursive: true, force: true });
+});
+
+/** Builds an index of the test corpus at `file` under the temporary root. */
+async function indexAt(file: string, embeddingModel = mockEmbeddingModel()) {
+  const { index } = await buildIndex({ documents: corpus, embeddingModel });
+  await mkdir(dirname(join(root, file)), { recursive: true });
+  await writeIndexFile(join(root, file), index);
+  return index;
+}
+
+async function serve(file: string, options: Partial<Parameters<typeof startDevServer>[0]> = {}) {
+  const logs: string[] = [];
+  const server = await startDevServer({
+    file: join(root, file),
+    port: 0,
+    env: {},
+    log: (line) => logs.push(line),
+    error: (line) => logs.push(line),
+    ...options,
+  });
+  servers.push(server);
+  return { server, logs };
+}
+
+const ask = (endpoint: string, question: string, headers: Record<string, string> = {}) =>
+  fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify({ question }),
+  });
+
+/** The answer's text, from the stream's text deltas. */
+const answerOf = (stream: string) =>
+  Array.from(
+    stream.matchAll(/^data: (\{"type":"text-delta".*\})$/gm),
+    (match) => (JSON.parse(match[1] ?? '{}') as { delta: string }).delta,
+  ).join('');
+
+describe('ask-my-site dev', () => {
+  it('answers questions from the index, with sources, as the handler streams them', async () => {
+    await indexAt('ask-index.json');
+    const { server, logs } = await serve('ask-index.json');
+    expect(server.endpoint).toMatch(/^http:\/\/localhost:\d+\/api\/ask$/);
+    expect(server.description).toBe(
+      'mock embeddings, answers from the mock model, which quotes the sources',
+    );
+
+    const response = await ask(server.endpoint, 'How is an int8 vector scaled?');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const stream = await response.text();
+    expect(stream).toContain('"url":"/docs/quantization#why-int8"');
+    expect(answerOf(stream)).toMatch(/largest component maps to 127\. \[\d\]$/);
+    expect(logs.at(-1)).toMatch(/answered from \d sources: How is an int8 vector scaled\?/);
+
+    const refused = await (await ask(server.endpoint, 'What is the capital of France?')).text();
+    expect(refused).toContain("I don't know");
+    expect((await fetch(server.endpoint.replace('/api/ask', '/'))).status).toBe(404);
+  });
+
+  it('allows any origin by default, or only the ones it is given', async () => {
+    await indexAt('ask-index.json');
+    const open = await serve('ask-index.json');
+    const preflight = await fetch(open.server.endpoint, {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'http://localhost:3000',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type',
+      },
+    });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-origin')).toBe('*');
+    expect(preflight.headers.get('access-control-allow-headers')).toBe('content-type');
+    expect(preflight.headers.get('access-control-allow-methods')).toContain('POST');
+
+    const { server } = await serve('ask-index.json', { origins: ['http://localhost:4321'] });
+    const site = await ask(server.endpoint, 'int8', { origin: 'http://localhost:4321' });
+    expect(site.headers.get('access-control-allow-origin')).toBe('http://localhost:4321');
+    expect(site.headers.get('vary')).toBe('origin');
+    await site.body?.cancel();
+    const other = await ask(server.endpoint, 'int8', { origin: 'http://evil.example' });
+    expect(other.headers.get('access-control-allow-origin')).toBeNull();
+    await other.body?.cancel();
+  });
+
+  it('picks up a rebuilt index on the next question', async () => {
+    await indexAt('build/ask-index.json');
+    const { server, logs } = await serve('build/ask-index.json');
+    const { index } = await buildIndex({
+      documents: [{ id: 'new.md', url: '/new', title: 'Brand new', content: 'Zebras stripe.' }],
+      embeddingModel: mockEmbeddingModel(),
+    });
+    await writeIndexFile(join(root, 'build/ask-index.json'), index);
+    // Some file systems keep modification times to the second.
+    const later = new Date(Date.now() + 5000);
+    await utimes(join(root, 'build/ask-index.json'), later, later);
+
+    expect(await (await ask(server.endpoint, 'zebras')).text()).toContain('"url":"/new"');
+    expect(logs).toContain('Reloaded the index (1 chunks).');
+  });
+
+  it('finds the index the CLI, Docusaurus or Astro wrote, or says how to make one', async () => {
+    expect(() => findIndexFile(root)).toThrow(
+      /No index found: looked for ask-index.json, build\/ask-index.json, dist\/ask-index.json/,
+    );
+    await indexAt('dist/ask-index.json');
+    expect(findIndexFile(root)).toBe(join(root, 'dist/ask-index.json'));
+    await indexAt('build/ask-index.json');
+    expect(findIndexFile(root)).toBe(join(root, 'build/ask-index.json'));
+    await indexAt('ask-index.json');
+    expect(findIndexFile(root)).toBe(join(root, 'ask-index.json'));
+    expect(findIndexFile(root, 'dist/ask-index.json')).toBe(join(root, 'dist/ask-index.json'));
+    expect(() => findIndexFile(root, 'nope.json')).toThrow('No index at nope.json.');
+  });
+});
+
+describe('the models dev answers with', () => {
+  it('embeds questions as the index was, and answers with OpenAI only when its key is set', async () => {
+    const mock = await indexAt('mock.json', mockEmbeddingModel({ dimensions: 128 }));
+    expect(await devModels(mock, {})).toMatchObject({
+      embeddingModel: { modelId: 'mock-hash-128' },
+      model: { modelId: 'mock-extractive' },
+    });
+    expect(await devModels(mock, { OPENAI_API_KEY: 'sk-test' })).toMatchObject({
+      embeddingModel: { modelId: 'mock-hash-128' },
+      model: { modelId: 'gpt-5.4-mini' },
+      description: 'mock embeddings, answers from gpt-5.4-mini',
+    });
+
+    const { index: keywordOnly } = await buildIndex({ documents: corpus });
+    const models = await devModels(keywordOnly, {});
+    expect(models.embeddingModel).toBeUndefined();
+    expect(models.description).toMatch(/^keyword-only retrieval/);
+
+    const openai = { ...mock, embedding: { model: 'text-embedding-3-small', dimensions: 512 } };
+    expect(await devModels(openai, { OPENAI_API_KEY: 'sk-test' }, 'gpt-5.4')).toMatchObject({
+      embeddingModel: { modelId: 'text-embedding-3-small' },
+      embeddingProviderOptions: { openai: { dimensions: 512 } },
+      model: { modelId: 'gpt-5.4' },
+    });
+    expect(await devModels(openai, { AI_GATEWAY_API_KEY: 'gw' })).toMatchObject({
+      embeddingModel: 'openai/text-embedding-3-small',
+      model: 'openai/gpt-5.4-mini',
+    });
+  });
+
+  it('refuses an index it cannot embed questions for, saying what would', async () => {
+    const mock = await indexAt('mock.json');
+    const openai = { ...mock, embedding: { model: 'text-embedding-3-small', dimensions: 512 } };
+    await expect(devModels(openai, {})).rejects.toThrow(
+      'The index was embedded with text-embedding-3-small, so questions must be too: set ' +
+        'OPENAI_API_KEY or AI_GATEWAY_API_KEY. To try it without a key, rebuild the index with ' +
+        '--embedding mock.',
+    );
+    const cohere = { ...mock, embedding: { model: 'embed-multilingual-v3.0', dimensions: 1024 } };
+    await expect(devModels(cohere, { OPENAI_API_KEY: 'sk-test' })).rejects.toBeInstanceOf(DevError);
+    await expect(devModels(cohere, { OPENAI_API_KEY: 'sk-test' })).rejects.toThrow(
+      'cannot load: it embeds with OpenAI, AI Gateway or the mock model',
+    );
+  });
+
+  it('embeds questions with OpenAI for an index OpenAI embedded', async () => {
+    const stub = await startOpenAIStub();
+    try {
+      const openai = createOpenAI({ apiKey: 'sk-test', baseURL: stub.url });
+      const { index } = await buildIndex({
+        documents: corpus,
+        embeddingModel: openai.embedding('text-embedding-3-small'),
+        embeddingProviderOptions: { openai: { dimensions: 64 } },
+      });
+      await writeIndexFile(join(root, 'ask-index.json'), index);
+      const { server, logs } = await serve('ask-index.json', {
+        env: { OPENAI_API_KEY: 'sk-test', OPENAI_BASE_URL: stub.url },
+      });
+      expect(server.description).toBe(
+        'text-embedding-3-small embeddings from OpenAI, answers from gpt-5.4-mini',
+      );
+      // The stub serves embeddings only, so the answer itself fails; the sources come first.
+      const stream = await (await ask(server.endpoint, 'Upstash ratelimit')).text();
+      expect(stream).toContain('"url":"/docs/rate-limits#upstash"');
+      // One for the index, one for the question.
+      expect(stub.requests.filter((request) => request === 'POST /v1/embeddings')).toHaveLength(2);
+      expect(logs.some((line) => line.startsWith('  ✗'))).toBe(true);
+    } finally {
+      await stub.close();
+    }
+  });
+});
+
+describe('ask-my-site dev on the command line', () => {
+  async function run(args: string[], env: Record<string, string | undefined> = {}) {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const controller = new AbortController();
+    const code = main(['dev', ...args], {
+      cwd: root,
+      env,
+      signal: controller.signal,
+      stdout: (line) => {
+        stdout.push(line);
+        // Stop once it has said where it listens, after one question.
+        const endpoint = /Endpoint {2}(\S+)/.exec(line)?.[1];
+        if (endpoint) {
+          void ask(endpoint, 'int8')
+            .then((response) => response.text())
+            .finally(() => {
+              controller.abort();
+            });
+        }
+      },
+      stderr: (line) => stderr.push(line),
+    });
+    return { code: await code, stdout: stdout.join('\n'), stderr: stderr.join('\n') };
+  }
+
+  it('says where it listens and what to set, and stops when asked', async () => {
+    await indexAt('build/ask-index.json');
+    const result = await run(['--port', '0']);
+    expect(result.code).toBe(0);
+    const endpoint = /Endpoint {2}(\S+)/.exec(result.stdout)?.[1] ?? '';
+    expect(result.stdout).toContain('build/ask-index.json');
+    expect(result.stdout).toContain(`ASK_ENDPOINT=${endpoint}`);
+    expect(result.stdout).toContain(`endpoint: '${endpoint}'`);
+    expect(result.stdout).toContain(`<AskDialog endpoint="${endpoint}" />`);
+    expect(result.stdout).toContain(`data-endpoint="${endpoint}"`);
+    expect(result.stdout).toMatch(/answered from \d sources: int8/);
+    // It is stopped: the port no longer answers.
+    await expect(ask(endpoint, 'int8')).rejects.toThrow();
+  });
+
+  it('exits 1 with the reason when the index cannot be served', async () => {
+    expect((await run([])).stderr).toContain('No index found');
+    const index = await indexAt('ask-index.json');
+    await writeIndexFile(join(root, 'ask-index.json'), {
+      ...index,
+      embedding: { model: 'text-embedding-3-small', dimensions: 512 },
+    });
+    const mismatch = await run([]);
+    expect(mismatch.code).toBe(1);
+    expect(mismatch.stderr).toContain('set OPENAI_API_KEY or AI_GATEWAY_API_KEY');
+    expect((await run(['--port', 'x'])).code).toBe(2);
+    expect((await run(['--help'])).stdout).toContain('Usage: ask-my-site dev [options]');
+  });
+});
