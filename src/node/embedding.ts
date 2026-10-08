@@ -3,6 +3,7 @@ import type { EmbeddingModel } from 'ai';
 
 import type { EmbeddingProviderOptions } from '../build';
 import { mockEmbeddingModel } from '../mock';
+import { importOptional } from './optional';
 
 /**
  * An embedding model as a string: `openai:<model>` (@ai-sdk/openai, needs `OPENAI_API_KEY`),
@@ -77,12 +78,17 @@ export async function embeddingFromSpec(
     // Checking compares ids only, so it needs neither the provider package nor a key.
     if (mode === 'check') return { model: modelId, ...choice };
     if (!env.OPENAI_API_KEY) throw new EmbeddingSpecError(`${name} needs OPENAI_API_KEY.`);
-    let provider: typeof import('@ai-sdk/openai');
+    let provider: typeof import('@ai-sdk/openai') | null;
     try {
-      provider = await import('@ai-sdk/openai');
-    } catch {
+      provider = await importOptional<typeof import('@ai-sdk/openai')>('@ai-sdk/openai');
+    } catch (error) {
+      throw new Error(`${name} could not load @ai-sdk/openai: ${String(error)}`, {
+        cause: error,
+      });
+    }
+    if (!provider) {
       throw new EmbeddingSpecError(
-        `${name} needs @ai-sdk/openai. Install it: npm i @ai-sdk/openai`,
+        `${name} needs @ai-sdk/openai, which is not installed: npm i @ai-sdk/openai`,
       );
     }
     const client = provider.createOpenAI({

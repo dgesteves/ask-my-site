@@ -26,7 +26,13 @@ export default defineConfig(
       globals: { ...globals.node, ...globals.browser },
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['*.js', '*.mjs', 'bench/*.mjs', 'scripts/assets/*.mjs'],
+          allowDefaultProject: [
+            '*.js',
+            '*.mjs',
+            'bench/*.mjs',
+            'scripts/*.mjs',
+            'scripts/assets/*.mjs',
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },

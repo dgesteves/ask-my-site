@@ -7,6 +7,7 @@ import type { EmbeddingModel } from 'ai';
 
 import { buildIndex, type EmbeddingProviderOptions } from '../build';
 import { parseIndexFile, serializeIndexFile, type AskIndexFile } from '../index-file';
+import { embeddingFromSpec, EmbeddingSpecError } from '../node/embedding';
 import type { ChunkingOptions, SourceDocument } from '../types';
 
 export interface Logger {
@@ -43,6 +44,14 @@ export function consoleLogger(): Logger {
   };
 }
 
+const DEFAULT_MODEL = 'text-embedding-3-small';
+
+/**
+ * The embedding model a build uses unless the options name one: OpenAI's `text-embedding-3-small`
+ * when `OPENAI_API_KEY` is set, the same model through AI Gateway when only `AI_GATEWAY_API_KEY`
+ * is, else none, with a warning. A key that is set but cannot be used, because @ai-sdk/openai is
+ * missing or fails to load, fails the build rather than quietly building a keyword-only index.
+ */
 export async function defaultEmbedding(
   options: IndexOptions,
   log: Logger,
@@ -50,13 +59,23 @@ export async function defaultEmbedding(
   if (options.embeddingModel !== undefined) return options.embeddingModel;
   if (process.env.OPENAI_API_KEY) {
     try {
-      const { createOpenAI } = await import('@ai-sdk/openai');
-      return createOpenAI().embedding('text-embedding-3-small');
-    } catch {
-      log.warn('OPENAI_API_KEY is set but @ai-sdk/openai is not installed: npm i @ai-sdk/openai');
+      const { model } = await embeddingFromSpec(`openai:${DEFAULT_MODEL}`, {
+        name: `OPENAI_API_KEY is set, so the default embedding, openai:${DEFAULT_MODEL},`,
+      });
+      return model;
+    } catch (error) {
+      const message = (error as Error).message.replace(/\.?$/, '.');
+      // Both keys set, without @ai-sdk/openai: AI Gateway serves the same model.
+      if (!(error instanceof EmbeddingSpecError) || !process.env.AI_GATEWAY_API_KEY) {
+        throw new Error(
+          `ask-my-site: ${message} Or pass \`embeddingModel: null\` to build a keyword-only index.`,
+          { cause: error },
+        );
+      }
+      log.warn(`${message} Embedding through AI Gateway instead.`);
     }
   }
-  if (process.env.AI_GATEWAY_API_KEY) return 'openai/text-embedding-3-small';
+  if (process.env.AI_GATEWAY_API_KEY) return `openai/${DEFAULT_MODEL}`;
   log.warn(
     'No embedding model: building a keyword-only index. Set OPENAI_API_KEY or AI_GATEWAY_API_KEY ' +
       'at build time, or pass `embeddingModel`, for semantic search.',
