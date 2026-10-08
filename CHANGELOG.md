@@ -1,5 +1,15 @@
 # ask-my-site
 
+## 0.4.0
+
+### Minor Changes
+
+- [#6](https://github.com/dgesteves/ask-my-site/pull/6) [`5c2bb57`](https://github.com/dgesteves/ask-my-site/commit/5c2bb57600e4afac8f9da976e21a7700de29e8c7) Thanks [@dgesteves](https://github.com/dgesteves)! - Add `ask-my-site/starlight`, a Starlight plugin, and `ask-my-site/astro`, the Astro integration under it. After `astro build` they index the site into `dist/ask-index.json` (one per locale) at the URLs Astro serves, following `base`, `trailingSlash` and `build.format`. The Starlight plugin reads what Starlight's search reads, the `data-pagefind-body` region of each page: the title and Markdown, notes and tips included, without the sidebar, table of contents, heading anchors, edit link or pagination, and without pages that have `pagefind: false`. The Astro integration reads each page's `<main>`, or the part `content` selects. Both reuse the previous build's vectors from `node_modules/.cache`, embed with OpenAI or AI Gateway when their keys are set at build time, and add the dialog to every page: a floating "Ask AI" button and ⌘/Ctrl+I, in Starlight's colors and theme, bundled by Vite so it shares the site's React. They work with Astro 5, 6 and 7 and Starlight 0.32 and later, and `examples/starlight` is a working site.
+  
+  Add `ask-my-site/embed` and a script embed for sites that do not build with React (Hugo, Jekyll, Eleventy, MkDocs, plain HTML): `<script src="https://cdn.jsdelivr.net/npm/ask-my-site@0.4/dist/embed.global.js" data-endpoint="/api/ask" defer></script>` adds the dialog and its button, with React and the styles bundled in (91 KB gzipped), configured by `data-*` attributes. `window.AskMySite.mount()` and `mountAskDialog()` mount it by hand and return `{ open, close, unmount }`. Its theme follows `data-theme` on `<html>`, or the system setting.
+  
+  Also: `fromHtml` takes a selector as `root` (such as `[data-pagefind-body]`) and an `ignore` selector, reads code blocks that write each line as a `<div>` (Expressive Code, which Starlight and many Astro sites use) line by line instead of as one line, and no longer leaks the rest of a tag as text when an attribute value holds a `>` (such as a copy button's `data-code`).
+
 ## 0.3.0
 
 ### Minor Changes

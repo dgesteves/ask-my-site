@@ -1,6 +1,6 @@
 {
   "name": "ask-my-site",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A drop-in \u2318K ask agent for any website. Build-time static index, hybrid BM25 + vector retrieval in memory, streaming answers with citations. No vector database.",
   "keywords": [
     "rag",
