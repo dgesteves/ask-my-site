@@ -1,0 +1,22 @@
+name: Feature request
+description: A framework, option or behaviour ask-my-site is missing
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The site, and what its readers or you need. What do you do today instead?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: The option or API you have in mind, if any.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Checked
+      options:
+        - label: The [roadmap](https://github.com/dgesteves/ask-my-site#roadmap) and existing issues do not cover it

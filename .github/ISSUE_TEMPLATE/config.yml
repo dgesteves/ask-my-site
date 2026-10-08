@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea
+    url: https://github.com/dgesteves/ask-my-site/discussions
+    about: How to set something up, or an idea to talk through first.
+  - name: Security vulnerability
+    url: https://github.com/dgesteves/ask-my-site/security/advisories/new
+    about: Report it privately, not in an issue (see SECURITY.md).
