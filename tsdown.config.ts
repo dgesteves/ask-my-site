@@ -41,6 +41,8 @@ export default defineConfig([
       // file name: dist/docusaurus/theme/Root.js and AskMySite.js.
       'docusaurus/theme/Root': 'src/docusaurus/theme/Root.tsx',
       'docusaurus/theme/AskMySite': 'src/docusaurus/theme/AskMySite.tsx',
+      'astro/index': 'src/astro/index.ts',
+      'starlight/index': 'src/starlight/index.ts',
     },
     // Provided by the Docusaurus site at build time: its modules and theme components.
     deps: { neverBundle: [/^@docusaurus\//, /^@theme(-init|-original)?\//] },
@@ -64,6 +66,7 @@ export default defineConfig([
     copy: [
       { from: 'src/react/styles.css', to: 'dist' },
       { from: 'src/embed/launcher.css', to: 'dist/embed' },
+      { from: 'src/starlight/launcher.css', to: 'dist/starlight' },
       { from: 'src/docusaurus/launcher.css', to: 'dist/docusaurus' },
       { from: 'src/docusaurus/theme.d.ts', to: 'dist/docusaurus' },
     ],

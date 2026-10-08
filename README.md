@@ -55,7 +55,7 @@ That is the whole integration: five lines, imports aside. [Full setup](#full-set
 - **Any AI SDK model.** Embeddings through `embedMany`/`embed` and answers through `streamText`, from any provider package or an AI Gateway model string.
 - **Web-standard handler.** `(Request) => Promise<Response>` built on Web APIs only, so it mounts in Next.js route handlers, Hono, Bun, Deno or Cloudflare Workers. It streams the AI SDK UI message protocol, so `useChat` can consume it too.
 - **Accessible ⌘K dialog.** Radix Dialog and cmdk; focus management, `aria-live` answer, reduced motion, light and dark themes, unstyled-friendly.
-- **A plugin and a script tag.** The [Docusaurus](#docusaurus) plugin indexes the built site at the URLs it serves and adds the dialog; [one `<script>` tag](#any-static-site-script-embed) adds it to Hugo, Jekyll, Eleventy, MkDocs or plain HTML.
+- **Plugins and a script tag.** [Docusaurus](#docusaurus), [Astro and Starlight](#astro-and-starlight) plugins index the built site at the URLs it serves and add the dialog; [one `<script>` tag](#any-static-site-script-embed) adds it to Hugo, Jekyll, Eleventy, MkDocs or plain HTML.
 - **Production hygiene.** zod-validated input, body-size cap, pluggable rate limiting (in-memory or Upstash) keyed on the one client IP header your platform controls, masked model errors, keyword fallback when the embedding provider is down.
 - **Offline mock mode.** A deterministic embedder and a scripted extractive model run the whole pipeline with no key, for demos and tests.
 
@@ -272,6 +272,39 @@ export const onRequest: PagesFunction<{ OPENAI_API_KEY: string; ASSETS: Fetcher 
 
 To try it locally, the [Docusaurus example](./examples/docusaurus) ships a small endpoint: `pnpm --filter ask-my-site-example-docusaurus api`, and build the site with `ASK_ENDPOINT=http://localhost:8787/api/ask`.
 
+## Astro and Starlight
+
+`ask-my-site/starlight` is a Starlight plugin, and `ask-my-site/astro` the Astro integration under it, for any other Astro site. Like the Docusaurus plugin, they build the index with the site and add the dialog. The dialog is React, so install React with its peers:
+
+```sh
+npm i ask-my-site ai @ai-sdk/openai react react-dom @radix-ui/react-dialog cmdk
+```
+
+```js
+// astro.config.mjs
+import starlight from '@astrojs/starlight';
+import askMySite from 'ask-my-site/starlight';
+import { defineConfig } from 'astro/config';
+
+export default defineConfig({
+  integrations: [starlight({ title: 'Acme Docs', plugins: [askMySite({ endpoint: '/api/ask' })] })],
+});
+```
+
+Without Starlight, add `askMySite({ endpoint: '/api/ask' })` from `ask-my-site/astro` to `integrations` instead.
+
+- **After `astro build`** it indexes the pages Astro built into `dist/ask-index.json`, at the URLs Astro serves them from: with your `base`, and with or without a trailing slash as `trailingSlash` and `build.format` have it. The Starlight plugin reads what Starlight's own search reads, the part of each page Starlight marks `data-pagefind-body`: the title and the Markdown, notes and tips included, without the header, sidebar, table of contents, heading anchors, edit link or pagination. Pages that Starlight's search leaves out are left out too: the 404 page and any page with `pagefind: false`. Mark anything else to leave out with `data-pagefind-ignore`, which keeps it out of the search as well. The Astro integration reads each page's `<main>`; choose another part with `content: '.prose'` (a tag, `#id`, `.class` or `[attribute]`, or a comma-separated list) and leave parts out with `ignore: '.toc'`. 404 and 500 pages, redirects and `noindex` pages are skipped. Unchanged pages reuse their vectors from the previous build, cached in `node_modules/.cache/ask-my-site`.
+- **In the browser** it adds a floating "Ask AI" button and <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>I</kbd> to every page (⌘K stays with Starlight's search, and text fields keep ⌘I). In Starlight the button sits in the corner of the table of contents column, in Starlight's colors, and the dialog follows its light or dark theme; elsewhere the dialog follows `data-theme` on `<html>`, or the system setting. Vite bundles the dialog with your pages, so it shares React with your own islands. With `<ClientRouter />`, the dialog stays across navigations and citations navigate through the router.
+- **Embeddings** default to OpenAI's `text-embedding-3-small` when `OPENAI_API_KEY` is set at build time, or the same model through AI Gateway with `AI_GATEWAY_API_KEY`, as in the Docusaurus plugin; without either, a keyword-only index, with a warning.
+
+Options: `endpoint`, `embeddingModel`, `embeddingProviderOptions`, `chunking`, `indexFile` (default `ask-index.json`), `exclude` (path prefixes relative to `base` and the locale, e.g. `['/changelog']`), and `dialog` (`title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`, `theme`); `content` and `ignore` for the Astro integration. It works with Astro 5, 6 and 7, and Starlight 0.32 and later.
+
+**Locales.** Starlight builds every locale at once, so the plugin writes one index per locale: `dist/ask-index.json` for the root locale and `dist/fr/ask-index.json` for French, served at `/fr/ask-index.json`. A page not yet translated is indexed in its locale with the fallback content Starlight shows there, as Starlight's search does. When every locale has its own path (no `root` locale), the default locale's index is under its path too, e.g. `dist/en/ask-index.json`. The Astro integration splits the index the same way along Astro's `i18n` locales. Every page's dialog posts to the same endpoint, and the recipes serve one index.
+
+**The endpoint** is the same as for Docusaurus: use the [Vercel, Netlify or Cloudflare Pages recipe](#docusaurus) with `dist/ask-index.json` in place of `build/ask-index.json`. Astro writes `base` into URLs, not folders, so the file stays at `dist/ask-index.json` with `base: '/docs'` and is served at `/docs/ask-index.json`. The [Starlight example](./examples/starlight) has a local endpoint to try it: `pnpm --filter ask-my-site-example-starlight api`, and build the site with `ASK_ENDPOINT=http://localhost:8787/api/ask`.
+
+**Shortcut.** Pick another key with `dialog: { shortcut: 'j' }`, turn it off with `shortcut: false`, or hide the button with `buttonLabel: false`.
+
 ## Any static site (script embed)
 
 For Hugo, Jekyll, Eleventy, MkDocs or plain HTML, one script tag adds the dialog and its button, with React and the styles bundled in (91 KB gzipped):
@@ -308,7 +341,7 @@ Without `OPENAI_API_KEY` it runs in mock mode: `mockEmbeddingModel()` hashes wor
 
 ## API
 
-Seven imports and a CLI. Each import is tree-shakeable, and only `ask-my-site/node`, the Docusaurus plugin and the CLI touch Node built-ins.
+Nine imports and a CLI. Each import is tree-shakeable, and only `ask-my-site/node`, the framework plugins and the CLI touch Node built-ins.
 
 | Import                   | For                                                                                                               |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
@@ -318,6 +351,8 @@ Seven imports and a CLI. Each import is tree-shakeable, and only `ask-my-site/no
 | `ask-my-site/react`      | `AskDialog`, `useAsk`, `AskAnswer`; needs `@radix-ui/react-dialog` and `cmdk`                                     |
 | `ask-my-site/embed`      | `mountAskDialog`: the dialog and its button without writing React ([script embed](#any-static-site-script-embed)) |
 | `ask-my-site/docusaurus` | The [Docusaurus](#docusaurus) plugin                                                                              |
+| `ask-my-site/astro`      | The [Astro](#astro-and-starlight) integration                                                                     |
+| `ask-my-site/starlight`  | The [Starlight](#astro-and-starlight) plugin                                                                      |
 | `ask-my-site/mock`       | `mockEmbeddingModel`, `mockLanguageModel`                                                                         |
 | `ask-my-site` (bin)      | `ask-my-site index`                                                                                               |
 
@@ -496,7 +531,7 @@ At 10,000 chunks, the BM25 half of a query takes 2.3 ms and the vector scan 4.6 
 - **Re-ranking hook:** an optional AI SDK reranking model over the fused candidates.
 - **Retrieval evals in CI:** a golden question set scored for hit rate and refusal precision, next to `--check`.
 - **Bigger corpora:** sharded indexes loaded per section, and binary quantization with int8 rescoring.
-- **More framework plugins:** Starlight and VitePress, after the [Docusaurus](#docusaurus) one.
+- **More framework plugins:** VitePress, after the [Docusaurus](#docusaurus), [Astro and Starlight](#astro-and-starlight) ones.
 - **Language-aware keyword search:** per-language stopwords and stemming.
 
 ## Development

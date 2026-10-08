@@ -14,7 +14,12 @@
     "edge",
     "react",
     "docusaurus",
-    "docusaurus-plugin"
+    "docusaurus-plugin",
+    "astro",
+    "astro-integration",
+    "withastro",
+    "starlight",
+    "starlight-plugin"
   ],
   "homepage": "https://github.com/dgesteves/ask-my-site#readme",
   "bugs": "https://github.com/dgesteves/ask-my-site/issues",
@@ -59,6 +64,15 @@
       "types": "./dist/docusaurus/index.d.ts",
       "default": "./dist/docusaurus/index.js"
     },
+    "./astro": {
+      "types": "./dist/astro/index.d.ts",
+      "default": "./dist/astro/index.js"
+    },
+    "./starlight": {
+      "types": "./dist/starlight/index.d.ts",
+      "default": "./dist/starlight/index.js"
+    },
+    "./starlight/launcher.css": "./dist/starlight/launcher.css",
     "./package.json": "./package.json"
   },
   "unpkg": "./dist/embed.global.js",
@@ -79,13 +93,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:package": "publint --strict && attw --pack . --profile esm-only --exclude-entrypoints ./react/styles.css ./embed/launcher.css",
+    "check:package": "publint --strict && attw --pack . --profile esm-only --exclude-entrypoints ./react/styles.css ./embed/launcher.css ./starlight/launcher.css",
     "bench": "pnpm build && node --expose-gc bench/run.mjs",
     "assets": "node scripts/assets/architecture.mjs",
     "screenshot": "node scripts/assets/screenshot.mjs",
     "example:build": "pnpm build && pnpm --filter ask-my-site-example-nextjs build",
     "example:dev": "pnpm build && pnpm --filter ask-my-site-example-nextjs dev",
-    "validate": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm check:package && pnpm example:build && pnpm --filter ask-my-site-example-nextjs lint && pnpm --filter ask-my-site-example-docusaurus build",
+    "validate": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm check:package && pnpm example:build && pnpm --filter ask-my-site-example-nextjs lint && pnpm --filter ask-my-site-example-docusaurus build && pnpm --filter ask-my-site-example-starlight build",
     "changeset": "changeset",
     "release": "pnpm build && changeset publish"
   },
@@ -97,6 +111,7 @@
   "devDependencies": {
     "@ai-sdk/openai": "^4.0.83",
     "@arethetypeswrong/cli": "^0.18.5",
+    "@astrojs/starlight": "0.42.5",
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@docusaurus/module-type-aliases": "3.10.2",
@@ -110,6 +125,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "ai": "^7.0.127",
+    "astro": "7.3.6",
     "cmdk": "^1.1.1",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
@@ -130,9 +146,11 @@
   },
   "peerDependencies": {
     "@ai-sdk/openai": ">=4",
+    "@astrojs/starlight": ">=0.32.0",
     "@docusaurus/core": "^3.0.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "ai": "^7.0.0",
+    "astro": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "cmdk": "^1.1.1",
     "react": "^18.3.0 || ^19.0.0",
     "react-dom": "^18.3.0 || ^19.0.0"
@@ -141,10 +159,16 @@
     "@ai-sdk/openai": {
       "optional": true
     },
+    "@astrojs/starlight": {
+      "optional": true
+    },
     "@docusaurus/core": {
       "optional": true
     },
     "@radix-ui/react-dialog": {
+      "optional": true
+    },
+    "astro": {
       "optional": true
     },
     "cmdk": {

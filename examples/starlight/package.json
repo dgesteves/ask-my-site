@@ -1,0 +1,21 @@
+{
+  "name": "ask-my-site-example-starlight",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "api": "node api-server.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.42.5",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "ask-my-site": "workspace:*",
+    "astro": "7.3.6",
+    "cmdk": "^1.1.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  }
+}

@@ -29,8 +29,16 @@ describe('package.json', () => {
     }
   });
 
-  it('declares what ask-my-site/react imports as optional peers', () => {
-    for (const name of ['react', 'react-dom', '@radix-ui/react-dialog', 'cmdk']) {
+  it('declares what ask-my-site/react imports, and the plugins’ frameworks, as optional peers', () => {
+    for (const name of [
+      'react',
+      'react-dom',
+      '@radix-ui/react-dialog',
+      'cmdk',
+      '@docusaurus/core',
+      'astro',
+      '@astrojs/starlight',
+    ]) {
       expect(manifest.peerDependencies?.[name]).toBeDefined();
       expect(manifest.peerDependenciesMeta?.[name]?.optional).toBe(true);
     }
