@@ -130,6 +130,37 @@ describe('useAsk', () => {
     expect(broken.result.current.error).toMatchObject({ kind: 'http', status: 502 });
   });
 
+  it('explains a missing endpoint kindly, and in development says where it posted', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const notFound = () =>
+      Promise.resolve(
+        new Response('<h1>404</h1>', { status: 404, headers: { 'content-type': 'text/html' } }),
+      );
+    const { result } = renderHook(() => useAsk({ fetch: notFound }));
+    await act(() => result.current.ask('int8'));
+    expect(result.current.error).toEqual({
+      kind: 'http',
+      status: 404,
+      message: 'Answers aren’t available here right now.',
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(`POST ${new URL('/api/ask', location.href).href} returned 404`),
+    );
+
+    // A production build on a deployed site keeps the console quiet.
+    warn.mockClear();
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubGlobal('location', new URL('https://docs.example.com/guide/'));
+    try {
+      await act(() => result.current.ask('int8'));
+      expect(result.current.error?.status).toBe(404);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('stop() keeps the partial answer and ignores the rest of the stream', async () => {
     const slow = handlerFetch({ model: mockLanguageModel({ initialDelayMs: 0, wordDelayMs: 30 }) });
     const { result } = renderHook(() => useAsk({ fetch: slow }));
