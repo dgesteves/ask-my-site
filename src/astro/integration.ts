@@ -9,7 +9,9 @@ import type { AskMySiteDialogOptions as DialogOptions, AskMySiteTheme } from '..
 import {
   buildEmbedding,
   checkIndexOptions,
+  dialogEndpoint,
   excluder,
+  hintDevEndpoint,
   warnMissingDialogPeers,
   writeSiteIndex,
   type IndexOptions,
@@ -26,7 +28,11 @@ export interface AskMySiteDialogOptions extends DialogOptions {
 }
 
 export interface AskMySiteOptions extends IndexOptions {
-  /** URL the dialog posts questions to. Default `/api/ask`. */
+  /**
+   * URL the dialog posts questions to. Default: `ASK_ENDPOINT` when it is set as the site builds
+   * or starts (`ASK_ENDPOINT=http://localhost:8787/api/ask` for `ask-my-site dev`), else
+   * `/api/ask`.
+   */
   endpoint?: string;
   /**
    * The part of each page to index, as a selector: a tag name, `#id`, `.class` or `[attribute]`,
@@ -67,11 +73,16 @@ export function createIntegration(
   preset: IntegrationPreset,
 ): AstroIntegration {
   checkIndexOptions(options);
+  const endpoint = dialogEndpoint(options.endpoint);
   let config: AstroConfig | undefined;
+  // Whether this is `astro dev`, and whether a route of the site answers the endpoint.
+  let dev = false;
+  let served = false;
   return {
     name: 'ask-my-site',
     hooks: {
-      'astro:config:setup': ({ injectScript, updateConfig, logger }) => {
+      'astro:config:setup': ({ injectScript, updateConfig, logger, command }) => {
+        dev = command === 'dev';
         warnMissingDialogPeers(logger);
         // The stylesheets go into every page's CSS: a `page` script's CSS is built but not linked.
         injectScript(
@@ -82,7 +93,7 @@ export function createIntegration(
             .join('\n'),
         );
         // Bundled by Vite with each page's scripts, so React is the site's own copy, if it has one.
-        injectScript('page', pageScript(options, preset));
+        injectScript('page', pageScript(endpoint, options, preset));
         updateConfig({
           vite: {
             plugins: [quietUseClient()],
@@ -94,6 +105,15 @@ export function createIntegration(
       },
       'astro:config:done': ({ config: resolved }) => {
         config = resolved;
+      },
+      'astro:routes:resolved': ({ routes }) => {
+        // An endpoint route, as a page cannot answer a POST: Starlight's `[...slug]` matches any
+        // path.
+        const path = endpoint.split(/[?#]/)[0] ?? endpoint;
+        served = routes.some((route) => route.type === 'endpoint' && route.patternRegex.test(path));
+      },
+      'astro:server:start': ({ logger }) => {
+        if (dev && !served) hintDevEndpoint(endpoint, 'astro dev', logger);
       },
       'astro:build:done': async ({ dir, pages, logger }) => {
         if (!config) throw new Error('ask-my-site: astro:config:done did not run');
@@ -155,9 +175,13 @@ function quietUseClient() {
 }
 
 /** The script every page runs: `mountAskDialog` with the dialog's options. */
-function pageScript(options: AskMySiteOptions, preset: IntegrationPreset): string {
+function pageScript(
+  endpoint: string,
+  options: AskMySiteOptions,
+  preset: IntegrationPreset,
+): string {
   const mount = {
-    endpoint: options.endpoint ?? '/api/ask',
+    endpoint,
     ...options.dialog,
     title: options.dialog?.title ?? preset.title,
   };

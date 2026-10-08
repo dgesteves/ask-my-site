@@ -45,7 +45,19 @@ Render the dialog in your layout, with `import 'ask-my-site/react/styles.css'` a
 
 It opens from a floating "Ask AI" button, as on the plugins' sites, and from <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>K</kbd>. Leave `launcher` out to open it from your own button (`trigger`) or the shortcut alone.
 
-That is the whole integration: five lines, imports aside. [Full setup](#full-setup) is below, and no API key is needed to [try the example](#try-it-without-an-api-key).
+That is the whole integration: five lines, imports aside. [Full setup](#full-setup) is below, and no API key is needed to [try it](#try-it-in-2-minutes-no-api-key).
+
+## Try it in 2 minutes, no API key
+
+Index a folder of Markdown, MDX or HTML with the offline mock embedder, and serve the ask endpoint on your machine:
+
+```sh
+npm i ask-my-site
+npx ask-my-site index ./docs -e mock   # writes ask-index.json
+npx ask-my-site dev                    # serves POST http://localhost:8787/api/ask
+```
+
+Then point the dialog at `http://localhost:8787/api/ask`: start a site that uses the [Docusaurus](#docusaurus), [Astro or Starlight](#astro-and-starlight) plugin with `ASK_ENDPOINT=http://localhost:8787/api/ask` (such a site can skip `index`, as `dev` finds the `build/ask-index.json` or `dist/ask-index.json` its build wrote), render `<AskDialog endpoint="http://localhost:8787/api/ask" launcher />`, or add the [script tag](#any-static-site-script-embed) with `data-endpoint="http://localhost:8787/api/ask"`. Without a key, `dev` answers with the mock model, which quotes the sentences that best match the question and cites them; with `OPENAI_API_KEY` set, it answers with OpenAI. Then ⌘K (⌘I with the plugins), and ask.
 
 ## Features
 
@@ -278,7 +290,7 @@ export const onRequest: PagesFunction<{ OPENAI_API_KEY: string; ASSETS: Fetcher 
 
 </details>
 
-To try it locally, the [Docusaurus example](./examples/docusaurus) ships a small endpoint: `pnpm --filter ask-my-site-example-docusaurus api`, and build the site with `ASK_ENDPOINT=http://localhost:8787/api/ask`.
+To try it locally, build the site once, run `npx ask-my-site dev` in its folder, which answers from `build/ask-index.json` with the model the build embedded with (the mock one without a key), and start the site with `ASK_ENDPOINT=http://localhost:8787/api/ask npm start`. The plugin posts to `ASK_ENDPOINT` when it is set and `endpoint` is not, and `docusaurus start` reminds you when the dialog posts to a path it does not serve. The [Docusaurus example](./examples/docusaurus) runs this way.
 
 ## Astro and Starlight
 
@@ -309,7 +321,7 @@ Options: `endpoint`, `embedding`, `dimensions`, `embeddingModel`, `embeddingProv
 
 **Locales.** Starlight builds every locale at once, so the plugin writes one index per locale: `dist/ask-index.json` for the root locale and `dist/fr/ask-index.json` for French, served at `/fr/ask-index.json`. A page not yet translated is indexed in its locale with the fallback content Starlight shows there, as Starlight's search does. When every locale has its own path (no `root` locale), the default locale's index is under its path too, e.g. `dist/en/ask-index.json`. The Astro integration splits the index the same way along Astro's `i18n` locales. Every page's dialog posts to the same endpoint, and the recipes serve one index.
 
-**The endpoint** is the same as for Docusaurus: use the [Vercel, Netlify or Cloudflare Pages recipe](#docusaurus) with `dist/ask-index.json` in place of `build/ask-index.json`. Astro writes `base` into URLs, not folders, so the file stays at `dist/ask-index.json` with `base: '/docs'` and is served at `/docs/ask-index.json`. The [Starlight example](./examples/starlight) has a local endpoint to try it: `pnpm --filter ask-my-site-example-starlight api`, and build the site with `ASK_ENDPOINT=http://localhost:8787/api/ask`.
+**The endpoint** is the same as for Docusaurus: use the [Vercel, Netlify or Cloudflare Pages recipe](#docusaurus) with `dist/ask-index.json` in place of `build/ask-index.json`. Astro writes `base` into URLs, not folders, so the file stays at `dist/ask-index.json` with `base: '/docs'` and is served at `/docs/ask-index.json`. To try it locally, build the site once, run `npx ask-my-site dev`, which answers from `dist/ask-index.json`, and start `astro dev` with `ASK_ENDPOINT=http://localhost:8787/api/ask`, as the [Starlight example](./examples/starlight) does.
 
 **Shortcut.** Pick another key with `dialog: { shortcut: 'j' }`, turn it off with `shortcut: false`, or hide the button with `buttonLabel: false`.
 
@@ -326,16 +338,16 @@ For Hugo, Jekyll, Eleventy, MkDocs or plain HTML, one script tag adds the dialog
 ```
 
 1. **Index the site** with the [CLI](#cli): from its Markdown, or from the HTML your generator built, which has the URLs it actually serves (`public` after `hugo`, `_site` after Jekyll or Eleventy, `site` after `mkdocs build`). HTML is read from each page's `<main>`, and citations link to the headings' own `id`s.
-2. **Deploy the endpoint** next to the site, with one of the [recipes](#docusaurus) or the [full setup](#full-setup), reading your index.
+2. **Deploy the endpoint** next to the site, with one of the [recipes](#docusaurus) or the [full setup](#full-setup), reading your index. To try it first, run `npx ask-my-site dev` beside the index and set `data-endpoint="http://localhost:8787/api/ask"`.
 3. **Add the script tag** to your base template.
 
 It mounts itself once the page has loaded, with its tag's attributes: `data-endpoint` (default `/api/ask`), `data-title`, `data-placeholder`, `data-suggestions` (a JSON array, as in `data-suggestions='["How do I install it?"]'`), `data-shortcut` (default `i`; `"false"` turns it off), `data-button-label` (default "Ask AI"; `"false"` hides the button) and `data-theme` (`auto`, the default, follows `data-theme` on `<html>` when the site sets one, and the system setting otherwise; or `light` or `dark`). With `data-manual` it waits for `window.AskMySite.mount(options)`, which takes the same options and returns `{ open, close, unmount }`, for example to open the dialog from your own search box. Pin an exact version (`ask-my-site@0.4.0`) in production.
 
 In an app with a bundler, `mountAskDialog(options)` from `ask-my-site/embed` does the same with your own React (install `react`, `react-dom`, `@radix-ui/react-dialog` and `cmdk`); import `ask-my-site/react/styles.css` and `ask-my-site/embed/launcher.css` with it.
 
-## Try it without an API key
+## Example site
 
-The [Next.js example](./examples/nextjs) is a docs site about ask-my-site that indexes itself.
+The [Next.js example](./examples/nextjs), which the [live demo](https://ask-my-site-demo.vercel.app) runs, is a docs site about ask-my-site that indexes itself.
 
 ```sh
 pnpm install && pnpm example:dev   # http://localhost:3000, then press ⌘K
@@ -362,7 +374,7 @@ Nine imports and a CLI. Each import is tree-shakeable, and only `ask-my-site/nod
 | `ask-my-site/astro`      | The [Astro](#astro-and-starlight) integration                                                                     |
 | `ask-my-site/starlight`  | The [Starlight](#astro-and-starlight) plugin                                                                      |
 | `ask-my-site/mock`       | `mockEmbeddingModel`, `mockLanguageModel`                                                                         |
-| `ask-my-site` (bin)      | `ask-my-site index`                                                                                               |
+| `ask-my-site` (bin)      | `ask-my-site index`, and `ask-my-site dev` for a local endpoint                                                   |
 
 ### CLI
 
@@ -386,6 +398,21 @@ ask-my-site index [dir] [options]
 ```
 
 Without `--embedding`, it uses `openai:text-embedding-3-small` when `OPENAI_API_KEY` is set (or `openai/text-embedding-3-small` through AI Gateway when only `AI_GATEWAY_API_KEY` is), and fails otherwise rather than silently building a keyword-only index. `.env` and `.env.local` are read without overriding the environment. `index.md`, `_index.md` (Hugo), `index.html` and `README.md` stand for their folder. Other HTML files keep `.html` in their URL (`docs/install.html` → `/docs/install.html`), as a server without clean URLs serves them; `--clean-urls` drops it for a host that serves `/docs/install`. Frontmatter `url` or `permalink` overrides the derived URL, and `draft: true`, `ask: false` or `noindex: true` excludes a page. Symlinked files and folders are followed, except a link back into a folder already being read. Ids and URLs use the file path in Unicode NFC, so a name like `café.md` gets the same id on macOS and Linux. `--ignore` globs support `*`, `**`, `?`, `[...]` and `{a,b}`, matched case-sensitively on every platform.
+
+`ask-my-site dev` serves the ask endpoint on your machine, for the dialog on a site's dev server:
+
+```
+ask-my-site dev [options]
+
+      --index <file>           Index file (default: ask-index.json, then build/ask-index.json,
+                               then dist/ask-index.json)
+      --port <n>               Port on 127.0.0.1 (default: 8787)
+      --origin <origin>        Origin allowed to call it (CORS); repeatable (default: any)
+      --model <id>             OpenAI model for answers (default: gpt-5.4-mini)
+  -h, --help                   Show this help
+```
+
+It embeds questions with the model the index records: the mock one, OpenAI's with `OPENAI_API_KEY`, AI Gateway's with `AI_GATEWAY_API_KEY`, or none for a keyword-only index. An index it cannot match, such as one embedded with OpenAI when no key is set, is refused with what would fix it. Answers come from OpenAI when `OPENAI_API_KEY` is set, else from the mock model. A rebuilt index is picked up on the next question, and on start it prints the endpoint and what to set: `ASK_ENDPOINT`, `endpoint`, or `data-endpoint`.
 
 Citations have to land on the URL your site actually serves, and docs frameworks do not all map files to URLs the same way. The CLI looks for the framework's config in or above the content folder and follows its rules, printing which it picked:
 

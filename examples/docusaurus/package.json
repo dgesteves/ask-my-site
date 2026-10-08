@@ -8,7 +8,7 @@
     "serve": "docusaurus serve",
     "clear": "docusaurus clear",
     "typecheck": "tsc",
-    "api": "node api-server.mjs"
+    "api": "ask-my-site dev"
   },
   "dependencies": {
     "@docusaurus/core": "3.10.2",

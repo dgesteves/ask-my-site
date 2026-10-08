@@ -317,6 +317,37 @@ describe('ask-my-site/docusaurus', () => {
     );
   });
 
+  it('posts to ASK_ENDPOINT when set, and says once how to get answers in docusaurus start', async () => {
+    // The hint shows once per process.
+    Reflect.deleteProperty(globalThis, Symbol.for('ask-my-site.devEndpointHint'));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { context } = await site();
+    const setGlobalData = vi.fn();
+    const load = (options = {}) => {
+      askMySite(context, options).contentLoaded({ actions: { setGlobalData } });
+    };
+    // A build says nothing.
+    load();
+    expect(log).not.toHaveBeenCalled();
+
+    vi.stubEnv('NODE_ENV', 'development');
+    // An endpoint elsewhere needs no hint; the site's own path does, once across reloads.
+    load({ endpoint: 'https://api.example.com/ask' });
+    load();
+    load();
+    expect(log.mock.calls).toEqual([
+      [
+        '[ask-my-site] The dialog posts to /api/ask, which docusaurus start does not serve. For answers while you work, build the site once, run `npx ask-my-site dev`, and start the site with ASK_ENDPOINT=http://localhost:8787/api/ask.',
+      ],
+    ]);
+
+    vi.stubEnv('ASK_ENDPOINT', 'http://localhost:8787/api/ask');
+    load();
+    expect(setGlobalData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ endpoint: 'http://localhost:8787/api/ask' }),
+    );
+  });
+
   it('hands the dialog its settings, and points Docusaurus at files that exist', async () => {
     const { context } = await site();
     const plugin = askMySite(context, {

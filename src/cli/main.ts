@@ -10,6 +10,7 @@ import { buildIndex, checkIndex, embeddingModelId, type EmbeddingProviderOptions
 import { DEFAULT_CHUNKING } from '../chunk';
 import type { AskIndexFile } from '../index-file';
 import { embeddingFromSpec, EmbeddingSpecError } from '../node/embedding';
+import { dev } from './dev';
 import {
   detectFramework,
   loadDirectory,
@@ -25,9 +26,12 @@ export interface CliIO {
   stderr: (line: string) => void;
   cwd: string;
   env: Record<string, string | undefined>;
+  /** Stops `ask-my-site dev`. Default: Ctrl+C. */
+  signal?: AbortSignal;
 }
 
 const USAGE = `Usage: ask-my-site index [dir] [options]
+       ask-my-site dev [options]   Serve the ask endpoint locally (ask-my-site dev --help)
 
 Builds a static retrieval index from the Markdown, MDX and HTML files in <dir>.
 
@@ -267,6 +271,10 @@ function parseFlags(args: string[]): {
 
 /** Runs the CLI. Returns the exit code: 0 success, 1 failure or stale index, 2 usage error. */
 export async function main(args: string[], io: CliIO): Promise<number> {
+  if (args[0] === 'dev') {
+    loadEnvFiles(io);
+    return dev(args.slice(1), io);
+  }
   try {
     const { command, dir, flags, help, version: showVersion } = parseFlags(args);
     if (showVersion) {

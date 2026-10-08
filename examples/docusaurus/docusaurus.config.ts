@@ -4,9 +4,9 @@ import type { AskMySiteOptions } from 'ask-my-site/docusaurus';
 import { themes as prismThemes } from 'prism-react-renderer';
 
 // With OPENAI_API_KEY the plugin embeds with OpenAI (its default); without it, this example uses
-// the offline mock model so it builds anywhere. The ask endpoint must use the same model.
+// the offline mock model so it builds anywhere. The ask endpoint must use the same model. The
+// dialog posts to ASK_ENDPOINT when it is set, else to /api/ask.
 const askMySite: AskMySiteOptions = {
-  endpoint: process.env.ASK_ENDPOINT ?? '/api/ask',
   ...(process.env.OPENAI_API_KEY ? {} : { embedding: 'mock' as const }),
   dialog: {
     suggestions: ['How do I install it?', 'When does it answer "I don\'t know"?'],
