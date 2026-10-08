@@ -7,11 +7,20 @@ import { Marked } from 'marked';
 
 const DOCS_DIR = path.join(process.cwd(), 'content/docs');
 
+/** Sidebar sections, in order. A page names its own in `section` frontmatter. */
+export const SECTIONS = ['Get started', 'Integrations', 'Guides', 'Reference'] as const;
+
 export interface DocMeta {
   slug: string;
   title: string;
   description: string;
+  section: string;
   order: number;
+}
+
+export interface DocSection {
+  title: string;
+  docs: DocMeta[];
 }
 
 export interface Doc extends DocMeta {
@@ -32,6 +41,7 @@ async function readDoc(slug: string): Promise<{ meta: DocMeta; body: string } | 
       slug,
       title: typeof data.title === 'string' ? data.title : slug,
       description: typeof data.description === 'string' ? data.description : '',
+      section: typeof data.section === 'string' ? data.section : 'Reference',
       order: typeof data.order === 'number' ? data.order : 99,
     },
     body,
@@ -43,7 +53,28 @@ export const getDocs = cache(async (): Promise<DocMeta[]> => {
   const docs = await Promise.all(files.map((file) => readDoc(file.replace(/\.md$/, ''))));
   return docs
     .flatMap((doc) => (doc ? [doc.meta] : []))
-    .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+    .sort(
+      (a, b) =>
+        sectionRank(a.section) - sectionRank(b.section) ||
+        a.order - b.order ||
+        a.title.localeCompare(b.title),
+    );
+});
+
+function sectionRank(section: string): number {
+  const rank = (SECTIONS as readonly string[]).indexOf(section);
+  return rank === -1 ? SECTIONS.length : rank;
+}
+
+/** The pages grouped by section, in sidebar order. */
+export const getSections = cache(async (): Promise<DocSection[]> => {
+  const sections: DocSection[] = [];
+  for (const doc of await getDocs()) {
+    const last = sections.at(-1);
+    if (last?.title === doc.section) last.docs.push(doc);
+    else sections.push({ title: doc.section, docs: [doc] });
+  }
+  return sections;
 });
 
 /**
@@ -62,6 +93,33 @@ export const getDoc = cache(async (slug: string): Promise<Doc | null> => {
         const label = decodeEntities(this.parser.parseInline(tokens).replace(/<[^>]+>/g, ''));
         headings.push({ depth, text: label, id });
         return `<h${String(depth)} id="${id}"><a class="anchor" href="#${id}" aria-hidden="true" tabindex="-1">#</a>${this.parser.parseInline(tokens)}</h${String(depth)}>\n`;
+      },
+      // Every cell carries its column's name, so reference tables can stack into one block per
+      // row on narrow screens. Tables of numbers (right-aligned columns) keep their grid.
+      table({ header, rows, align }) {
+        const attribute = (value: string | null) => (value ? ` align="${value}"` : '');
+        const labels = header.map((cell) =>
+          decodeEntities(this.parser.parseInline(cell.tokens).replace(/<[^>]+>/g, '')).replace(
+            /"/g,
+            '&quot;',
+          ),
+        );
+        const head = header
+          .map((cell) => `<th${attribute(cell.align)}>${this.parser.parseInline(cell.tokens)}</th>`)
+          .join('');
+        const body = rows
+          .map(
+            (row) =>
+              `<tr>${row
+                .map(
+                  (cell, i) =>
+                    `<td${attribute(cell.align)} data-label="${labels[i] ?? ''}">${this.parser.parseInline(cell.tokens)}</td>`,
+                )
+                .join('')}</tr>`,
+          )
+          .join('\n');
+        const numeric = align.includes('right');
+        return `<div class="table-scroll"><table${numeric ? '' : ' class="table-stack"'}><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>\n`;
       },
     },
   });

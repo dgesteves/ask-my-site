@@ -7,7 +7,7 @@
   --fg: #f5f7fa;
   --fg-soft: #dfe6ee;
   --muted: #9aa6b4;
-  --subtle: #6f7b89;
+  --subtle: #7c8796;
   --cyan: #22d3ee;
   --cyan-bright: #67e8f9;
   --magenta: #f0468a;
@@ -194,6 +194,10 @@ a:focus-visible {
   letter-spacing: 0.08em;
 }
 
+.sidebar-section + .sidebar-section {
+  margin-top: 24px;
+}
+
 .sidebar ul,
 .toc ul {
   margin: 0;
@@ -316,6 +320,8 @@ h1 {
 }
 
 .prose code {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
   padding: 0.1em 0.35em;
   font-size: 0.88em;
   color: var(--fg);
@@ -339,6 +345,45 @@ h1 {
   padding: 0;
   background: none;
   border: 0;
+}
+
+.prose .table-scroll {
+  margin: 0 0 20px;
+  overflow-x: auto;
+}
+
+.prose table {
+  width: 100%;
+  font-size: 14px;
+  line-height: 1.5;
+  border-collapse: collapse;
+}
+
+.prose th,
+.prose td {
+  padding: 8px 12px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+.prose th:not([align]) {
+  text-align: left;
+}
+
+.prose th {
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  border-bottom-color: var(--border-strong);
+}
+
+.prose td[align] {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.prose td:first-child code {
+  white-space: nowrap;
 }
 
 .home {
@@ -367,6 +412,14 @@ h1 {
   background: var(--ink-raised);
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+.card-section + .card-section {
+  margin-top: 32px;
+}
+
+.card-section h2 {
+  font-weight: 500;
 }
 
 .cards {
@@ -438,5 +491,65 @@ h1 {
   h1,
   .home h1 {
     font-size: 32px;
+  }
+
+  .prose table {
+    font-size: 13px;
+  }
+
+  .prose th,
+  .prose td {
+    padding: 8px;
+  }
+
+  /* Reference tables become one block per row, each value under its column's name. */
+  .prose .table-stack,
+  .prose .table-stack tbody,
+  .prose .table-stack tr,
+  .prose .table-stack td {
+    display: block;
+  }
+
+  .prose .table-stack {
+    font-size: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .prose .table-stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .prose .table-stack tr {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .prose .table-stack td {
+    padding: 2px 0;
+    border: 0;
+  }
+
+  .prose .table-stack td:first-child {
+    padding-bottom: 6px;
+    font-weight: 600;
+    color: var(--fg);
+  }
+
+  .prose .table-stack td:not(:first-child)::before {
+    content: attr(data-label) ' ';
+    margin-right: 6px;
+    font-family: var(--font-geist-mono), monospace;
+    font-size: 11px;
+    color: var(--subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .prose .table-stack td:empty {
+    display: none;
   }
 }

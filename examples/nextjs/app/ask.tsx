@@ -3,11 +3,12 @@
 import { AskDialog } from 'ask-my-site/react';
 import { useRouter } from 'next/navigation';
 
+// Each one is checked against the mock model: it must get a correct, cited answer.
 const SUGGESTIONS = [
-  'When does it answer "I don\'t know"?',
-  'Why are vectors stored as int8?',
-  'How do I fail CI when the index is stale?',
-  'Which runtimes can run the handler?',
+  'How do I add it to Docusaurus?',
+  'Do I need a vector database?',
+  'Can I use Anthropic models?',
+  'How much does it cost to run?',
 ];
 
 export function Ask({ mode }: { mode: 'openai' | 'mock' }) {
