@@ -47,6 +47,8 @@ Options:
       --ignore <glob>          Skip matching files; repeatable
       --framework <name>       How file paths become URLs: docusaurus | starlight | next | none
                                (default: detected from the framework config above <dir>)
+      --clean-urls             Drop .html from HTML files' URLs, for hosts that serve
+                               page.html at /page (default: keep it)
   -c, --config <file>          Module whose default export is an AskConfig
   -q, --quiet                  Only print errors
   -h, --help                   Show this help
@@ -79,6 +81,7 @@ interface Flags {
   chunking: ChunkingOptions;
   ignore: string[];
   framework?: Framework | 'auto';
+  cleanUrls: boolean;
   config?: string;
   quiet: boolean;
 }
@@ -217,6 +220,7 @@ function parseFlags(args: string[]): {
         'chunk-overlap': { type: 'string' },
         ignore: { type: 'string', multiple: true },
         framework: { type: 'string' },
+        'clean-urls': { type: 'boolean' },
         config: { type: 'string', short: 'c' },
         quiet: { type: 'boolean', short: 'q' },
         help: { type: 'boolean', short: 'h' },
@@ -253,6 +257,7 @@ function parseFlags(args: string[]): {
       },
       ignore: values.ignore ?? [],
       ...(framework ? { framework: framework as Framework | 'auto' } : {}),
+      cleanUrls: values['clean-urls'] ?? false,
       ...(values.config ? { config: values.config } : {}),
       quiet: values.quiet ?? false,
     },
@@ -305,6 +310,7 @@ export async function main(args: string[], io: CliIO): Promise<number> {
         ...(await loadDirectory(root, {
           ...(baseUrl ? { baseUrl } : {}),
           framework,
+          cleanUrls: flags.cleanUrls || (config.cleanUrls ?? false),
           ignore: [...(config.ignore ?? []), ...flags.ignore],
         })),
       );

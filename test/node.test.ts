@@ -21,6 +21,30 @@ const ids = async (directory: string, options?: Parameters<typeof loadDirectory>
   (await loadDirectory(directory, options)).map((document) => [document.id, document.url]);
 
 describe('loadDirectory', () => {
+  it('keeps .html in the URLs of HTML files, unless the host serves clean URLs', async () => {
+    const content = join(root, 'content');
+    await mkdir(join(content, 'docs'), { recursive: true });
+    await writeFile(join(content, 'docs/install.html'), '<main><h1>Install</h1></main>');
+    await writeFile(join(content, 'docs/index.html'), '<main><h1>Docs</h1></main>');
+    await writeFile(join(content, 'guide.md'), '# Guide');
+
+    expect(await ids(content)).toEqual([
+      ['docs/index.html', '/docs'],
+      ['docs/install.html', '/docs/install.html'],
+      ['guide.md', '/guide'],
+    ]);
+    expect(await ids(content, { cleanUrls: true })).toEqual([
+      ['docs/index.html', '/docs'],
+      ['docs/install.html', '/docs/install'],
+      ['guide.md', '/guide'],
+    ]);
+    // A framework's rules are its own: Docusaurus serves clean URLs.
+    expect(await ids(content, { framework: 'docusaurus' })).toContainEqual([
+      'docs/install.html',
+      '/docs/install',
+    ]);
+  });
+
   it('normalizes file names to NFC, so ids and URLs match on every file system', async () => {
     const content = join(root, 'content');
     await mkdir(content);

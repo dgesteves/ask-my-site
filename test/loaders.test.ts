@@ -135,8 +135,28 @@ describe('fromHtml', () => {
     expect(chunks.map((c) => [c.heading, c.anchor])).toEqual([
       ['', undefined],
       ['Requirements & limits', 'requirements'],
-      ['Next steps', 'next-steps'],
+      // No id on the page, so no anchor to make up: the citation links to the page.
+      ['Next steps', undefined],
     ]);
+  });
+
+  it('links a heading without an id to the nearest heading above it that has one', () => {
+    const doc = fromHtml(
+      '<main><h2 id="setup">Setup</h2><p>Run it.</p><h3>Details</h3><p>More.</p></main>',
+      { id: 'a.html', url: '/a.html' },
+    );
+    expect(chunkDocument(doc!).map((c) => [c.heading, c.anchor])).toEqual([
+      ['Setup', 'setup'],
+      ['Setup › Details', 'setup'],
+    ]);
+    // Markdown keeps its slugs, the ids its renderer gives those headings.
+    const markdown = {
+      id: 'a.md',
+      url: '/a',
+      title: 'A',
+      content: '## Setup\n\nRun it.\n\n### Details\n\nMore.',
+    };
+    expect(chunkDocument(markdown).map((c) => c.anchor)).toEqual(['setup', 'details']);
   });
 
   it('falls back to <title>, honours robots noindex, decodes entities', () => {
@@ -251,6 +271,7 @@ describe('fromHtml with a selector', () => {
       title: 'Setup',
       content:
         '# Setup {#_top}\n\nInstall it.\n\n## Configure {#configure}\n\nTip\n\nPin the version.',
+      anchors: 'explicit',
     });
   });
 

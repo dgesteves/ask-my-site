@@ -85,7 +85,7 @@ export function chunkSearchText(chunk: Pick<Chunk, 'title' | 'heading' | 'text'>
 function splitSections(document: SourceDocument): Section[] {
   const slug = createSlugger();
   const title = document.title.trim().toLowerCase();
-  const stack: { level: number; text: string; anchor: string }[] = [];
+  const stack: { level: number; text: string; anchor: string | undefined }[] = [];
   const sections: Section[] = [{ path: [], lines: [] }];
   const inFence = createFenceTracker();
 
@@ -103,14 +103,18 @@ function splitSections(document: SourceDocument): Section[] {
       sections.at(-1)?.lines.push(line);
       continue;
     }
-    // Slugged from the heading as written: GitHub keeps every space (`a  b` → `a--b`).
-    const anchor = explicit.id ?? slug(explicit.text);
+    // Slugged from the heading as written: GitHub keeps every space (`a  b` → `a--b`). A page
+    // whose ids are all explicit (built HTML) has no slug the chunk could link to.
+    const anchor =
+      explicit.id ?? (document.anchors === 'explicit' ? undefined : slug(explicit.text));
     while (stack.length > 0 && (stack.at(-1)?.level ?? 0) >= level) stack.pop();
     // A level-one heading that repeats the page title adds nothing to a citation.
     if (!(level === 1 && text.toLowerCase() === title)) stack.push({ level, text, anchor });
+    // The innermost heading's anchor, or the nearest one above it that has one.
+    const sectionAnchor = stack.findLast((entry) => entry.anchor !== undefined)?.anchor;
     sections.push({
       path: stack.map((entry) => entry.text),
-      ...(stack.length > 0 ? { anchor: stack.at(-1)?.anchor } : {}),
+      ...(sectionAnchor === undefined ? {} : { anchor: sectionAnchor }),
       lines: [],
     });
   }

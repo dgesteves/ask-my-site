@@ -59,7 +59,8 @@ describe('ask-my-site index', () => {
     expect(index.embedding).toEqual({ model: 'mock-hash-512', dimensions: 512 });
     expect(index.documents).toEqual([
       { id: 'guides/deploy.mdx', url: '/docs/guides/deploy', title: 'Deploying' },
-      { id: 'guides/legacy.html', url: '/docs/guides/legacy', title: 'Legacy' },
+      // A server without clean URLs serves the file by its name.
+      { id: 'guides/legacy.html', url: '/docs/guides/legacy.html', title: 'Legacy' },
       { id: 'index.md', url: '/docs', title: 'Home' },
     ]);
     expect(index.chunks.find((c) => c.anchor === 'rollbacks')?.text).toBe(
@@ -208,6 +209,13 @@ describe('ask-my-site index', () => {
     );
     const result = await run('index', 'content', '-e', 'mock');
     expect(result.stdout).toContain(`, 1 embedded, ${String(total - 1)} reused`);
+  });
+
+  it('drops .html from URLs with --clean-urls', async () => {
+    expect((await run('index', 'content', '-e', 'none', '--clean-urls')).code).toBe(0);
+    expect((await readIndex()).documents.find((d) => d.id === 'guides/legacy.html')?.url).toBe(
+      '/guides/legacy',
+    );
   });
 
   it('builds a keyword-only index with --embedding none', async () => {

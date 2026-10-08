@@ -72,19 +72,34 @@ export interface LoadDirectoryOptions {
    * `{a,b}`, matched case-sensitively.
    */
   ignore?: readonly string[];
+  /**
+   * Drop `.html` from the URLs of HTML files, for a host that serves `guides/setup.html` at
+   * `/guides/setup`. Default `false`: the URL keeps the file's name, which every server serves.
+   * The frameworks' rules always drop it.
+   */
+  cleanUrls?: boolean;
 }
 
 /**
- * Maps a content path to a URL: extensions are dropped and `index`/`_index`/`README` files stand
- * for their folder. `guides/setup.md` → `/guides/setup`, `guides/index.html` → `/guides`.
+ * Maps a content path to a URL: `index`/`_index`/`README` files stand for their folder, Markdown
+ * extensions are dropped, and an HTML file keeps its `.html`, as a server without clean URLs
+ * serves it, unless `cleanUrls` drops it too. `guides/setup.md` → `/guides/setup`,
+ * `guides/setup.html` → `/guides/setup.html`, `guides/index.html` → `/guides`.
  */
-export function pathToUrl(relativePath: string, baseUrl = '/'): string {
-  const withoutExt = relativePath
-    .split(sep)
-    .join('/')
-    .replace(/\.(?:mdx?|markdown|html?)$/i, '');
+export function pathToUrl(
+  relativePath: string,
+  baseUrl = '/',
+  { cleanUrls = false }: { cleanUrls?: boolean } = {},
+): string {
+  const file = relativePath.split(sep).join('/');
+  const withoutExt = file.replace(/\.(?:mdx?|markdown|html?)$/i, '');
   // `_index` is Hugo's section page.
-  const path = withoutExt.replace(/(?:^|\/)(?:_?index|readme)$/i, '');
+  const folder = /(?:^|\/)(?:_?index|readme)$/i;
+  const path = folder.test(withoutExt)
+    ? withoutExt.replace(folder, '')
+    : cleanUrls || !/\.html?$/i.test(file)
+      ? withoutExt
+      : file;
   const base = baseUrl.replace(/\/+$/, '');
   if (!path) return base || '/';
   return `${base}/${path}`;
@@ -223,7 +238,7 @@ export async function loadDirectory(
     const source = await readFile(join(directory, file), 'utf8');
     const ext = extname(path).toLowerCase();
     const markdown = ext !== '.html' && ext !== '.htm';
-    let url = pathToUrl(path, options.baseUrl);
+    let url = pathToUrl(path, options.baseUrl, { cleanUrls: options.cleanUrls ?? false });
     if (framework !== 'none') {
       let frontmatter: Record<string, unknown> = {};
       try {
@@ -283,6 +298,8 @@ export interface AskConfig {
   ignore?: string[];
   /** How file paths become URLs; see {@link Framework}. The CLI's default is `'auto'`. */
   framework?: Framework | 'auto';
+  /** Drop `.html` from HTML files' URLs; see {@link LoadDirectoryOptions.cleanUrls}. */
+  cleanUrls?: boolean;
   /** Documents from elsewhere (a CMS, an API), indexed alongside the directory. */
   documents?: SourceDocument[] | (() => SourceDocument[] | Promise<SourceDocument[]>);
 }
