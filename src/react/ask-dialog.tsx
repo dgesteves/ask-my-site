@@ -239,39 +239,44 @@ export function AskDialog({
               )}
             </div>
 
-            {showList ? (
-              <Command.List className={cx('ask-list', classNames.list)}>
-                {trimmedQuery ? (
-                  <Command.Item
-                    value={`ask:${trimmedQuery}`}
-                    onSelect={() => {
-                      submit(trimmedQuery);
-                    }}
-                    className={cx('ask-item', 'ask-item-primary', classNames.item)}
-                  >
-                    <span className="ask-item-label">Ask</span>
-                    <span className="ask-item-text">{trimmedQuery}</span>
-                    <kbd className="ask-kbd">↵</kbd>
-                  </Command.Item>
-                ) : null}
-                {matchingSuggestions.length > 0 ? (
-                  <Command.Group heading="Suggested" className="ask-group">
-                    {matchingSuggestions.map((suggestion) => (
-                      <Command.Item
-                        key={suggestion}
-                        value={suggestion}
-                        onSelect={() => {
-                          submit(suggestion);
-                        }}
-                        className={cx('ask-item', classNames.item)}
-                      >
-                        <span className="ask-item-text">{suggestion}</span>
-                      </Command.Item>
-                    ))}
-                  </Command.Group>
-                ) : null}
-              </Command.List>
-            ) : (
+            {/* Always mounted, as the input's aria-controls points at it. While the answer shows,
+                it is hidden and empty, so Enter selects nothing. */}
+            <Command.List className={cx('ask-list', classNames.list)} hidden={!showList}>
+              {showList ? (
+                <>
+                  {trimmedQuery ? (
+                    <Command.Item
+                      value={`ask:${trimmedQuery}`}
+                      onSelect={() => {
+                        submit(trimmedQuery);
+                      }}
+                      className={cx('ask-item', 'ask-item-primary', classNames.item)}
+                    >
+                      <span className="ask-item-label">Ask</span>
+                      <span className="ask-item-text">{trimmedQuery}</span>
+                      <kbd className="ask-kbd">↵</kbd>
+                    </Command.Item>
+                  ) : null}
+                  {matchingSuggestions.length > 0 ? (
+                    <Command.Group heading="Suggested" className="ask-group">
+                      {matchingSuggestions.map((suggestion) => (
+                        <Command.Item
+                          key={suggestion}
+                          value={suggestion}
+                          onSelect={() => {
+                            submit(suggestion);
+                          }}
+                          className={cx('ask-item', classNames.item)}
+                        >
+                          <span className="ask-item-text">{suggestion}</span>
+                        </Command.Item>
+                      ))}
+                    </Command.Group>
+                  ) : null}
+                </>
+              ) : null}
+            </Command.List>
+            {showList ? null : (
               <AnswerPanel state={state} onNavigate={navigate} classNames={classNames} />
             )}
           </Command>

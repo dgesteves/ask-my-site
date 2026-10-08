@@ -3,6 +3,7 @@ import { act, cleanup, render, renderHook, screen, waitFor, within } from '@test
 import userEvent from '@testing-library/user-event';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
+import axe from 'axe-core';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildIndex } from '../src';
@@ -248,6 +249,28 @@ describe('AskDialog', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
     expect(document.activeElement).toBe(elsewhere);
+  });
+
+  it('passes axe before and after it answers', async () => {
+    const user = userEvent.setup();
+    render(<AskDialog fetch={handlerFetch()} defaultOpen suggestions={['How do I install it?']} />);
+    const dialog = await screen.findByRole('dialog');
+    // jsdom has no layout, so color contrast is left to the theme's tests (styles.test.ts).
+    const violations = async () =>
+      (await axe.run(dialog)).violations.map(
+        (v) => `${v.id}: ${v.nodes.map((node) => node.target.join(' ')).join(', ')}`,
+      );
+    expect(await violations()).toEqual([]);
+
+    await user.type(within(dialog).getByRole('combobox'), 'How is an int8 vector scaled?{Enter}');
+    await waitFor(() => {
+      expect(dialog.querySelector('[data-status="done"]')).not.toBeNull();
+    });
+    expect(within(dialog).getByRole('navigation', { name: 'Sources' })).toBeTruthy();
+    // The input's aria-controls still points at the list, which the answer replaced.
+    const controls = within(dialog).getByRole('combobox').getAttribute('aria-controls') ?? '';
+    expect(document.getElementById(controls)).not.toBeNull();
+    expect(await violations()).toEqual([]);
   });
 
   it('leaves the shortcut to text fields and editors, where ⌘I means italic', async () => {

@@ -6,7 +6,8 @@
  *
  *   .ask-dialog { --ask-accent: #7c3aed; --ask-radius: 8px; }
  *
- * Light and dark follow prefers-color-scheme unless the dialog's `theme` prop pins one.
+ * Light and dark follow prefers-color-scheme unless the dialog's `theme` prop pins one. Text
+ * colors (fg, muted, subtle, accent, danger) keep a 4.5:1 contrast on bg and raised in both.
  */
 
 .ask-overlay,
@@ -17,7 +18,7 @@
   --ask-border-strong: #cdd3db;
   --ask-fg: #0d0f12;
   --ask-muted: #556070;
-  --ask-subtle: #7a8594;
+  --ask-subtle: #687280;
   --ask-accent: #0e7490;
   --ask-accent-soft: rgb(14 116 144 / 0.1);
   --ask-accent-line: rgb(14 116 144 / 0.35);
@@ -41,7 +42,7 @@
     --ask-border-strong: #353c47;
     --ask-fg: #f5f7fa;
     --ask-muted: #9aa6b4;
-    --ask-subtle: #6f7b89;
+    --ask-subtle: #7c8796;
     --ask-accent: #22d3ee;
     --ask-accent-soft: rgb(34 211 238 / 0.1);
     --ask-accent-line: rgb(34 211 238 / 0.35);
@@ -61,7 +62,7 @@
   --ask-border-strong: #353c47;
   --ask-fg: #f5f7fa;
   --ask-muted: #9aa6b4;
-  --ask-subtle: #6f7b89;
+  --ask-subtle: #7c8796;
   --ask-accent: #22d3ee;
   --ask-accent-soft: rgb(34 211 238 / 0.1);
   --ask-accent-line: rgb(34 211 238 / 0.35);
@@ -453,13 +454,15 @@
   border-color: var(--ask-accent-line);
 }
 
-.ask-source[data-cited='false'] {
-  opacity: 0.55;
+/* Sources the answer never cites step back in color, not opacity, which would take their text
+   below a 4.5:1 contrast. */
+.ask-source[data-cited='false']:not(:hover, :focus-visible) .ask-source-title {
+  color: var(--ask-muted);
 }
 
-.ask-source[data-cited='false']:hover,
-.ask-source[data-cited='false']:focus-visible {
-  opacity: 1;
+.ask-source[data-cited='false']:not(:hover, :focus-visible) .ask-source-id {
+  color: var(--ask-muted);
+  background: var(--ask-raised);
 }
 
 .ask-source-id {
