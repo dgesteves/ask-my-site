@@ -138,10 +138,10 @@ Other runtimes take the handler as-is: `app.post('/api/ask', (c) => handler(c.re
 
 ## Docusaurus
 
-The `ask-my-site/docusaurus` plugin does the indexing and the dialog for a Docusaurus 3 site:
+The `ask-my-site/docusaurus` plugin does the indexing and the dialog for a Docusaurus 3 site. It builds the index with `ai`, and embeds with `@ai-sdk/openai` by default:
 
 ```sh
-npm i ask-my-site @radix-ui/react-dialog cmdk
+npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
 ```
 
 ```ts
@@ -152,13 +152,35 @@ export default {
 };
 ```
 
-- **After `docusaurus build`** it indexes the pages the site serves (each route's `<article>`, so the docs and blog posts without the navbar, table of contents or pagination) into `build/ask-index.json`, at the exact URLs Docusaurus generated. There is no URL guessing, and nothing to commit: the index is rebuilt with the site, and unchanged pages reuse their vectors from the previous build.
-- **In the browser** it adds a floating "Ask AI" button and <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>I</kbd> (⌘K stays with your search), follows the site's light or dark mode, and routes citations without a page reload.
-- **Embeddings** default to OpenAI's `text-embedding-3-small` when `OPENAI_API_KEY` is set at build time, or the same model through AI Gateway with `AI_GATEWAY_API_KEY`. Without either, it builds a keyword-only index and says so. Pass `embeddingModel` to choose another.
+- **After `docusaurus build`** it indexes the docs, blog posts and MDX pages the site serves into `build/ask-index.json`, at the exact URLs Docusaurus generated. It reads each page's Markdown, without the navbar, breadcrumbs, table of contents, doc cards or pagination, and leaves out the pages that only list others: blog lists, tag and author pages, and generated category indexes. There is no URL guessing, and nothing to commit: the index is rebuilt with the site, and unchanged pages reuse their vectors from the previous build, cached in `node_modules/.cache/ask-my-site` (Netlify and Vercel keep it between builds).
+- **In the browser** it adds a floating "Ask AI" button beside the back-to-top button, and <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>I</kbd> (⌘K stays with your search, and text fields keep ⌘I for italic). It follows the site's light or dark mode and routes citations without a page reload. DocSearch's Ask AI side panel also opens with ⌘/Ctrl+I; pick another key with `dialog: { shortcut: 'j' }`, or turn it off with `shortcut: false`.
+- **Embeddings** default to OpenAI's `text-embedding-3-small` when `OPENAI_API_KEY` is set at build time, or the same model through AI Gateway with `AI_GATEWAY_API_KEY`. Without either, it builds a keyword-only index and says so. Pass `embeddingModel` to choose another; `embeddingProviderOptions` applies to the default model too.
 
-Options: `endpoint`, `embeddingModel`, `embeddingProviderOptions`, `chunking`, `indexFile` (default `ask-index.json`), `exclude` (route prefixes), and `dialog` (`title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`).
+Options: `endpoint`, `embeddingModel`, `embeddingProviderOptions`, `chunking`, `indexFile` (default `ask-index.json`), `exclude` (path prefixes relative to `baseUrl` and the locale, e.g. `['/changelog']`), and `dialog` (`title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`).
 
-A Docusaurus site is static, so the endpoint runs as a function on your host. It must use the same embedding model as the build:
+**Locales.** Docusaurus builds each locale on its own, and each gets its own `ask-index.json` under its locale path: `build/fr/ask-index.json`, served at `/fr/ask-index.json`. The recipes below serve one index, the default locale's.
+
+**Versions.** Versioned docs index every version, so an answer can cite an old one. Leave versions out with `exclude`: with docs at `/docs`, `exclude: ['/docs/next', '/docs/1.0']` drops the unreleased docs and version 1.0.
+
+**Another plugin wraps `Root`?** When two plugins wrap `Root`, Docusaurus uses only the last one's wrapper, so the dialog can go missing. Render it from your own `Root` instead; it shows once even if the plugin's `Root` renders it too:
+
+```tsx
+// src/theme/Root.tsx
+import AskMySite from '@theme/AskMySite';
+import Root from '@theme-original/Root';
+import type { ReactNode } from 'react';
+
+export default function RootWithAsk({ children }: { children: ReactNode }) {
+  return (
+    <Root>
+      {children}
+      <AskMySite />
+    </Root>
+  );
+}
+```
+
+A Docusaurus site is static, so the endpoint runs as a function on your host. It must use the same embedding model as the build. The index is served at `${baseUrl}ask-index.json`; the recipes read it from `build/ask-index.json`, or from `build/docs/ask-index.json` for `baseUrl: '/docs/'` when the site is built into `build/docs` to be served at `/docs/`:
 
 <details>
 <summary><strong>Vercel</strong>: <code>api/ask.ts</code></summary>
@@ -185,11 +207,15 @@ Include the index in the function's bundle with `vercel.json`: `{ "functions": {
 <summary><strong>Netlify</strong>: <code>netlify/functions/ask.mts</code></summary>
 
 ```ts
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { openai } from '@ai-sdk/openai';
 import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
 
 export default createAskHandler({
-  index: () => fetch(new URL('/ask-index.json', process.env.URL)).then((r) => r.text()),
+  // The deployed file, bundled with the function (below). `build/docs/ask-index.json` for
+  // `baseUrl: '/docs/'`.
+  index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
   model: openai('gpt-5.4-mini'),
   embeddingModel: openai.embedding('text-embedding-3-small'),
   rateLimit: memoryRateLimit({
@@ -202,6 +228,13 @@ export default createAskHandler({
 export const config = { path: '/api/ask' };
 ```
 
+Include the index in the function's bundle with `netlify.toml`:
+
+```toml
+[functions.ask]
+  included_files = ["build/ask-index.json"]
+```
+
 </details>
 
 <details>
@@ -211,6 +244,9 @@ export const config = { path: '/api/ask' };
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAskHandler } from 'ask-my-site/server';
 
+// `${baseUrl}ask-index.json`: '/docs/ask-index.json' for `baseUrl: '/docs/'`.
+const INDEX = '/ask-index.json';
+
 let handler: ((request: Request) => Promise<Response>) | undefined;
 
 export const onRequest: PagesFunction<{ OPENAI_API_KEY: string; ASSETS: Fetcher }> = ({
@@ -219,7 +255,11 @@ export const onRequest: PagesFunction<{ OPENAI_API_KEY: string; ASSETS: Fetcher 
 }) => {
   const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
   handler ??= createAskHandler({
-    index: () => env.ASSETS.fetch(new URL('/ask-index.json', request.url)).then((r) => r.text()),
+    index: async () => {
+      const response = await env.ASSETS.fetch(new URL(INDEX, request.url));
+      if (!response.ok) throw new Error(`${INDEX}: HTTP ${String(response.status)}`);
+      return response.text();
+    },
     model: openai('gpt-5.4-mini'),
     embeddingModel: openai.embedding('text-embedding-3-small'),
   });

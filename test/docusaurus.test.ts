@@ -17,99 +17,285 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   await rm(root, { recursive: true, force: true });
 });
 
-/** A page as Docusaurus builds it: chrome around an <article>, a TOC beside it in <main>. */
-const page = (
-  title: string,
-  body: string,
-) => `<!doctype html><html><head><title>${title} | Docs</title></head>
-<body><nav class=navbar>Docs GitHub</nav><main><div class=row><div class=col>
-<article><nav class=breadcrumbs>Home</nav><div class="theme-doc-markdown markdown"><header><h1>${title}</h1></header>
-${body}</div><footer>Edit this page</footer></article>
-<nav class=pagination-nav>Previous Next</nav></div>
-<div class=col--3><div class=tableOfContents><ul><li><a href=#setup>Setup</a></li></ul></div></div></div></main>
-<footer class=footer>Copyright</footer></body></html>`;
+/** A page as Docusaurus 3 builds it: its page type in the classes on <html>, chrome around it. */
+const html = (classes: string, title: string, main: string) =>
+  `<!doctype html><html lang=en dir=ltr class="${classes}" data-has-hydrated=false><head><title data-rh=true>${title}</title></head>
+<body><div id=__docusaurus><nav class="navbar navbar--fixed-top">Docs GitHub</nav><div class=main-wrapper>${main}</div>
+<footer class=footer>Copyright</footer></div></body></html>`;
 
-async function site(baseUrl = '/') {
-  const outDir = join(root, 'build');
+const DOCS = 'docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page';
+const BLOG = 'blog-wrapper plugin-blog plugin-id-default';
+
+/** A doc: breadcrumbs, a version badge and the Markdown in an <article>, a TOC beside it. */
+const doc = (id: string, title: string, markdown: string, { hideTitle = false } = {}) =>
+  html(
+    `${DOCS} docs-doc-id-${id}`,
+    `${title} | Acme Docs`,
+    `<main class=docMainContainer><div class=row><div class=col><article>
+<nav class=theme-doc-breadcrumbs aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a href=/>Home</a><li class=breadcrumbs__item><span>${title}</span></ul></nav>
+<span class="theme-doc-version-badge badge badge--secondary">Version: 2.0</span>
+<div class="theme-doc-markdown markdown">${hideTitle ? '' : `<header><h1>${title}</h1></header>`}${markdown}</div>
+<footer class="theme-doc-footer docusaurus-mt-lg">Edit this page</footer></article>
+<nav class="pagination-nav docusaurus-mt-lg" aria-label="Docs pages">Previous Next</nav></div>
+<div class="col col--3"><div class=tableOfContents><ul><li><a href=#setup>Setup</a></li></ul></div></div></div></main>`,
+  );
+
+/** A <DocCardList> card: an <article> of its own. */
+const card = (title: string) =>
+  `<article class="docCardListItem_W1sv col col--6"><a class="card padding--lg cardContainer_fWXF" href=/${title.toLowerCase()}><h2 class="text--truncate cardTitle_rnsV" title=${title}>📄️<!-- -->${title}</h2><p class="text--truncate cardDescription_PWke">${title} in detail.</p></a></article>`;
+
+/** A blog post: its title, date and authors in a header, the Markdown in its own container. */
+const post = (title: string, markdown: string) =>
+  html(
+    `${BLOG} blog-post-page`,
+    `${title} | Acme Docs`,
+    `<main class="col col--7"><article class=""><header><h1 class=title_f1Hy>${title}</h1><div class="container_mt6G margin-vert--md"><time datetime=2026-05-01T00:00:00.000Z>May 1, 2026</time> · <!-- -->One min read</div><div class="margin-top--md margin-bottom--sm row"><div class="col col--6 authorCol_Hf19"><div class="avatar margin-bottom--sm"><div class=avatar__intro><div class=avatar__name><a href=/blog/authors/jane><span>Jane Doe</span></a></div><small>Maintainer</small></div></div></div></div></header>
+<div id=__blog-post-container class=markdown>${markdown}</div><footer class="row docusaurus-mt-lg">Tags: release</footer></article>
+<nav class=pagination-nav>Older post</nav></main>`,
+  );
+
+/** A page listing posts or docs, each in an <article> with its teaser. */
+const listing = (classes: string, title: string) =>
+  html(
+    classes,
+    `${title} | Acme Docs`,
+    `<main class="col col--7"><h1>${title}</h1>${[1, 2]
+      .map(
+        (i) =>
+          `<article class=margin-bottom--xl><header><h2><a href=/blog/post-${String(i)}>Post ${String(i)}</a></h2></header><div class=markdown><p>Teaser ${String(i)}.</p></div></article>`,
+      )
+      .join('')}</main>`,
+  );
+
+/**
+ * A built site, as `postBuild` sees it. A locale other than the default one is built into its
+ * own directory, with its own base URL (`/docs/fr/`) and pages in its language.
+ */
+async function site({ baseUrl = '/', locale = 'en' } = {}) {
+  const localized = locale === 'en' ? baseUrl : `${baseUrl}${locale}/`;
+  const outDir = join(root, 'build', locale === 'en' ? '' : locale);
+  const say = (text: string) => (locale === 'en' ? text : `${text} (${locale})`);
   const files: Record<string, string> = {
-    'index.html': page('Introduction', '<p>Welcome to the docs.</p>'),
-    'guides/setup/index.html': page(
+    'index.html': doc('intro', 'Introduction', `<p>${say('Welcome to the docs.')}</p>`),
+    'guides/setup/index.html': doc(
+      'guides/setup',
       'Setup',
-      '<h2 id=setup>Install<a href=#setup class=hash-link aria-label="Direct link">​</a></h2><p>Run the installer.</p>',
+      `<h2 class=anchor id=setup>Install<a href=#setup class=hash-link aria-label="Direct link to Install" translate=no>\u200b</a></h2><p>${say('Run the installer.')}</p>`,
     ),
     // trailingSlash: false writes the route as a file.
-    'guides/deploy.html': page('Deploy', '<p>Ship it.</p>'),
-    'changelog/index.html': page('Changelog', '<p>1.0 released.</p>'),
-    'landing/index.html': '<html><body><main><h1>Custom React page</h1></main></body></html>',
-    '404.html': page('Page not found', '<p>Nothing here.</p>'),
+    'guides/deploy.html': doc('guides/deploy', 'Deploy', `<p>${say('Ship it.')}</p>`),
+    'reference/index.html': doc(
+      'reference/index',
+      'Reference',
+      `<p>${say('Every option.')}</p><section class=row>${card('Alpha')}${card('Beta')}</section>
+<h2 class=anchor id=defaults>Defaults</h2><p>${say('Defaults apply everywhere.')}</p>`,
+    ),
+    // `hide_title: true`: the title comes from <title>.
+    'faq/index.html': doc('faq', 'FAQ', `<p>${say('Answers live here.')}</p>`, {
+      hideTitle: true,
+    }),
+    'changelog/index.html': doc('changelog', 'Changelog', `<p>${say('1.0 released.')}</p>`),
+    // A generated-index category page: a docs page without a doc id, all cards.
+    'category/guides/index.html': html(
+      DOCS,
+      'Guides | Acme Docs',
+      `<main><div class=generatedIndexPage><header><h1>Guides</h1><p>All the guides.</p></header><article class=margin-top--lg><section class=row>${card('Setup')}${card('Deploy')}</section></article></div></main>`,
+    ),
+    // One swizzled to show its description in the article.
+    'category/more/index.html': html(
+      DOCS,
+      'More | Acme Docs',
+      `<main><article><h1>More</h1><p>More guides.</p><section class=row>${card('Setup')}</section></article></main>`,
+    ),
+    'blog/first-post/index.html': post('First post', `<p>${say('We shipped it.')}</p>`),
+    'blog/index.html': listing(`${BLOG} blog-list-page`, 'Blog'),
+    'blog/page/2/index.html': listing(`${BLOG} blog-list-page`, 'Blog'),
+    'blog/tags/index.html': listing(`${BLOG} blog-tags-list-page`, 'Tags'),
+    'blog/tags/release/index.html': listing(`${BLOG} blog-tags-post-list-page`, 'Release'),
+    'blog/authors/jane/index.html': listing(`${BLOG} blog-authors-posts-page`, 'Jane Doe'),
+    'tags/index.html': listing('docs-wrapper plugin-docs docs-tags-list-page', 'Tags'),
+    'tags/setup/index.html': listing('docs-wrapper plugin-docs docs-tags-doc-list-page', 'Setup'),
+    'about/index.html': html(
+      'mdx-wrapper plugin-pages plugin-id-default mdx-page',
+      'About | Acme Docs',
+      `<main class="container container--fluid margin-vert--lg"><div class=row><div class="col col--8"><article><header><h1>About</h1></header><p>${say('Acme makes docs.')}</p></article></div></div></main>`,
+    ),
+    // A React page, without a page type or an article.
+    'landing/index.html': html(
+      'plugin-pages plugin-id-default',
+      'Acme Docs',
+      '<main><h1>Custom React page</h1></main>',
+    ),
+    // An older or custom theme, without page types: a page with an article is content.
+    'legacy/index.html': `<html><head><title>Legacy | Acme Docs</title></head><body><main><article><h1>Legacy</h1><p>${say('An old theme.')}</p></article></main></body></html>`,
+    '404.html': doc('404', 'Page Not Found', '<p>Nothing here.</p>'),
   };
-  for (const [file, html] of Object.entries(files)) {
+  for (const [file, page] of Object.entries(files)) {
     await mkdir(dirname(join(outDir, file)), { recursive: true });
-    await writeFile(join(outDir, file), html);
+    await writeFile(join(outDir, file), page);
   }
-  const prefix = baseUrl.replace(/\/$/, '');
   const routesPaths = [
     '/',
-    '/guides/setup',
-    '/guides/deploy',
-    '/changelog',
-    '/landing',
-    '/404.html',
-  ].map((r) => (r === '/' ? baseUrl : `${prefix}${r}`));
+    ...Object.keys(files)
+      .filter((file) => file !== 'index.html')
+      .map((file) => `/${file.replace(/(\/index)?\.html$/, '')}`)
+      .map((route) => (route === '/404' ? '/404.html' : route)),
+  ].map((route) => (route === '/' ? localized : `${localized.replace(/\/$/, '')}${route}`));
   const context = {
-    siteConfig: { title: 'Acme Docs', baseUrl },
-    generatedFilesDir: join(root, '.docusaurus'),
+    siteDir: root,
+    siteConfig: { title: 'Acme Docs', titleDelimiter: '|' },
+    baseUrl: localized,
+    i18n: { currentLocale: locale },
   };
   return { outDir, routesPaths, context };
 }
 
-describe('ask-my-site/docusaurus', () => {
-  it('indexes the built pages that have an article, at the URLs Docusaurus serves', async () => {
-    const { outDir, routesPaths, context } = await site('/docs/');
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    const plugin = askMySite(context, {
-      embeddingModel: mockEmbeddingModel(),
-      exclude: ['/docs/changelog'],
-    });
-    await plugin.postBuild({ outDir, routesPaths });
+async function build(s: Awaited<ReturnType<typeof site>>, options = {}) {
+  await askMySite(s.context, { embeddingModel: mockEmbeddingModel(), ...options }).postBuild(s);
+  return parseIndexFile(await readFile(join(s.outDir, 'ask-index.json'), 'utf8'));
+}
 
-    const index = parseIndexFile(await readFile(join(outDir, 'ask-index.json'), 'utf8'));
+describe('ask-my-site/docusaurus', () => {
+  it('indexes docs, blog posts and MDX pages, at the URLs Docusaurus serves', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const index = await build(await site());
+
+    // No blog lists, tag or author pages, generated-index pages, React pages without an
+    // article, or 404 page.
     expect(index.documents.map((d) => [d.url, d.title])).toEqual([
-      ['/docs/', 'Introduction'],
-      ['/docs/guides/deploy', 'Deploy'],
-      ['/docs/guides/setup', 'Setup'],
+      ['/', 'Introduction'],
+      ['/about', 'About'],
+      ['/blog/first-post', 'First post'],
+      ['/changelog', 'Changelog'],
+      // From <title>, without the site's title.
+      ['/faq', 'FAQ'],
+      ['/guides/deploy', 'Deploy'],
+      ['/guides/setup', 'Setup'],
+      ['/legacy', 'Legacy'],
+      ['/reference', 'Reference'],
     ]);
-    const text = index.chunks.map((c) => c.text).join('\n');
-    // The article only: no navbar, breadcrumbs, table of contents, pagination or footers.
-    for (const chrome of ['GitHub', 'Home', 'Previous', 'Edit this page', 'Copyright']) {
+    const text = index.chunks.map((c) => `${c.heading}\n${c.text}`).join('\n');
+    // The Markdown only: no navbar, breadcrumbs, version badge, table of contents, pagination,
+    // footers, a post's date and authors, or the cards of a <DocCardList>.
+    for (const chrome of [
+      'GitHub',
+      'Home',
+      'Version: 2.0',
+      'Previous',
+      'Edit this page',
+      'Copyright',
+      'May 1, 2026',
+      'One min read',
+      'Jane Doe',
+      'Tags: release',
+      'Teaser',
+      'Alpha',
+      '📄',
+    ]) {
       expect([chrome, text.includes(chrome)]).toEqual([chrome, false]);
     }
+    // The text after the cards is kept.
+    expect(index.chunks.find((c) => c.anchor === 'defaults')?.text).toBe(
+      'Defaults apply everywhere.',
+    );
     // The heading permalink's zero-width space is not part of the heading.
-    const setup = index.chunks.find((c) => c.anchor === 'setup');
-    expect(setup?.heading).toBe('Install');
+    expect(index.chunks.find((c) => c.anchor === 'setup')?.heading).toBe('Install');
     expect(index.embedding?.model).toBe('mock-hash-512');
   });
 
-  it('reuses the previous build’s vectors, and falls back to keyword-only with a warning', async () => {
-    const { outDir, routesPaths, context } = await site();
+  it('excludes paths relative to the base URL, in every locale', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const exclude = ['/changelog', 'blog/', '/guides/setup'];
+    const en = await build(await site({ baseUrl: '/docs/' }), { exclude });
+    expect(en.documents.map((d) => d.url)).toEqual([
+      '/docs/',
+      '/docs/about',
+      '/docs/faq',
+      '/docs/guides/deploy',
+      '/docs/legacy',
+      '/docs/reference',
+    ]);
+
+    const fr = await build(await site({ baseUrl: '/docs/', locale: 'fr' }), { exclude });
+    expect(fr.documents.map((d) => d.url)).toEqual(
+      en.documents.map((d) => d.url.replace('/docs/', '/docs/fr/')),
+    );
+    expect(fr.chunks[0]?.text).toBe('Welcome to the docs. (fr)');
+  });
+
+  it('reuses vectors per locale, from node_modules/.cache, and falls back to keyword-only', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const plugin = askMySite(context, { embeddingModel: mockEmbeddingModel() });
-    await plugin.postBuild({ outDir, routesPaths });
-    await plugin.postBuild({ outDir, routesPaths });
-    expect(log.mock.calls.at(-1)?.[0]).toMatch(
-      /^\[ask-my-site\] Indexed 4 pages into \d+ chunks, 0 embedded, \d+ reused → ask-index\.json/,
-    );
+    const en = await site();
+    const fr = await site({ locale: 'fr' });
+    await build(en);
+    await build(fr);
+    // Building French did not evict the English vectors, nor the reverse.
+    await build(en);
+    await build(fr);
+    for (const call of log.mock.calls.slice(-2)) {
+      expect(call[0]).toMatch(
+        /^\[ask-my-site\] Indexed 9 pages into \d+ chunks, 0 embedded, \d+ reused → ask-index\.json/,
+      );
+    }
+    const cache = join(root, 'node_modules', '.cache', 'ask-my-site');
+    expect(existsSync(join(cache, 'en-default.json'))).toBe(true);
+    expect(existsSync(join(cache, 'fr-default.json'))).toBe(true);
 
-    await askMySite(context).postBuild({ outDir, routesPaths });
+    await askMySite(en.context, { id: 'second' }).postBuild(en);
     expect(warn.mock.calls[0]?.[0]).toContain('No embedding model: building a keyword-only index.');
     expect(
-      parseIndexFile(await readFile(join(outDir, 'ask-index.json'), 'utf8')).embedding,
+      parseIndexFile(await readFile(join(en.outDir, 'ask-index.json'), 'utf8')).embedding,
     ).toBeNull();
+    expect(existsSync(join(cache, 'en-second.json'))).toBe(true);
+  });
+
+  it('passes embeddingProviderOptions to the default OpenAI and AI Gateway models', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const requests: { url: string; body: { input?: string[]; values?: string[] } }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string | URL | Request, init?: RequestInit) => {
+        const url = input instanceof Request ? input.url : String(input);
+        const body = JSON.parse(init?.body as string) as { input?: string[]; values?: string[] };
+        requests.push({ url, body });
+        const vectors = (body.input ?? body.values ?? []).map((_, i) => [1, i, 0, 0]);
+        return Promise.resolve(
+          Response.json(
+            url.startsWith('https://api.openai.com/')
+              ? { data: vectors.map((embedding) => ({ embedding })) }
+              : { embeddings: vectors },
+          ),
+        );
+      }),
+    );
+    const s = await site();
+    const options = { embeddingProviderOptions: { openai: { dimensions: 4 } } };
+
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
+    await askMySite(s.context, options).postBuild(s);
+    expect(requests.at(-1)).toMatchObject({
+      url: 'https://api.openai.com/v1/embeddings',
+      body: { model: 'text-embedding-3-small', dimensions: 4 },
+    });
+    const index = parseIndexFile(await readFile(join(s.outDir, 'ask-index.json'), 'utf8'));
+    expect(index.embedding).toMatchObject({ model: 'text-embedding-3-small', dimensions: 4 });
+    expect(index.embedding?.settings).toBeDefined();
+
+    // Without the cache, so the gateway embeds every chunk again.
+    await rm(join(root, 'node_modules'), { recursive: true });
+    vi.stubEnv('OPENAI_API_KEY', '');
+    vi.stubEnv('AI_GATEWAY_API_KEY', 'gateway-test');
+    await askMySite(s.context, options).postBuild(s);
+    expect(requests.at(-1)).toMatchObject({
+      url: expect.stringMatching(/\/embedding-model$/) as string,
+      body: { providerOptions: { openai: { dimensions: 4 } } },
+    });
   });
 
   it('hands the dialog its settings, and points Docusaurus at files that exist', async () => {
@@ -124,7 +310,10 @@ describe('ask-my-site/docusaurus', () => {
       endpoint: 'https://api.example.com/ask',
       dialog: { shortcut: false, title: 'Ask Acme Docs' },
     });
-    expect(existsSync(join(plugin.getThemePath(), 'Root.tsx'))).toBe(true);
+    // Root renders AskMySite, which a site can also render from its own swizzled Root.
+    for (const component of ['Root.tsx', 'AskMySite.tsx']) {
+      expect(existsSync(join(plugin.getThemePath(), component))).toBe(true);
+    }
     expect(existsSync(plugin.getClientModules()[1]!)).toBe(true);
   });
 });
