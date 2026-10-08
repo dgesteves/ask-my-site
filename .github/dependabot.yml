@@ -13,6 +13,10 @@ updates:
       # TypeScript 7 is the Go compiler, which typescript-eslint doesn't support yet. Move to it by hand.
       - dependency-name: typescript
         update-types: ['version-update:semver-major']
+      # @types/node follows the Node major the code runs and is tested on (24), not the newest one:
+      # newer types would let code use APIs that Node 24 doesn't have. Move it with .nvmrc and CI.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
