@@ -16,7 +16,9 @@ import {
   buildEmbedding,
   checkIndexOptions,
   consoleLogger,
+  dialogEndpoint,
   excluder,
+  hintDevEndpoint,
   warnMissingDialogPeers,
   writeSiteIndex,
   type IndexOptions,
@@ -35,7 +37,11 @@ export interface AskMySiteDialogOptions extends DialogOptions {
 export type AskMySiteOptions = IndexOptions & {
   /** The plugin instance's id, set by Docusaurus. Default `"default"`. */
   id?: string;
-  /** URL the dialog posts questions to. Default `/api/ask`. */
+  /**
+   * URL the dialog posts questions to. Default: `ASK_ENDPOINT` when it is set as the site builds
+   * or starts (`ASK_ENDPOINT=http://localhost:8787/api/ask` for `ask-my-site dev`), else
+   * `/api/ask`.
+   */
   endpoint?: string;
   /** Where the index is written in the build output, and served from. Default `ask-index.json`. */
   indexFile?: string;
@@ -75,7 +81,7 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
   const { title: siteTitle, titleDelimiter = '|' } = context.siteConfig;
   const indexFile = (options.indexFile ?? 'ask-index.json').replace(/^\/+/, '');
   const data: AskMySiteGlobalData = {
-    endpoint: options.endpoint ?? '/api/ask',
+    endpoint: dialogEndpoint(options.endpoint),
     dialog: { ...options.dialog, title: options.dialog?.title ?? `Ask ${siteTitle}` },
   };
 
@@ -94,6 +100,10 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
 
     contentLoaded({ actions }: { actions: { setGlobalData: (data: unknown) => void } }) {
       actions.setGlobalData(data);
+      // `docusaurus start`; `build` sets production.
+      if (process.env.NODE_ENV === 'development') {
+        hintDevEndpoint(data.endpoint, 'docusaurus start', consoleLogger());
+      }
     },
 
     async postBuild({ outDir, routesPaths }: PostBuildProps) {

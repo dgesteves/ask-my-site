@@ -146,6 +146,7 @@ describe('useAsk', () => {
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining(`POST ${new URL('/api/ask', location.href).href} returned 404`),
     );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('run `npx ask-my-site dev`'));
 
     // A production build on a deployed site keeps the console quiet.
     warn.mockClear();

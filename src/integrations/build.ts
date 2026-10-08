@@ -157,6 +157,29 @@ function mergeProviderOptions(
   return merged;
 }
 
+/** Where the dialog posts: `endpoint`, else `ASK_ENDPOINT` at build or dev time, else `/api/ask`. */
+export function dialogEndpoint(endpoint: string | undefined): string {
+  return endpoint ?? (process.env.ASK_ENDPOINT || '/api/ask');
+}
+
+const HINTED = Symbol.for('ask-my-site.devEndpointHint');
+
+/**
+ * Says how to get answers while developing, when the dialog posts to a path on the site that
+ * `server`, the framework's dev server, does not serve. Once per process: Docusaurus loads its
+ * plugins again as the site reloads.
+ */
+export function hintDevEndpoint(endpoint: string, server: string, log: Logger): void {
+  const shared = globalThis as Record<symbol, unknown>;
+  if (shared[HINTED] || !endpoint.startsWith('/') || endpoint.startsWith('//')) return;
+  shared[HINTED] = true;
+  log.info(
+    `The dialog posts to ${endpoint}, which ${server} does not serve. For answers while you ` +
+      'work, build the site once, run `npx ask-my-site dev`, and start the site with ' +
+      'ASK_ENDPOINT=http://localhost:8787/api/ask.',
+  );
+}
+
 /** What the dialog renders with: optional peers of ask-my-site that a plugin's site needs. */
 const DIALOG_PEERS = ['react', 'react-dom', '@radix-ui/react-dialog', 'cmdk'];
 

@@ -83,8 +83,9 @@ async function errorFrom(response: Response, endpoint: string): Promise<AskError
   if (response.status === 404 && isDevelopment()) {
     const url = typeof location === 'undefined' ? endpoint : new URL(endpoint, location.href).href;
     console.warn(
-      `[ask-my-site] POST ${url} returned 404: no ask endpoint answers there. Point the dialog's ` +
-        '`endpoint` at one (see https://github.com/dgesteves/ask-my-site#readme).',
+      `[ask-my-site] POST ${url} returned 404: no ask endpoint answers there. While you ` +
+        'develop, run `npx ask-my-site dev` and point the dialog’s `endpoint` at ' +
+        'http://localhost:8787/api/ask; to deploy one, see https://github.com/dgesteves/ask-my-site#readme.',
     );
   }
   if (response.status === 429) {

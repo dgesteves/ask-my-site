@@ -422,6 +422,39 @@ describe('ask-my-site/astro', () => {
     expect(existsSync(join(outDir, 'ask-index.json'))).toBe(false);
   });
 
+  it('posts to ASK_ENDPOINT when set, and says how to get answers in astro dev', async () => {
+    // The hint shows once per process.
+    Reflect.deleteProperty(globalThis, Symbol.for('ask-my-site.devEndpointHint'));
+    const logger = { info: vi.fn(), warn: vi.fn() };
+    /** Runs the hooks of `astro dev`, with the routes the site has. */
+    const dev = async (integration: AstroIntegration, routes: { patternRegex: RegExp }[]) => {
+      const hooks = integration.hooks as Record<string, (options: unknown) => unknown>;
+      const injected: string[] = [];
+      await hooks['astro:config:setup']?.({
+        command: 'dev',
+        injectScript: (_: string, content: string) => injected.push(content),
+        updateConfig: vi.fn(),
+        logger,
+      });
+      await hooks['astro:routes:resolved']?.({ routes, logger });
+      await hooks['astro:server:start']?.({ logger });
+      return injected;
+    };
+
+    // An SSR site that serves the endpoint itself needs no hint.
+    await dev(askMySite({ embeddingModel: null }), [{ patternRegex: /^\/api\/ask\/?$/ }]);
+    expect(logger.info).not.toHaveBeenCalled();
+    // A static site does not serve it.
+    await dev(askMySite({ embeddingModel: null }), [{ patternRegex: /^\/guide\/?$/ }]);
+    expect(logger.info).toHaveBeenCalledWith(
+      'The dialog posts to /api/ask, which astro dev does not serve. For answers while you work, build the site once, run `npx ask-my-site dev`, and start the site with ASK_ENDPOINT=http://localhost:8787/api/ask.',
+    );
+
+    vi.stubEnv('ASK_ENDPOINT', 'http://localhost:8787/api/ask');
+    const [, script] = await dev(askMySite({ embeddingModel: null }), []);
+    expect(script).toContain('mountAskDialog({"endpoint":"http://localhost:8787/api/ask"});');
+  });
+
   it('passes embeddingProviderOptions to the default OpenAI and AI Gateway models', async () => {
     const requests: { url: string; body: Record<string, unknown> }[] = [];
     vi.stubGlobal(
