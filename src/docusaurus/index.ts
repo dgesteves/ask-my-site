@@ -13,8 +13,9 @@ import { fileURLToPath } from 'node:url';
 
 import type { AskMySiteDialogOptions as DialogOptions } from '../embed/options';
 import {
+  buildEmbedding,
+  checkIndexOptions,
   consoleLogger,
-  defaultEmbedding,
   excluder,
   writeSiteIndex,
   type IndexOptions,
@@ -68,6 +69,7 @@ interface PostBuildProps {
 const here = dirname(fileURLToPath(import.meta.url));
 
 export default function askMySite(context: LoadContext, options: AskMySiteOptions = {}) {
+  checkIndexOptions(options);
   const { title: siteTitle, titleDelimiter = '|' } = context.siteConfig;
   const indexFile = (options.indexFile ?? 'ask-index.json').replace(/^\/+/, '');
   const data: AskMySiteGlobalData = {
@@ -98,9 +100,11 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
         exclude: options.exclude ?? [],
         titleSuffix: ` ${titleDelimiter} ${siteTitle}`,
       });
+      const embedding = await buildEmbedding(options, log);
       await writeSiteIndex({
         documents,
-        embeddingModel: await defaultEmbedding(options, log),
+        embeddingModel: embedding.model,
+        embeddingProviderOptions: embedding.providerOptions,
         options,
         file: join(outDir, indexFile),
         // One file per locale and plugin instance, in node_modules/.cache, which Netlify and

@@ -1,4 +1,5 @@
-// Embedding models named by a spec string, as the CLI's `--embedding` takes them. Node.js only.
+// Embedding models named by a spec string: the CLI's `--embedding` and the framework plugins'
+// `embedding` option. Node.js only.
 import type { EmbeddingModel } from 'ai';
 
 import type { EmbeddingProviderOptions } from '../build';

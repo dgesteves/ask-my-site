@@ -7,7 +7,8 @@ import type { AstroConfig, AstroIntegration } from 'astro';
 
 import type { AskMySiteDialogOptions as DialogOptions, AskMySiteTheme } from '../embed/options';
 import {
-  defaultEmbedding,
+  buildEmbedding,
+  checkIndexOptions,
   excluder,
   writeSiteIndex,
   type IndexOptions,
@@ -64,6 +65,7 @@ export function createIntegration(
   options: AskMySiteOptions,
   preset: IntegrationPreset,
 ): AstroIntegration {
+  checkIndexOptions(options);
   let config: AstroConfig | undefined;
   return {
     name: 'ask-my-site',
@@ -103,14 +105,15 @@ export function createIntegration(
           );
           return;
         }
-        const embeddingModel = await defaultEmbedding(options, logger);
+        const embedding = await buildEmbedding(options, logger);
         for (const [locale, documents] of groups) {
           // A site whose every locale has a path prefix has no pages of its own at the root.
           if (documents.length === 0) continue;
           const name = locale ? `${locale}/${indexFile}` : indexFile;
           await writeSiteIndex({
             documents,
-            embeddingModel,
+            embeddingModel: embedding.model,
+            embeddingProviderOptions: embedding.providerOptions,
             options,
             file: join(outDir, name),
             // One file per locale, in node_modules/.cache, which Netlify and Vercel keep between

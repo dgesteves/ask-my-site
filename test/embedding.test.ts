@@ -201,7 +201,49 @@ describe('embedding specs', () => {
   });
 });
 
-describe('the plugins’ default embedding', () => {
+describe('the plugins’ embedding options', () => {
+  it('take a spec and dimensions, so the config imports no provider', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const requests = stubEmbeddings(8);
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
+    const s = await site();
+    await askMySite(s.context, {
+      embedding: 'openai:text-embedding-3-large',
+      dimensions: 8,
+      embeddingProviderOptions: { openai: { user: 'docs-build' } },
+    }).postBuild(s);
+    expect(requests.at(-1)?.body).toMatchObject({
+      model: 'text-embedding-3-large',
+      dimensions: 8,
+      user: 'docs-build',
+    });
+    expect((await readIndex()).embedding).toMatchObject({
+      model: 'text-embedding-3-large',
+      dimensions: 8,
+    });
+
+    await askMySite(s.context, { embedding: 'mock:32' }).postBuild(s);
+    expect((await readIndex()).embedding).toEqual({ model: 'mock-hash-32', dimensions: 32 });
+    // An explicit keyword-only index, with the key set and no warning.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await askMySite(s.context, { embedding: 'none' }).postBuild(s);
+    expect((await readIndex()).embedding).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('reject contradictory or unknown options when the plugin is created', async () => {
+    const { context } = await site();
+    expect(() => askMySite(context, { embedding: 'mock', embeddingModel: null })).toThrow(
+      'pass `embedding` or `embeddingModel`, not both',
+    );
+    expect(() => askMySite(context, { embeddingModel: null, dimensions: 512 })).toThrow(
+      '`dimensions` applies to `embedding` or the default model',
+    );
+    expect(() =>
+      askMySite(context, { embedding: 'openai-text-embedding-3-small' as 'none' }),
+    ).toThrow("Unknown embedding: 'openai-text-embedding-3-small'. Use openai:<model>");
+  });
+
   it('fail the build, with the real error, when OPENAI_API_KEY is set but the provider cannot load', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     const s = await site();
@@ -209,7 +251,7 @@ describe('the plugins’ default embedding', () => {
     vi.mocked(importOptional).mockResolvedValueOnce(null);
     await expect(askMySite(s.context, {}).postBuild(s)).rejects.toThrow(
       'ask-my-site: OPENAI_API_KEY is set, so the default embedding, openai:text-embedding-3-small, ' +
-        'needs @ai-sdk/openai, which is not installed: npm i @ai-sdk/openai. Or pass `embeddingModel: null`',
+        "needs @ai-sdk/openai, which is not installed: npm i @ai-sdk/openai. Or set `embedding: 'none'`",
     );
 
     vi.mocked(importOptional).mockRejectedValueOnce(
