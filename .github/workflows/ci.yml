@@ -31,6 +31,8 @@ jobs:
       - run: pnpm build
       - name: Check the published package (publint, are-the-types-wrong)
         run: pnpm check:package
+      - name: Check the script embed's size (production React, minified)
+        run: node -e "const s=require('zlib').gzipSync(require('fs').readFileSync('dist/embed.global.js')).length;console.log('dist/embed.global.js:',Math.round(s/1024),'KB gzipped');if(s>110*1024)throw new Error('over the 110 KB budget')"
       - name: CLI smoke test, including --check
         run: |
           node dist/cli.js index examples/nextjs/content/docs --base-url /docs -e mock -o "$RUNNER_TEMP/ask-index.json"

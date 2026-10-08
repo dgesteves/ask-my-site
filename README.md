@@ -55,6 +55,7 @@ That is the whole integration: five lines, imports aside. [Full setup](#full-set
 - **Any AI SDK model.** Embeddings through `embedMany`/`embed` and answers through `streamText`, from any provider package or an AI Gateway model string.
 - **Web-standard handler.** `(Request) => Promise<Response>` built on Web APIs only, so it mounts in Next.js route handlers, Hono, Bun, Deno or Cloudflare Workers. It streams the AI SDK UI message protocol, so `useChat` can consume it too.
 - **Accessible ⌘K dialog.** Radix Dialog and cmdk; focus management, `aria-live` answer, reduced motion, light and dark themes, unstyled-friendly.
+- **A plugin and a script tag.** The [Docusaurus](#docusaurus) plugin indexes the built site at the URLs it serves and adds the dialog; [one `<script>` tag](#any-static-site-script-embed) adds it to Hugo, Jekyll, Eleventy, MkDocs or plain HTML.
 - **Production hygiene.** zod-validated input, body-size cap, pluggable rate limiting (in-memory or Upstash) keyed on the one client IP header your platform controls, masked model errors, keyword fallback when the embedding provider is down.
 - **Offline mock mode.** A deterministic embedder and a scripted extractive model run the whole pipeline with no key, for demos and tests.
 
@@ -271,6 +272,26 @@ export const onRequest: PagesFunction<{ OPENAI_API_KEY: string; ASSETS: Fetcher 
 
 To try it locally, the [Docusaurus example](./examples/docusaurus) ships a small endpoint: `pnpm --filter ask-my-site-example-docusaurus api`, and build the site with `ASK_ENDPOINT=http://localhost:8787/api/ask`.
 
+## Any static site (script embed)
+
+For Hugo, Jekyll, Eleventy, MkDocs or plain HTML, one script tag adds the dialog and its button, with React and the styles bundled in (91 KB gzipped):
+
+```html
+<script
+  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.3/dist/embed.global.js"
+  data-endpoint="/api/ask"
+  defer
+></script>
+```
+
+1. **Index the site** with the [CLI](#cli): from its Markdown, or from the HTML your generator built, which has the URLs it actually serves (`public` after `hugo`, `_site` after Jekyll or Eleventy, `site` after `mkdocs build`). HTML is read from each page's `<main>`.
+2. **Deploy the endpoint** next to the site, with one of the [recipes](#docusaurus) or the [full setup](#full-setup), reading your index.
+3. **Add the script tag** to your base template.
+
+It mounts itself once the page has loaded, with its tag's attributes: `data-endpoint` (default `/api/ask`), `data-title`, `data-placeholder`, `data-suggestions` (a JSON array, as in `data-suggestions='["How do I install it?"]'`), `data-shortcut` (default `i`; `"false"` turns it off), `data-button-label` (default "Ask AI"; `"false"` hides the button) and `data-theme` (`auto`, the default, follows `data-theme` on `<html>` when the site sets one, and the system setting otherwise; or `light` or `dark`). With `data-manual` it waits for `window.AskMySite.mount(options)`, which takes the same options and returns `{ open, close, unmount }`, for example to open the dialog from your own search box. Pin an exact version (`ask-my-site@0.3.0`) in production.
+
+In an app with a bundler, `mountAskDialog(options)` from `ask-my-site/embed` does the same with your own React; import `ask-my-site/react/styles.css` and `ask-my-site/embed/launcher.css` with it.
+
 ## Try it without an API key
 
 The [Next.js example](./examples/nextjs) is a docs site about ask-my-site that indexes itself.
@@ -287,16 +308,18 @@ Without `OPENAI_API_KEY` it runs in mock mode: `mockEmbeddingModel()` hashes wor
 
 ## API
 
-Five imports and a CLI. Each import is tree-shakeable, and only `ask-my-site/node` and the CLI touch Node built-ins.
+Seven imports and a CLI. Each import is tree-shakeable, and only `ask-my-site/node`, the Docusaurus plugin and the CLI touch Node built-ins.
 
-| Import               | For                                                                           |
-| -------------------- | ----------------------------------------------------------------------------- |
-| `ask-my-site`        | Loaders, chunking, `buildIndex`, `checkIndex`, `loadIndex`, `retrieve`        |
-| `ask-my-site/node`   | `loadDirectory`, `readIndexFile`, `writeIndexFile`, config types              |
-| `ask-my-site/server` | `createAskHandler`, rate limiters, prompt helpers                             |
-| `ask-my-site/react`  | `AskDialog`, `useAsk`, `AskAnswer`; needs `@radix-ui/react-dialog` and `cmdk` |
-| `ask-my-site/mock`   | `mockEmbeddingModel`, `mockLanguageModel`                                     |
-| `ask-my-site` (bin)  | `ask-my-site index`                                                           |
+| Import                   | For                                                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `ask-my-site`            | Loaders, chunking, `buildIndex`, `checkIndex`, `loadIndex`, `retrieve`                                            |
+| `ask-my-site/node`       | `loadDirectory`, `readIndexFile`, `writeIndexFile`, config types                                                  |
+| `ask-my-site/server`     | `createAskHandler`, rate limiters, prompt helpers                                                                 |
+| `ask-my-site/react`      | `AskDialog`, `useAsk`, `AskAnswer`; needs `@radix-ui/react-dialog` and `cmdk`                                     |
+| `ask-my-site/embed`      | `mountAskDialog`: the dialog and its button without writing React ([script embed](#any-static-site-script-embed)) |
+| `ask-my-site/docusaurus` | The [Docusaurus](#docusaurus) plugin                                                                              |
+| `ask-my-site/mock`       | `mockEmbeddingModel`, `mockLanguageModel`                                                                         |
+| `ask-my-site` (bin)      | `ask-my-site index`                                                                                               |
 
 ### CLI
 
@@ -473,7 +496,7 @@ At 10,000 chunks, the BM25 half of a query takes 2.3 ms and the vector scan 4.6 
 - **Re-ranking hook:** an optional AI SDK reranking model over the fused candidates.
 - **Retrieval evals in CI:** a golden question set scored for hit rate and refusal precision, next to `--check`.
 - **Bigger corpora:** sharded indexes loaded per section, and binary quantization with int8 rescoring.
-- **More framework plugins:** Starlight and VitePress, after the [Docusaurus](#docusaurus) one; and a `<script>` embed for sites without React.
+- **More framework plugins:** Starlight and VitePress, after the [Docusaurus](#docusaurus) one.
 - **Language-aware keyword search:** per-language stopwords and stemming.
 
 ## Development
@@ -481,7 +504,7 @@ At 10,000 chunks, the BM25 half of a query takes 2.3 ms and the vector scan 4.6 
 ```sh
 pnpm install
 pnpm test        # Vitest, offline: mock models from ai/test, no keys
-pnpm validate    # lint, format, typecheck, test, build, package checks, example build + lint
+pnpm validate    # lint, format, typecheck, test, build, package checks, example builds + lint
 pnpm bench       # benchmarks
 pnpm assets      # regenerate the architecture diagram
 ```

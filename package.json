@@ -50,12 +50,19 @@
       "types": "./dist/mock.d.ts",
       "default": "./dist/mock.js"
     },
+    "./embed": {
+      "types": "./dist/embed.d.ts",
+      "default": "./dist/embed.js"
+    },
+    "./embed/launcher.css": "./dist/embed/launcher.css",
     "./docusaurus": {
       "types": "./dist/docusaurus/index.d.ts",
       "default": "./dist/docusaurus/index.js"
     },
     "./package.json": "./package.json"
   },
+  "unpkg": "./dist/embed.global.js",
+  "jsdelivr": "./dist/embed.global.js",
   "bin": {
     "ask-my-site": "dist/cli.js"
   },
@@ -72,7 +79,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:package": "publint --strict && attw --pack . --profile esm-only --exclude-entrypoints ./react/styles.css",
+    "check:package": "publint --strict && attw --pack . --profile esm-only --exclude-entrypoints ./react/styles.css ./embed/launcher.css",
     "bench": "pnpm build && node --expose-gc bench/run.mjs",
     "assets": "node scripts/assets/architecture.mjs",
     "screenshot": "node scripts/assets/screenshot.mjs",

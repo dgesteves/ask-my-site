@@ -7,6 +7,9 @@ interface Manifest {
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+  files?: string[];
+  unpkg?: string;
+  jsdelivr?: string;
 }
 
 const read = (path: string): Manifest =>
@@ -31,5 +34,12 @@ describe('package.json', () => {
       expect(manifest.peerDependencies?.[name]).toBeDefined();
       expect(manifest.peerDependenciesMeta?.[name]?.optional).toBe(true);
     }
+  });
+
+  it('makes the script embed what unpkg and jsDelivr serve for the bare package', () => {
+    // https://cdn.jsdelivr.net/npm/ask-my-site@0 serves dist/embed.global.js.
+    expect(manifest.unpkg).toBe('./dist/embed.global.js');
+    expect(manifest.jsdelivr).toBe('./dist/embed.global.js');
+    expect(manifest.files).toContain('dist');
   });
 });
