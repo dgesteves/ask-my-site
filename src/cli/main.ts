@@ -10,7 +10,14 @@ import { buildIndex, checkIndex, embeddingModelId, type EmbeddingProviderOptions
 import { DEFAULT_CHUNKING } from '../chunk';
 import type { AskIndexFile } from '../index-file';
 import { mockEmbeddingModel } from '../mock';
-import { loadDirectory, readIndexFile, writeIndexFile, type AskConfig } from '../node';
+import {
+  detectFramework,
+  loadDirectory,
+  readIndexFile,
+  writeIndexFile,
+  type AskConfig,
+  type Framework,
+} from '../node';
 import type { ChunkingOptions, SourceDocument } from '../types';
 
 export interface CliIO {
@@ -38,6 +45,8 @@ Options:
       --chunk-size <chars>     Max characters per chunk (default: ${String(DEFAULT_CHUNKING.maxChars)})
       --chunk-overlap <chars>  Characters shared by consecutive chunks (default: ${String(DEFAULT_CHUNKING.overlap)})
       --ignore <glob>          Skip matching files; repeatable
+      --framework <name>       How file paths become URLs: docusaurus | starlight | next | none
+                               (default: detected from the framework config above <dir>)
   -c, --config <file>          Module whose default export is an AskConfig
   -q, --quiet                  Only print errors
   -h, --help                   Show this help
@@ -48,6 +57,19 @@ that are already set.`;
 
 class UsageError extends Error {}
 
+const FRAMEWORKS: readonly (Framework | 'auto')[] = [
+  'auto',
+  'docusaurus',
+  'starlight',
+  'next',
+  'none',
+];
+const FRAMEWORK_NAMES: Record<Exclude<Framework, 'none'>, string> = {
+  docusaurus: 'Docusaurus',
+  starlight: 'Starlight',
+  next: 'Next.js-style (route groups, page.mdx)',
+};
+
 interface Flags {
   out: string;
   check: boolean;
@@ -56,6 +78,7 @@ interface Flags {
   dimensions?: number;
   chunking: ChunkingOptions;
   ignore: string[];
+  framework?: Framework | 'auto';
   config?: string;
   quiet: boolean;
 }
@@ -228,6 +251,7 @@ function parseFlags(args: string[]): {
         'chunk-size': { type: 'string' },
         'chunk-overlap': { type: 'string' },
         ignore: { type: 'string', multiple: true },
+        framework: { type: 'string' },
         config: { type: 'string', short: 'c' },
         quiet: { type: 'boolean', short: 'q' },
         help: { type: 'boolean', short: 'h' },
@@ -243,6 +267,10 @@ function parseFlags(args: string[]): {
   const maxChars = integerFlag('chunk-size', values['chunk-size']);
   const overlap = integerFlag('chunk-overlap', values['chunk-overlap']);
   const dimensions = integerFlag('dimensions', values.dimensions);
+  const framework = values.framework;
+  if (framework !== undefined && !FRAMEWORKS.includes(framework as Framework | 'auto')) {
+    throw new UsageError(`--framework must be one of ${FRAMEWORKS.join(', ')}.`);
+  }
   return {
     ...(positionals[0] ? { command: positionals[0] } : {}),
     ...(positionals[1] ? { dir: positionals[1] } : {}),
@@ -259,6 +287,7 @@ function parseFlags(args: string[]): {
         ...(overlap !== undefined ? { overlap } : {}),
       },
       ignore: values.ignore ?? [],
+      ...(framework ? { framework: framework as Framework | 'auto' } : {}),
       ...(values.config ? { config: values.config } : {}),
       quiet: values.quiet ?? false,
     },
@@ -292,9 +321,25 @@ export async function main(args: string[], io: CliIO): Promise<number> {
         throw new UsageError(`Not a directory: ${dir}`);
       }
       const baseUrl = flags.baseUrl ?? config.baseUrl;
+      const requested = flags.framework ?? config.framework ?? 'auto';
+      if (!FRAMEWORKS.includes(requested)) {
+        throw new UsageError(`framework must be one of ${FRAMEWORKS.join(', ')}.`);
+      }
+      const framework = requested === 'auto' ? await detectFramework(root) : requested;
+      if (requested === 'auto' && framework !== 'none') {
+        log(
+          `Reading ${dir} with ${FRAMEWORK_NAMES[framework]} URLs (--framework none to turn off)`,
+        );
+      }
+      if (framework === 'docusaurus' && !baseUrl) {
+        log(
+          'Docusaurus serves docs under /docs unless routeBasePath says otherwise: pass --base-url /docs',
+        );
+      }
       documents.push(
         ...(await loadDirectory(root, {
           ...(baseUrl ? { baseUrl } : {}),
+          framework,
           ignore: [...(config.ignore ?? []), ...flags.ignore],
         })),
       );

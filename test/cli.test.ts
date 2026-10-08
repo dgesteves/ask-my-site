@@ -124,6 +124,46 @@ describe('ask-my-site index', () => {
     expect(viaConfig.stderr).toContain('expected 256');
   });
 
+  it('detects the docs framework, says so, and takes --framework', async () => {
+    await writeFile(join(cwd, 'docusaurus.config.ts'), 'export default {}');
+    await writeFile(
+      join(cwd, 'content/guides/01-setup.md'),
+      '---\nslug: /start\n---\n# Setup\n\nGo.',
+    );
+    const detected = await run('index', 'content', '-e', 'none', '--base-url', '/docs');
+    expect(detected.code).toBe(0);
+    expect(detected.stdout).toContain(
+      'Reading content with Docusaurus URLs (--framework none to turn off)',
+    );
+
+    expect((await readIndex()).documents.find((d) => d.id === 'guides/01-setup.md')?.url).toBe(
+      '/docs/start',
+    );
+    expect(detected.stdout).not.toContain('pass --base-url /docs');
+    expect((await run('index', 'content', '-e', 'none')).stdout).toContain(
+      'Docusaurus serves docs under /docs unless routeBasePath says otherwise: pass --base-url /docs',
+    );
+
+    expect(
+      (await run('index', 'content', '-e', 'none', '--framework', 'none')).stdout,
+    ).not.toContain('Reading content with');
+    expect((await readIndex()).documents.find((d) => d.id === 'guides/01-setup.md')?.url).toBe(
+      '/guides/01-setup',
+    );
+
+    const bad = await run('index', 'content', '-e', 'none', '--framework', 'hugo');
+    expect(bad.code).toBe(2);
+    expect(bad.stderr).toContain(
+      '--framework must be one of auto, docusaurus, starlight, next, none.',
+    );
+
+    // A config module's framework is checked too.
+    await writeFile(join(cwd, 'ask.config.mjs'), "export default { framework: 'hugo' };");
+    const badConfig = await run('index', 'content', '-e', 'none', '-c', 'ask.config.mjs');
+    expect(badConfig.code).toBe(2);
+    expect(badConfig.stderr).toContain('framework must be one of');
+  });
+
   it('refuses --dimensions it could not apply to a build', async () => {
     await writeFile(join(cwd, 'ask.config.mjs'), 'export default { embeddingModel: null };');
     for (const args of [

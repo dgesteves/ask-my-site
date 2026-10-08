@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { loadDirectory } from '../src/node';
+import { detectFramework, frameworkUrl, loadDirectory } from '../src/node';
 import { matchesGlob } from '../src/node/glob';
 
 let root: string;
@@ -86,6 +86,117 @@ describe('loadDirectory', () => {
       ['guides/setup.md', '/guides/setup'],
     ]);
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('framework URLs', () => {
+  const write = async (files: Record<string, string>) => {
+    for (const [file, text] of Object.entries(files)) {
+      await mkdir(join(root, file, '..'), { recursive: true });
+      await writeFile(join(root, file), text);
+    }
+  };
+  const auto = { framework: 'auto' } as const;
+
+  it('follows Docusaurus: slug, id, number prefixes, folder indexes and partials', async () => {
+    await write({
+      'website/package.json': '{"name":"site"}',
+      'website/docusaurus.config.ts': 'export default {}',
+      'website/docs/introduction.md': '---\nslug: /\n---\n# Intro',
+      'website/docs/guides/docs/docs-introduction.mdx':
+        '---\nid: introduction\nslug: /docs-introduction\n---\n# Docs',
+      'website/docs/guides/creating-pages.md': '---\nslug: creating-pages-guide\n---\n# Pages',
+      'website/docs/guides/moved.md': '---\nslug: ../moved-out\n---\n# Moved',
+      'website/docs/02-tutorial/01-setup.md': '# Setup',
+      'website/docs/02-tutorial/tutorial.md': '# Tutorial',
+      'website/docs/Category/category.md': '# Category',
+      'website/docs/releases/1.0-release.md': '# 1.0',
+      'website/docs/releases/2024-12-recap.md': '# Recap',
+      'website/docs/raw/01-keep.md': '---\nparse_number_prefixes: false\n---\n# Keep',
+      'website/docs/api/plugin.md': '---\nid: plugin-api\n---\n# Plugin',
+      'website/docs/_partial.mdx': 'Shared text.',
+      'website/docs/_snippets/note.md': 'Note.',
+    });
+    const docs = join(root, 'website/docs');
+    expect(await detectFramework(docs)).toBe('docusaurus');
+    // Checked against @docusaurus/plugin-content-docs' own getSlug.
+    expect(Object.fromEntries(await ids(docs, { ...auto, baseUrl: '/docs' }))).toEqual({
+      '02-tutorial/01-setup.md': '/docs/tutorial/setup',
+      // Not the folder's page: the index test compares names as written, prefix included.
+      '02-tutorial/tutorial.md': '/docs/tutorial/tutorial',
+      'Category/category.md': '/docs/Category',
+      'api/plugin.md': '/docs/api/plugin-api',
+      'guides/creating-pages.md': '/docs/guides/creating-pages-guide',
+      'guides/docs/docs-introduction.mdx': '/docs/docs-introduction',
+      'guides/moved.md': '/docs/moved-out',
+      'introduction.md': '/docs',
+      'raw/01-keep.md': '/docs/raw/01-keep',
+      'releases/1.0-release.md': '/docs/releases/1.0-release',
+      'releases/2024-12-recap.md': '/docs/releases/2024-12-recap',
+    });
+    // The library keeps paths as they are unless asked.
+    expect(await ids(join(docs, 'releases'))).toEqual([
+      ['1.0-release.md', '/1.0-release'],
+      ['2024-12-recap.md', '/2024-12-recap'],
+    ]);
+  });
+
+  it('follows Starlight slugs and slugified paths, and Next.js-style content', async () => {
+    await write({
+      'site/package.json': '{"dependencies":{"@astrojs/starlight":"^1"}}',
+      'site/astro.config.mjs': 'export default {}',
+      'site/src/content/docs/Getting Started.md': '# Start',
+      'site/src/content/docs/guides/i18n.md': '---\nslug: translations\n---\n# i18n',
+      'site/src/content/docs/guides/README.md': '# Readme',
+      'site/src/content/docs/guides/empty-slug.md': "---\nslug: ''\n---\n# Empty",
+      'site/src/content/docs/_shared/served.md': '# Served',
+      'site/src/content/docs/_draft.md': '# Draft',
+      'next/package.json': '{"name":"docs"}',
+      'next/next.config.mjs': 'export default {}',
+      'next/content/docs/(root)/cli.mdx': '# CLI',
+      'next/content/docs/(root)/index.mdx': '# Home',
+      'next/content/docs/(root)/_blocks.mdx': '# Blocks',
+      'next/content/docs/getting-started/page.mdx': '# Getting started',
+      'plain/(notes)/a.md': '# A',
+      'plain/_index.md': '# Section',
+    });
+    expect(Object.fromEntries(await ids(join(root, 'site/src/content/docs'), auto))).toEqual({
+      'Getting Started.md': '/getting-started',
+      // Astro skips `_` files, not `_` folders, and only `index` is a folder's page.
+      '_shared/served.md': '/_shared/served',
+      'guides/README.md': '/guides/readme',
+      'guides/empty-slug.md': '/guides/empty-slug',
+      'guides/i18n.md': '/translations',
+    });
+    // Fumadocs serves `_blocks` (ui.shadcn.com/docs/_blocks), so it stays.
+    expect(
+      Object.fromEntries(await ids(join(root, 'next/content/docs'), { ...auto, baseUrl: '/docs' })),
+    ).toEqual({
+      '(root)/_blocks.mdx': '/docs/_blocks',
+      '(root)/cli.mdx': '/docs/cli',
+      '(root)/index.mdx': '/docs',
+      'getting-started/page.mdx': '/docs/getting-started',
+    });
+    // Without a framework config, paths are kept as they are (Hugo's _index.md is a section page).
+    expect(await detectFramework(join(root, 'plain'))).toBe('none');
+    expect(await ids(join(root, 'plain'), auto)).toEqual([
+      ['(notes)/a.md', '/(notes)/a'],
+      ['_index.md', '/'],
+    ]);
+    // Astro without Starlight is not Starlight.
+    await write({ 'astro/package.json': '{"name":"a"}', 'astro/astro.config.mjs': '' });
+    expect(await detectFramework(join(root, 'astro'))).toBe('none');
+  });
+
+  it('detects the framework through a linked content folder', async () => {
+    await write({
+      'site/package.json': '{"name":"site"}',
+      'site/docusaurus.config.js': 'module.exports = {}',
+      'site/docs/01-a.md': '# A',
+    });
+    await symlink(join(root, 'site/docs'), join(root, 'linked'));
+    expect(await detectFramework(join(root, 'linked'))).toBe('docusaurus');
+    expect(frameworkUrl('a/b.md', { slug: './c' }, 'docusaurus')).toBe('/a/c');
   });
 });
 
