@@ -1,0 +1,53 @@
+/* The floating "Ask AI" button the Docusaurus plugin adds. Uses the site's Infima variables. */
+.ask-my-site-launcher {
+  position: fixed;
+  /* Left of Docusaurus's back-to-top button (3rem wide, 1.3rem from the corner), centered on it,
+     and below the navbar, so the mobile menu covers it. */
+  right: calc(1.3rem + 3rem + 0.75rem);
+  bottom: calc(1.3rem + (3rem - 2.5rem) / 2);
+  z-index: calc(var(--ifm-z-index-fixed, 200) - 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  height: 2.5rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--ifm-color-emphasis-300, #dadde1);
+  border-radius: 999px;
+  background: var(--ifm-background-surface-color, #fff);
+  color: var(--ifm-font-color-base, #1c1e21);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: var(--ifm-global-shadow-md, 0 5px 40px rgb(0 0 0 / 20%));
+  cursor: pointer;
+}
+.ask-my-site-launcher:hover {
+  border-color: var(--ifm-color-primary, #2e8555);
+}
+.ask-my-site-launcher:focus-visible {
+  outline: 2px solid var(--ifm-color-primary, #2e8555);
+  outline-offset: 2px;
+}
+.ask-my-site-launcher > span {
+  color: var(--ifm-color-primary, #2e8555);
+}
+.ask-my-site-launcher > kbd {
+  margin-left: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0.7;
+}
+/* Touch screens have no shortcut to show. */
+@media (hover: none) {
+  .ask-my-site-launcher > kbd {
+    display: none;
+  }
+}
+@media print {
+  .ask-my-site-launcher {
+    display: none;
+  }
+}

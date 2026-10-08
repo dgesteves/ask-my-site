@@ -13,11 +13,18 @@ const doc = (content: string, title = 'Page'): SourceDocument => ({
   content,
 });
 
-/** Runs `fn` and returns how long it took, in milliseconds. */
+/**
+ * Runs `fn` three times and returns the fastest, in milliseconds. A GC pause or a busy CI runner
+ * can slow one run several times over; the quadratic cases these tests guard against take seconds.
+ */
 function timed(fn: () => unknown): number {
-  const start = performance.now();
-  fn();
-  return performance.now() - start;
+  let fastest = Infinity;
+  for (let run = 0; run < 3; run++) {
+    const start = performance.now();
+    fn();
+    fastest = Math.min(fastest, performance.now() - start);
+  }
+  return fastest;
 }
 
 describe('linear-time parsing of hostile input', () => {
@@ -38,7 +45,8 @@ describe('linear-time parsing of hostile input', () => {
 describe('linear-time loaders on unclosed constructs', () => {
   // Quadratic before: 0.8 s (unclosed <pre>) to 70 s (unclosed link labels) at this size.
   const n = 40_000;
-  const html = (source: string) => () => fromHtml(source, { id: 'x', url: '/x' });
+  const html = (source: string, root?: 'article') => () =>
+    fromHtml(source, { id: 'x', url: '/x', root });
   const md =
     (source: string, mdx = false) =>
     () =>
@@ -52,6 +60,12 @@ describe('linear-time loaders on unclosed constructs', () => {
     ['unclosed HTML comments', html(`<main>${'<!-- x '.repeat(n)}</main>`)],
     ['unclosed <main>', html('<main>x '.repeat(n))],
     ['unclosed <article>', html('<article>x '.repeat(n))],
+    ['unclosed <article>s around closed ones', html('<article>x<article>y</article>'.repeat(n))],
+    ['nested <article>s', html(`${'<article>x '.repeat(n)}${'</article>'.repeat(n)}`, 'article')],
+    [
+      'an unclosed Docusaurus container',
+      html(`<article>${'<div class=theme-doc-markdown>x '.repeat(n)}`, 'article'),
+    ],
     ['unclosed <title>', html('<title>x '.repeat(n))],
     ['a heading link full of spaces', html(`<main><h2><a>${' '.repeat(5 * n)}</h2></main>`)],
     ['Markdown links with unclosed destinations', md('[a](('.repeat(n))],

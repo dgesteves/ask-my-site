@@ -250,6 +250,49 @@ describe('AskDialog', () => {
     expect(document.activeElement).toBe(elsewhere);
   });
 
+  it('leaves the shortcut to text fields and editors, where ⌘I means italic', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">Elsewhere</button>
+        <input aria-label="Name" />
+        <textarea aria-label="Notes" />
+        <select aria-label="Size">
+          <option>S</option>
+        </select>
+        <div role="textbox" aria-label="Editor" contentEditable tabIndex={0}>
+          <b>Rich</b> text
+        </div>
+        <AskDialog fetch={handlerFetch()} shortcut="i" />
+      </>,
+    );
+    for (const field of [
+      screen.getByRole('textbox', { name: 'Name' }),
+      screen.getByRole('textbox', { name: 'Notes' }),
+      screen.getByRole('combobox', { name: 'Size' }),
+      screen.getByRole('textbox', { name: 'Editor' }),
+    ]) {
+      field.focus();
+      await user.keyboard('{Control>}i{/Control}');
+      expect([field.getAttribute('aria-label'), screen.queryByRole('dialog')]).toEqual([
+        field.getAttribute('aria-label'),
+        null,
+      ]);
+    }
+
+    screen.getByRole('button', { name: 'Elsewhere' }).focus();
+    await user.keyboard('{Control>}i{/Control}');
+    const dialog = await screen.findByRole('dialog');
+    // The dialog's own input still closes it.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(within(dialog).getByRole('combobox'));
+    });
+    await user.keyboard('{Control>}i{/Control}');
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
+
   it('asks a suggestion on click and supports a custom trigger', async () => {
     const user = userEvent.setup();
     render(

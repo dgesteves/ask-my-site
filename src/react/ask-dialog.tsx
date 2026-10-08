@@ -21,7 +21,10 @@ export interface AskDialogProps extends Omit<UseAskOptions, 'onFinish'> {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  /** Key that opens the dialog with ⌘ (macOS) or Ctrl. Default `"k"`; `false` disables it. */
+  /**
+   * Key that opens the dialog with ⌘ (macOS) or Ctrl. Default `"k"`; `false` disables it. It does
+   * not open the dialog while a text field or editor has focus.
+   */
   shortcut?: string | false;
   /** Element that opens the dialog, e.g. a search button. Rendered with Radix `asChild`. */
   trigger?: ReactNode;
@@ -54,6 +57,15 @@ function SearchIcon(): ReactNode {
         fill="currentColor"
       />
     </svg>
+  );
+}
+
+/** Text fields, selects and rich text editors. */
+function isEditable(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])') !==
+      null
   );
 }
 
@@ -136,10 +148,14 @@ export function AskDialog({
   useEffect(() => {
     if (shortcut === false) return;
     const onKeyDown = (event: KeyboardEvent): void => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === shortcut.toLowerCase()) {
-        event.preventDefault();
-        setOpen(!openRef.current);
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== shortcut.toLowerCase()) {
+        return;
       }
+      // In a text field the keys are often the field's own (⌘I is italic), so they are left to it.
+      // The dialog's own input still closes it.
+      if (!openRef.current && isEditable(event.target)) return;
+      event.preventDefault();
+      setOpen(!openRef.current);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
