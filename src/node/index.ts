@@ -3,22 +3,68 @@
  */
 
 import { mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, extname, join, sep } from 'node:path';
+import { basename, dirname, extname, join, posix, resolve, sep } from 'node:path';
 
 import type { EmbeddingModel } from 'ai';
+import { slug } from 'github-slugger';
 
 import type { EmbeddingProviderOptions } from '../build';
 import { parseIndexFile, serializeIndexFile, type AskIndexFile } from '../index-file';
 import { fromHtml } from '../loaders/html';
-import { fromMarkdown } from '../loaders/markdown';
+import { fromMarkdown, parseFrontmatter } from '../loaders/markdown';
 import type { ChunkingOptions, SourceDocument } from '../types';
 import { matchesGlob } from './glob';
 
 export const DEFAULT_EXTENSIONS = ['.md', '.mdx', '.markdown', '.html', '.htm'] as const;
 
+/**
+ * How a docs framework turns content files into URLs:
+ *
+ * - `docusaurus` (docs plugin): frontmatter `slug` (absolute, or resolved against the page's
+ *   folder) and `id`, number prefixes dropped (`01-intro.md` → `intro`, but not `2024-12-recap.md`
+ *   or `1.0-release.md`), `index`, `README` or a file named like its folder as the folder's page,
+ *   and `_`-prefixed files and folders as partials.
+ * - `starlight`: frontmatter `slug` replaces the path, segments are slugified, `index` is the
+ *   folder's page, and `_`-prefixed files are skipped.
+ * - `next`: Next.js-style content (Fumadocs, Nextra): `(group)` folders are not part of the URL
+ *   and `page.mdx` is its folder's page (app router).
+ * - `none`: the path as it is.
+ */
+export type Framework = 'docusaurus' | 'starlight' | 'next' | 'none';
+
+const FRAMEWORK_CONFIGS: [Framework, RegExp][] = [
+  ['docusaurus', /^docusaurus\.config\.[cm]?[jt]s$/],
+  ['starlight', /^astro\.config\.[cm]?[jt]s$/],
+  ['next', /^(?:next\.config\.[cm]?[jt]s|source\.config\.[cm]?ts)$/],
+];
+
+/**
+ * The framework whose config sits in `directory` or a folder above it, up to the nearest
+ * `package.json`. An Astro project counts as Starlight only when it depends on `@astrojs/starlight`.
+ */
+export async function detectFramework(directory: string): Promise<Framework> {
+  // Through links, so content linked in from a site still finds that site's config.
+  const start = await realpath(directory).catch(() => resolve(directory));
+  for (let dir = start; ; dir = dirname(dir)) {
+    const names = await readdir(dir).catch(() => [] as string[]);
+    for (const [framework, pattern] of FRAMEWORK_CONFIGS) {
+      if (!names.some((name) => pattern.test(name))) continue;
+      if (framework !== 'starlight') return framework;
+      const manifest = await readFile(join(dir, 'package.json'), 'utf8').catch(() => '');
+      return manifest.includes('"@astrojs/starlight"') ? 'starlight' : 'none';
+    }
+    if (names.includes('package.json') || dir === dirname(dir)) return 'none';
+  }
+}
+
 export interface LoadDirectoryOptions {
   /** Prefix for every page URL, e.g. `/docs` or `https://example.com`. Default `/`. */
   baseUrl?: string;
+  /**
+   * How file paths become URLs; see {@link Framework}. `'auto'` detects it from the framework
+   * config in or above the directory, as the CLI does. Default `'none'`: the path as it is.
+   */
+  framework?: Framework | 'auto';
   /** File extensions to read. Default Markdown, MDX and HTML. */
   extensions?: readonly string[];
   /**
@@ -29,23 +75,86 @@ export interface LoadDirectoryOptions {
 }
 
 /**
- * Maps a content path to a URL: extensions are dropped and `index`/`README` files stand for their
- * folder. `guides/setup.md` → `/guides/setup`, `guides/index.html` → `/guides`.
+ * Maps a content path to a URL: extensions are dropped and `index`/`_index`/`README` files stand
+ * for their folder. `guides/setup.md` → `/guides/setup`, `guides/index.html` → `/guides`.
  */
 export function pathToUrl(relativePath: string, baseUrl = '/'): string {
   const withoutExt = relativePath
     .split(sep)
     .join('/')
     .replace(/\.(?:mdx?|markdown|html?)$/i, '');
-  const path = withoutExt.replace(/(?:^|\/)(?:index|readme)$/i, '');
+  // `_index` is Hugo's section page.
+  const path = withoutExt.replace(/(?:^|\/)(?:_?index|readme)$/i, '');
   const base = baseUrl.replace(/\/+$/, '');
   if (!path) return base || '/';
   return `${base}/${path}`;
 }
 
+/** Whether a framework treats this path as a partial rather than a page. */
+function isHidden(path: string, framework: Framework): boolean {
+  if (framework === 'docusaurus') return path.split('/').some((segment) => segment.startsWith('_'));
+  // Astro skips `_` files, not `_` folders.
+  if (framework === 'starlight') return basename(path).startsWith('_');
+  return false;
+}
+
+// Docusaurus's DefaultNumberPrefixParser: `01-intro` → `intro`, but dates and versions stay.
+const NUMBER_PREFIX = /^\d+\s*[-_.]+\s*(?=[^-_.\s])/;
+const NOT_A_NUMBER_PREFIX = /^\d+[-_.]\d+/;
+const stripNumberPrefix = (name: string) =>
+  NOT_A_NUMBER_PREFIX.test(name) ? name : name.replace(NUMBER_PREFIX, '');
+
+/**
+ * The URL a framework serves a content file at, before `url`/`permalink` frontmatter, which
+ * always wins. `relativePath` uses `/`.
+ */
+export function frameworkUrl(
+  relativePath: string,
+  frontmatter: Record<string, unknown>,
+  framework: Framework,
+  baseUrl = '/',
+): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  const toUrl = (path: string) => {
+    const clean = path.replace(/^\/+|\/+$/g, '');
+    return clean ? `${base}/${clean}` : base || '/';
+  };
+  const text = (value: unknown) => (typeof value === 'string' ? value.trim() : undefined);
+  const dirs = relativePath.split('/');
+  const name = (dirs.pop() ?? '').replace(/\.(?:mdx?|markdown|html?)$/i, '');
+
+  if (framework === 'docusaurus') {
+    // As Docusaurus's getSlug: the index test uses the names as written, case-insensitively.
+    const isIndex =
+      /^(?:index|readme)$/i.test(name) || name.toLowerCase() === dirs.at(-1)?.toLowerCase();
+    const strip = frontmatter.parse_number_prefixes !== false;
+    const folder = `/${(strip ? dirs.map(stripNumberPrefix) : dirs).join('/')}/`.replace(
+      /\/+/g,
+      '/',
+    );
+    const slugValue = text(frontmatter.slug);
+    if (slugValue !== undefined) return toUrl(posix.resolve(folder, slugValue));
+    if (isIndex) return toUrl(folder);
+    const id = text(frontmatter.id);
+    const page = id && !id.includes('/') ? id : name;
+    return toUrl(posix.resolve(folder, strip ? stripNumberPrefix(page) : page));
+  }
+  if (framework === 'starlight') {
+    const slugValue = text(frontmatter.slug);
+    if (slugValue) return toUrl(slugValue);
+    const page = name.toLowerCase() === 'index' ? '' : slug(name);
+    return toUrl([...dirs.map((d) => slug(d)), page].filter(Boolean).join('/'));
+  }
+  if (framework === 'next') {
+    const page = /^(?:index|page)$/i.test(name) ? '' : name;
+    return toUrl([...dirs.filter((d) => !/^\(.+\)$/.test(d)), page].filter(Boolean).join('/'));
+  }
+  return pathToUrl(relativePath, baseUrl);
+}
+
 function titleFromPath(relativePath: string): string {
   const name = basename(relativePath, extname(relativePath));
-  const base = /^(?:index|readme)$/i.test(name) ? basename(dirname(relativePath)) : name;
+  const base = /^(?:_?index|readme|page)$/i.test(name) ? basename(dirname(relativePath)) : name;
   const words = base.replace(/[-_]+/g, ' ').trim() || 'Home';
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -102,19 +211,29 @@ export async function loadDirectory(
     (options.extensions ?? DEFAULT_EXTENSIONS).map((e) => e.toLowerCase()),
   );
   const ignore = options.ignore ?? [];
+  const framework =
+    options.framework === 'auto' ? await detectFramework(directory) : (options.framework ?? 'none');
   const files = (await listFiles(directory, extensions))
+    .filter(({ path }) => !isHidden(path, framework))
     .filter(({ path }) => !ignore.some((pattern) => matchesGlob(path, pattern)))
     .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
   const documents: SourceDocument[] = [];
   for (const { file, path } of files) {
     const source = await readFile(join(directory, file), 'utf8');
-    const meta = {
-      id: path,
-      url: pathToUrl(path, options.baseUrl),
-      fallbackTitle: titleFromPath(path),
-    };
     const ext = extname(path).toLowerCase();
+    const markdown = ext !== '.html' && ext !== '.htm';
+    let url = pathToUrl(path, options.baseUrl);
+    if (framework !== 'none') {
+      let frontmatter: Record<string, unknown> = {};
+      try {
+        frontmatter = markdown ? parseFrontmatter(source).data : {};
+      } catch {
+        // Invalid YAML: fromMarkdown below reports it with the file name.
+      }
+      url = frameworkUrl(path, frontmatter, framework, options.baseUrl);
+    }
+    const meta = { id: path, url, fallbackTitle: titleFromPath(path) };
     let document: SourceDocument | null;
     try {
       document =
@@ -162,6 +281,8 @@ export interface AskConfig {
   baseUrl?: string;
   /** Glob patterns of files to skip. */
   ignore?: string[];
+  /** How file paths become URLs; see {@link Framework}. The CLI's default is `'auto'`. */
+  framework?: Framework | 'auto';
   /** Documents from elsewhere (a CMS, an API), indexed alongside the directory. */
   documents?: SourceDocument[] | (() => SourceDocument[] | Promise<SourceDocument[]>);
 }
