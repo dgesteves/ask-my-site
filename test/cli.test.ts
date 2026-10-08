@@ -240,7 +240,7 @@ describe('ask-my-site index', () => {
   it.each([
     [['index', 'content'], 'No embedding model. Set OPENAI_API_KEY'],
     [['index', 'content', '-e', 'openai:text-embedding-3-small'], 'needs OPENAI_API_KEY'],
-    [['index', 'content', '-e', 'bogus'], 'Unknown --embedding "bogus"'],
+    [['index', 'content', '-e', 'bogus'], 'Unknown --embedding bogus. Use openai:<model>'],
     [['index', 'content', '--chunk-size', 'big'], '--chunk-size must be a non-negative integer'],
     [['index', 'missing', '-e', 'none'], 'Not a directory: missing'],
     [['index', '-e', 'none'], 'Missing <dir>'],
