@@ -261,12 +261,15 @@ describe('ask-my-site index', () => {
     expect(result.stderr).toContain(message);
   });
 
-  it('documents every option of --help in the README', async () => {
-    const help = (await run('--help')).stdout;
+  it.each([
+    [['--help'], /### CLI\n\n```\n(ask-my-site index[\s\S]*?)```/],
+    [['dev', '--help'], /```\n(ask-my-site dev \[options\][\s\S]*?)```/],
+  ])('documents every option of %j in the README', async (args, section) => {
+    const help = (await run(...args)).stdout;
     const readme = await readFile(join(import.meta.dirname, '../README.md'), 'utf8');
-    const block = /### CLI\n\n```\n([\s\S]*?)```/.exec(readme)?.[1] ?? '';
+    const block = section.exec(readme)?.[1] ?? '';
     const options = help.match(/^ +(?:-\w, )?--[\w-]+/gm) ?? [];
-    expect(options.length).toBeGreaterThan(10);
+    expect(options.length).toBeGreaterThan(4);
     for (const option of options.map((line) => line.trim())) {
       expect([option, block.includes(option)]).toEqual([option, true]);
     }
