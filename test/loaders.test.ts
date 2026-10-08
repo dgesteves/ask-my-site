@@ -222,6 +222,109 @@ describe('fromHtml on nested elements', () => {
   });
 });
 
+describe('fromHtml with a selector', () => {
+  // A Starlight page, as Starlight 0.42 builds it: the title, Markdown and page footer in the
+  // region it marks for Pagefind, the sidebar and table of contents outside it.
+  const starlight = (
+    attributes = 'data-pagefind-body',
+  ) => `<html lang=en data-theme=dark><head><title>Setup | Acme</title></head><body>
+<header><a href=/ class=site-title>Acme</a><site-search><button data-open-modal>Search</button></site-search></header>
+<nav class=sidebar aria-label=Main><a href=/guides/setup/>Setup</a></nav>
+<aside class=right-sidebar-container><h2 id=starlight__on-this-page>On this page</h2></aside>
+<main ${attributes} class=astro-uknsdzpk lang=en dir=ltr><div class=sl-banner data-pagefind-ignore>New release!</div>
+<div class=content-panel><div class=sl-container><h1 id=_top>Setup</h1></div></div>
+<div class=content-panel><div class=sl-container><div class=sl-markdown-content><p>Install it.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id=configure>Configure</h2><a class=sl-anchor-link href=#configure><span aria-hidden=true class=sl-anchor-icon><svg><path d=M0 /></svg></span><span class=sr-only data-pagefind-ignore>Section titled “Configure”</span></a></div>
+<aside aria-label=Tip class="starlight-aside starlight-aside--tip"><p class=starlight-aside__title aria-hidden=true>Tip</p><div class=starlight-aside__content><p>Pin the version.</p></div></aside>
+</div><footer class=sl-flex><div class="meta sl-flex"><a href=https://example.com/edit>Edit page</a></div><div class=pagination-links><a href=/ rel=prev>Previous</a></div></footer></div></div></main></body></html>`;
+
+  it('reads only what the selector matches, without what `ignore` matches, and keeps asides', () => {
+    const doc = fromHtml(starlight(), {
+      id: 'a',
+      url: '/a',
+      root: '[data-pagefind-body]',
+      ignore: '[data-pagefind-ignore]',
+    });
+    expect(doc).toEqual({
+      id: 'a',
+      url: '/a',
+      title: 'Setup',
+      content:
+        '# Setup {#_top}\n\nInstall it.\n\n## Configure {#configure}\n\nTip\n\nPin the version.',
+    });
+  });
+
+  it('returns null when the selector matches nothing, as for pagefind: false', () => {
+    const page = starlight('');
+    expect(fromHtml(page, { id: 'a', url: '/a', root: '[data-pagefind-body]' })).toBeNull();
+    // The default root still reads the page.
+    expect(fromHtml(page, { id: 'a', url: '/a' })?.content).toContain('Install it.');
+  });
+
+  it('matches tags, ids, classes and attribute values, combined or listed', () => {
+    const page =
+      '<body><div class="post wide" id=one data-kind=note>A</div><div class=post>B</div>' +
+      '<section class=post>C</section><p data-kind="other">D</p><div class=post><div class=post>E</div></div></body>';
+    const read = (root: string) => fromHtml(page, { id: 'a', url: '/a', root })?.content;
+    expect(read('.post')).toBe('A\n\nB\n\nC\n\nE');
+    expect(read('div.post')).toBe('A\n\nB\n\nE');
+    expect(read('#one')).toBe('A');
+    expect(read('[data-kind=note], [data-kind="other"]')).toBe('A\n\nD');
+    expect(read('section, #one')).toBe('A\n\nC');
+    expect(read('DIV.wide[data-kind]')).toBe('A');
+    // Commented-out markup and scripts are not elements.
+    expect(
+      fromHtml(
+        '<body><!-- <main class=x>no</main> --><script>"<main class=x>"</script><main class=x>yes</main>',
+        {
+          id: 'a',
+          url: '/a',
+          root: 'main.x',
+        },
+      )?.content,
+    ).toBe('yes');
+  });
+
+  it('rejects selectors it cannot read', () => {
+    for (const root of ['main p', 'main > p', 'a:hover', '', '.']) {
+      expect(() => fromHtml('<main>x</main>', { id: 'a', url: '/a', root })).toThrow(
+        /Unsupported selector/,
+      );
+    }
+  });
+});
+
+describe('fromHtml on highlighted code', () => {
+  it('reads Expressive Code blocks line by line', () => {
+    // Starlight's code blocks: one <div> per line, with no newline between them; an empty line
+    // keeps its newline inside its <div>.
+    const line = (code: string) =>
+      `<div class=ec-line><div class=code>${code ? `<span style="--0:#82AAFF">${code}</span>` : '\n'}</div></div>`;
+    const page = `<main><div class=expressive-code><figure class="frame is-terminal"><figcaption class=header><span class=title></span><span class=sr-only>Terminal window</span></figcaption><pre data-language=sh><code>${line('npm install acme')}${line('')}${line('npx acme --init')}</code></pre><div class=copy><button title="Copy to clipboard" data-code="npm install acme\u007f\u007fnpx acme --init"><div></div></button></div></figure></div></main>`;
+    expect(fromHtml(page, { id: 'a', url: '/a', ignore: '.sr-only' })?.content).toBe(
+      '```\nnpm install acme\n\nnpx acme --init\n```',
+    );
+    // Shiki's lines are spans with the newlines between them; one <div> per line with newlines
+    // between them counts each line once.
+    const shiki =
+      '<main><pre><code><span class=line>a</span>\n<span class=line>b</span></code></pre></main>';
+    expect(fromHtml(shiki, { id: 'a', url: '/a' })?.content).toBe('```\na\nb\n```');
+    const divs = '<main><pre><div>a</div>\n<div></div>\n<div>b</div></pre></main>';
+    expect(fromHtml(divs, { id: 'a', url: '/a' })?.content).toBe('```\na\n\nb\n```');
+  });
+
+  it('reads a tag to its end when an attribute value holds < or >', () => {
+    // Expressive Code keeps the whole snippet in the copy button's data-code.
+    const page = `<main><p>Before.</p><button data-code="<Ask endpoint='/api' /> => ok" title='a > b'>Copy</button><p data-x=">">After.</p></main>`;
+    expect(fromHtml(page, { id: 'a', url: '/a' })?.content).toBe('Before.\n\nAfter.');
+    // A quote only opens a value after `=`.
+    expect(
+      fromHtml(`<main><p class=x it's>Kept.</p><p>Also kept.</p></main>`, { id: 'a', url: '/a' })
+        ?.content,
+    ).toBe('Kept.\n\nAlso kept.');
+  });
+});
+
 describe('fromDocuments', () => {
   it('validates records and rejects duplicates', () => {
     const docs = fromDocuments([{ id: 'a', url: '/a', title: 'A', content: 'x\r\ny' }]);

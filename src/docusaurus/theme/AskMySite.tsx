@@ -6,7 +6,7 @@ import { useAllPluginInstancesData } from '@docusaurus/useGlobalData';
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 import type { AskMySiteGlobalData } from '../index';
-import { AskDialog } from '../../react/index';
+import { AskWithLauncher, useColorScheme } from '../../react/launcher';
 
 export interface Props {
   /** The plugin instance to read, when the site uses more than one. Default: the first. */
@@ -28,22 +28,17 @@ export default function AskMySite({ pluginId }: Props): ReactNode {
 
 function Ask({ endpoint, dialog }: AskMySiteGlobalData): ReactNode {
   const history = useHistory();
-  const theme = useDocusaurusTheme();
+  // `Root` sits outside Docusaurus's color mode provider, so this follows the `data-theme`
+  // attribute Docusaurus sets on `<html>` instead of its hook.
+  const theme = useColorScheme('auto');
   const first = useFirstInstance();
   if (!first) return null;
 
-  const label = dialog.buttonLabel ?? 'Ask AI';
-  const shortcut = dialog.shortcut ?? 'i';
-  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
-
   return (
-    <AskDialog
+    <AskWithLauncher
+      {...dialog}
       endpoint={endpoint}
-      title={dialog.title}
-      shortcut={shortcut}
       theme={theme}
-      {...(dialog.placeholder ? { placeholder: dialog.placeholder } : {})}
-      {...(dialog.suggestions ? { suggestions: dialog.suggestions } : {})}
       onNavigate={(url, event) => {
         // Same-site links route without a full page load.
         if (url.startsWith('/') && !url.startsWith('//')) {
@@ -51,29 +46,6 @@ function Ask({ endpoint, dialog }: AskMySiteGlobalData): ReactNode {
           history.push(url);
         }
       }}
-      {...(label === false
-        ? {}
-        : {
-            trigger: (
-              <button
-                type="button"
-                className="ask-my-site-launcher"
-                aria-keyshortcuts={
-                  shortcut
-                    ? `Meta+${shortcut.toUpperCase()} Control+${shortcut.toUpperCase()}`
-                    : undefined
-                }
-              >
-                <span aria-hidden="true">✦</span> {label}
-                {shortcut ? (
-                  <kbd aria-hidden="true">
-                    {mac ? '⌘' : 'Ctrl '}
-                    {shortcut.toUpperCase()}
-                  </kbd>
-                ) : null}
-              </button>
-            ),
-          })}
     />
   );
 }
@@ -107,26 +79,4 @@ function useFirstInstance(): boolean {
     () => mounted[0] === self,
     () => false,
   );
-}
-
-/**
- * The site's color mode. `Root` sits outside Docusaurus's color mode provider, so this follows
- * the `data-theme` attribute Docusaurus sets on `<html>` instead of its hook.
- */
-function useDocusaurusTheme(): 'light' | 'dark' {
-  const read = () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
-  const [theme, setTheme] = useState<'light' | 'dark'>(read);
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setTheme(read());
-    });
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme'],
-    });
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-  return theme;
 }

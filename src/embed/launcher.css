@@ -1,0 +1,82 @@
+/*
+ * The floating "Ask AI" button of ask-my-site/embed and the script embed. Its colors are custom
+ * properties set without specificity, so a plain class selector in the site's CSS overrides them:
+ *
+ *   .ask-my-site-launcher { --ask-launcher-accent: #7c3aed; }
+ */
+:where(.ask-my-site-launcher) {
+  --ask-launcher-bg: #ffffff;
+  --ask-launcher-fg: #0d0f12;
+  --ask-launcher-border: #cdd3db;
+  --ask-launcher-accent: #0e7490;
+  --ask-launcher-shadow: 0 8px 24px -8px rgb(13 15 18 / 0.3);
+}
+/* data-ask-theme is the color scheme the embed resolved, from its `theme` option. */
+:where(.ask-my-site-launcher[data-ask-theme='dark']) {
+  --ask-launcher-bg: #181c22;
+  --ask-launcher-fg: #f5f7fa;
+  --ask-launcher-border: #353c47;
+  --ask-launcher-accent: #22d3ee;
+  --ask-launcher-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.7);
+}
+.ask-my-site-launcher {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  /* Under the dialog's overlay (1000). */
+  z-index: 999;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  height: 2.5rem;
+  margin: 0;
+  padding: 0 0.9rem;
+  border: 1px solid var(--ask-launcher-border);
+  border-radius: 999px;
+  background: var(--ask-launcher-bg);
+  color: var(--ask-launcher-fg);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  box-shadow: var(--ask-launcher-shadow);
+  cursor: pointer;
+}
+.ask-my-site-launcher:hover {
+  border-color: var(--ask-launcher-accent);
+}
+.ask-my-site-launcher:focus-visible {
+  outline: 2px solid var(--ask-launcher-accent);
+  outline-offset: 2px;
+}
+.ask-my-site-launcher > span {
+  color: var(--ask-launcher-accent);
+}
+/* Undo a site's <kbd> styles. */
+.ask-my-site-launcher > kbd {
+  margin: 0 0 0 0.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0.7;
+}
+/* Touch screens have no shortcut to show. */
+@media (hover: none) {
+  .ask-my-site-launcher > kbd {
+    display: none;
+  }
+}
+@media print {
+  .ask-my-site-launcher {
+    display: none;
+  }
+}
