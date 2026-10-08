@@ -10,8 +10,12 @@ export interface HtmlMeta {
   fallbackTitle?: string;
   /**
    * The element that holds the page's own content. Default `main`, then `article`, then `body`.
-   * `article` suits sites whose `<main>` also holds a table of contents or pagination, such as
-   * Docusaurus.
+   *
+   * `article` reads the outermost `<article>` elements first, without the articles nested in them
+   * (cards, teasers), and suits sites whose `<main>` also holds a table of contents or
+   * pagination. In a Docusaurus page it reads the doc's or blog post's Markdown container, so
+   * breadcrumbs, the version badge and a post's date and authors are left out too; the title
+   * still comes from the page's `<h1>`.
    */
   root?: 'main' | 'article';
 }
@@ -104,7 +108,8 @@ function stripTags(html: string): string {
   return decodeEntities(html.replace(/<[^<>]*>/g, ''));
 }
 
-function attribute(tag: string, name: string): string | undefined {
+/** The value of attribute `name` in the opening tag `tag`, quoted or not. */
+export function attribute(tag: string, name: string): string | undefined {
   const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i').exec(tag);
   return match ? (match[1] ?? match[2] ?? match[3]) : undefined;
 }
@@ -158,6 +163,66 @@ function* elements(
   }
 }
 
+/**
+ * The outermost `tag` elements in `html`, left to right, each up to its own closing tag, so an
+ * element of the same name nested inside does not end it (`elements` stops at the first closing
+ * tag). One that is never closed ends at the first closing tag after it, as `elements` reads it.
+ * Linear: the tags are found in one scan and paired with a stack.
+ */
+function* outermost(html: string, tag: string): Generator<Element> {
+  const pattern = new RegExp(`<(/?)${tag}${NAME_END}[^<>]*>`, 'gi');
+  const tags: { match: RegExpExecArray; close: boolean; end: number }[] = [];
+  for (let match = pattern.exec(html); match !== null; match = pattern.exec(html)) {
+    tags.push({ match, close: match[1] === '/', end: pattern.lastIndex });
+  }
+  // closer[i]: the closing tag that pairs with opening tag i, else the first one after it.
+  const closer: (number | undefined)[] = [];
+  const unclosed: number[] = [];
+  tags.forEach(({ close }, i) => {
+    if (!close) {
+      unclosed.push(i);
+      return;
+    }
+    const opened = unclosed.pop();
+    if (opened !== undefined) closer[opened] = i;
+  });
+  let next: number | undefined;
+  for (let i = tags.length - 1; i >= 0; i--) {
+    if (tags[i]?.close) next = i;
+    else closer[i] ??= next;
+  }
+  for (let i = 0; i < tags.length; i++) {
+    const open = tags[i];
+    if (!open || open.close) continue;
+    const j = closer[i];
+    const close = j === undefined ? undefined : tags[j];
+    // No closing tag after this one, so none after any later one either.
+    if (j === undefined || !close) return;
+    yield {
+      open: open.match,
+      start: open.match.index,
+      end: close.end,
+      inner: html.slice(open.end, close.match.index),
+    };
+    i = j;
+  }
+}
+
+/** `html` with each of `found` (left to right, not overlapping) replaced by `replace(element)`. */
+function replaceEach(
+  html: string,
+  found: Iterable<Element>,
+  replace: (element: Element) => string,
+): string {
+  let out = '';
+  let last = 0;
+  for (const element of found) {
+    out += html.slice(last, element.start) + replace(element);
+    last = element.end;
+  }
+  return out + html.slice(last);
+}
+
 /** `html` with each element `elements` finds replaced by `replace(element)`. */
 function replaceElements(
   html: string,
@@ -165,27 +230,43 @@ function replaceElements(
   close: (match: RegExpExecArray) => string,
   replace: (element: Element) => string,
 ): string {
-  let out = '';
-  let last = 0;
-  for (const element of elements(html, open, close)) {
-    out += html.slice(last, element.start) + replace(element);
-    last = element.end;
-  }
-  return out + html.slice(last);
+  return replaceEach(html, elements(html, open, close), replace);
 }
 
 const openTag = (tag: string): RegExp => new RegExp(`<${tag}${NAME_END}[^<>]*>`, 'gi');
 
 function innerOf(html: string, tag: string): string | undefined {
-  for (const element of elements(html, openTag(tag), () => `</${tag}>`)) return element.inner;
+  for (const element of outermost(html, tag)) return element.inner;
   return undefined;
 }
 
 function innerOfAll(html: string, tag: string): string[] {
-  return Array.from(
-    elements(html, openTag(tag), () => `</${tag}>`),
-    (element) => element.inner,
-  );
+  return Array.from(outermost(html, tag), (element) => element.inner);
+}
+
+/**
+ * Where Docusaurus renders a page's Markdown: a doc's `theme-doc-markdown` container, or a blog
+ * post's `__blog-post-container` (the element Docusaurus's own feeds read), without the
+ * breadcrumbs, version badge, mobile table of contents, or a post's date and authors around it.
+ */
+function docusaurusMarkdown(html: string): string | undefined {
+  if (!html.includes('theme-doc-markdown') && !html.includes('__blog-post-container')) {
+    return undefined;
+  }
+  const pattern = /<([a-z][a-z\d-]*)(?=[\s/>])[^<>]*>/gi;
+  for (let match = pattern.exec(html); match !== null; match = pattern.exec(html)) {
+    const tag = match[0];
+    if (
+      attribute(tag, 'class')?.split(/\s+/).includes('theme-doc-markdown') ||
+      attribute(tag, 'id') === '__blog-post-container'
+    ) {
+      for (const element of outermost(html.slice(match.index), match[1] ?? '')) {
+        return element.inner;
+      }
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 /** True if any `<meta name="robots">` says noindex. Scans tag by tag, without backtracking. */
@@ -212,8 +293,8 @@ function isNoindex(html: string): boolean {
 /**
  * Turns an HTML page into a {@link SourceDocument} whose content is Markdown-shaped text.
  *
- * It reads `<main>` if the page has one, then `<article>`, then `<body>` (`root: 'article'` reads the
- * articles first). Navigation, scripts,
+ * It reads `<main>` if the page has one, then the outermost `<article>`s, then `<body>`
+ * (`root: 'article'` reads the articles first; see {@link HtmlMeta.root}). Navigation, scripts,
  * styles, forms and other chrome are dropped. Headings become `#` lines and keep their `id`
  * attribute as the anchor; `<pre>` becomes a fenced code block. Pages with
  * `<meta name="robots" content="noindex">` return `null`.
@@ -229,7 +310,11 @@ export function fromHtml(source: string, meta: HtmlMeta): SourceDocument | null 
   const article = articles.length > 0 ? articles.join('\n\n') : undefined;
   let html =
     (meta.root === 'article'
-      ? (article ?? innerOf(source, 'main'))
+      ? // Every <article> left inside the outermost ones is nested: a card or a teaser.
+        ((article === undefined
+          ? undefined
+          : replaceEach(article, outermost(article, 'article'), () => ' ')) ??
+        innerOf(source, 'main'))
       : (innerOf(source, 'main') ?? article)) ??
     innerOf(source, 'body') ??
     source;
@@ -243,7 +328,8 @@ export function fromHtml(source: string, meta: HtmlMeta): SourceDocument | null 
     );
   }
 
-  // The first <h1> beats <title>, which usually carries a " | Site name" suffix.
+  // The first <h1> beats <title>, which usually carries a " | Site name" suffix. It is read from
+  // the whole root: a Docusaurus blog post's <h1> sits outside its Markdown container.
   const firstH1 = innerOf(html, 'h1');
   const title =
     (firstH1 && stripTags(firstH1).replace(/\s+/g, ' ').trim()) ||
@@ -251,7 +337,9 @@ export function fromHtml(source: string, meta: HtmlMeta): SourceDocument | null 
     meta.fallbackTitle ||
     meta.id;
 
-  const content = htmlToText(html);
+  const content = htmlToText(
+    (meta.root === 'article' ? docusaurusMarkdown(html) : undefined) ?? html,
+  );
   return { id: meta.id, url: meta.url, title, content };
 }
 

@@ -163,6 +163,65 @@ describe('fromHtml on unclosed elements', () => {
   });
 });
 
+describe('fromHtml on nested elements', () => {
+  it('reads an element up to its own closing tag, not a nested one’s', () => {
+    const page =
+      '<body><article><h1>Post</h1><p>Intro.</p><article><p>A comment.</p></article>' +
+      '<p>Outro.</p></article></body>';
+    const doc = fromHtml(page, { id: 'a', url: '/a' });
+    expect(doc?.content).toBe('# Post\n\nIntro.\n\nA comment.\n\nOutro.');
+    expect(
+      fromHtml('<main><div><main><p>x</p></main><p>y</p></div></main>', { id: 'a', url: '/a' })
+        ?.content,
+    ).toBe('x\n\ny');
+  });
+
+  it('drops the articles nested in the root with root: article, and keeps what follows them', () => {
+    // Docusaurus's <DocCardList>: a card per page, each an <article>.
+    const card = (title: string) =>
+      `<article class="col col--6"><a class=card href=/${title.toLowerCase()}><h2 title=${title}>📄️<!-- -->${title}</h2><p>About ${title}.</p></a></article>`;
+    const page = `<main><article><h1>Reference</h1><p>Every option.</p><section class=row>${card('Alpha')}${card('Beta')}</section>
+<h2 id=after>After the cards</h2><p>Still indexed.</p></article><nav>Next</nav></main>`;
+    const doc = fromHtml(page, { id: 'a', url: '/a', root: 'article' })!;
+    expect(doc.title).toBe('Reference');
+    expect(doc.content).toBe(
+      '# Reference\n\nEvery option.\n\n## After the cards {#after}\n\nStill indexed.',
+    );
+  });
+
+  it('reads Docusaurus’s Markdown container with root: article, and the title from the page', () => {
+    const doc = `<html><head><title>Setup | Acme</title></head><body><main><article>
+<nav class=theme-doc-breadcrumbs>Home Guides</nav><span class="theme-doc-version-badge badge">Version: 1.0</span>
+<div class="theme-doc-markdown markdown"><header><h1>Setup</h1></header><div><p>Install it.</p></div><div class=row><p>Then run it.</p></div></div>
+<footer>Edit this page</footer></article></main></body></html>`;
+    expect(fromHtml(doc, { id: 'a', url: '/a', root: 'article' })).toMatchObject({
+      title: 'Setup',
+      content: '# Setup\n\nInstall it.\n\nThen run it.',
+    });
+
+    // A blog post's <h1>, date and authors sit in a header outside its container.
+    const post = `<html><head><title>Hello | Acme</title></head><body><main><article class="">
+<header><h1 class=title_x>Hello</h1><div class=container><time>May 1, 2026</time> · <!-- -->One min read</div><div class=row><span>Jane Doe</span></div></header>
+<div id=__blog-post-container class=markdown><p>First post.</div><footer>Tags: news</footer></article></main></body></html>`;
+    expect(fromHtml(post, { id: 'b', url: '/b', root: 'article' })).toMatchObject({
+      title: 'Hello',
+      content: 'First post.',
+    });
+  });
+
+  it('leaves other sites’ pages as they were', () => {
+    // A `markdown` class alone is not Docusaurus's container, and the default root ignores it.
+    const page =
+      '<main><article><header><p>By Jane</p></header><div class=markdown><h1>Post</h1><p>Body.</p></div></article></main>';
+    expect(fromHtml(page, { id: 'a', url: '/a', root: 'article' })?.content).toBe(
+      'By Jane\n\n# Post\n\nBody.',
+    );
+    const docusaurus =
+      '<main><article><nav>Home</nav><span>Version: 1.0</span><div class=theme-doc-markdown><p>Body.</p></div></article></main>';
+    expect(fromHtml(docusaurus, { id: 'a', url: '/a' })?.content).toBe('Version: 1.0\n\nBody.');
+  });
+});
+
 describe('fromDocuments', () => {
   it('validates records and rejects duplicates', () => {
     const docs = fromDocuments([{ id: 'a', url: '/a', title: 'A', content: 'x\r\ny' }]);
