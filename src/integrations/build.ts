@@ -1,6 +1,7 @@
 // What the framework plugins share at build time: the default embedding model, `exclude`, and
 // writing an index that reuses the previous build's vectors. Node.js only.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 
 import type { EmbeddingModel } from 'ai';
@@ -154,6 +155,31 @@ function mergeProviderOptions(
     merged[provider] = { ...a[provider], ...values };
   }
   return merged;
+}
+
+/** What the dialog renders with: optional peers of ask-my-site that a plugin's site needs. */
+const DIALOG_PEERS = ['react', 'react-dom', '@radix-ui/react-dialog', 'cmdk'];
+
+/**
+ * Warns, naming what to install, when a package the dialog renders with is missing, resolved as
+ * the dialog's own modules resolve it (from `from`, default this package). Otherwise the site's
+ * bundler fails later with "Cannot find package 'cmdk'", which does not say who needs it. A
+ * warning, not an error, as a site may alias React to something else.
+ */
+export function warnMissingDialogPeers(log: Logger, from: string | URL = import.meta.url): void {
+  const nativeRequire = createRequire(from);
+  const missing = DIALOG_PEERS.filter((name) => {
+    try {
+      nativeRequire.resolve(name);
+      return false;
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND';
+    }
+  });
+  if (missing.length === 0) return;
+  log.warn(
+    `The ask dialog renders with ${missing.join(', ')}, which ${missing.length === 1 ? 'is' : 'are'} not installed: npm i ${missing.join(' ')}`,
+  );
 }
 
 /**
