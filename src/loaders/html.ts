@@ -16,8 +16,17 @@ export interface HtmlMeta {
    * pagination. In a Docusaurus page it reads the doc's or blog post's Markdown container, so
    * breadcrumbs, the version badge and a post's date and authors are left out too; the title
    * still comes from the page's `<h1>`.
+   *
+   * Anything else is a selector, read from every element it matches (the outermost ones, each up
+   * to its own closing tag): a tag name, `#id`, `.class`, `[attribute]` or `[attribute=value]`,
+   * combined as in `div.content` or listed as in `main, .post`. There are no combinators. A page
+   * where it matches nothing has no content, so `fromHtml` returns `null`. Inside the elements it
+   * selects, `<aside>`s are kept: there they are callouts, such as Starlight's notes and tips,
+   * rather than a sidebar.
    */
-  root?: 'main' | 'article';
+  root?: string;
+  /** Elements to leave out, as a selector like `root`'s, e.g. `[data-pagefind-ignore]`. */
+  ignore?: string;
 }
 
 /** Elements whose content is never prose. */
@@ -38,6 +47,9 @@ const DROP_ELEMENTS = [
   'footer',
   'dialog',
 ];
+
+/** Inside a region chosen with a selector, `<aside>` is a callout. */
+const REGION_DROP_ELEMENTS = DROP_ELEMENTS.filter((tag) => tag !== 'aside');
 
 /** After a tag name: the name has ended (so `<nav` does not match the custom element `<nav-link>`). */
 const NAME_END = '(?=[\\s/>])';
@@ -209,10 +221,10 @@ function* outermost(html: string, tag: string): Generator<Element> {
 }
 
 /** `html` with each of `found` (left to right, not overlapping) replaced by `replace(element)`. */
-function replaceEach(
+function replaceEach<T extends { start: number; end: number }>(
   html: string,
-  found: Iterable<Element>,
-  replace: (element: Element) => string,
+  found: Iterable<T>,
+  replace: (element: T) => string,
 ): string {
   let out = '';
   let last = 0;
@@ -244,6 +256,128 @@ function innerOfAll(html: string, tag: string): string[] {
   return Array.from(outermost(html, tag), (element) => element.inner);
 }
 
+/** One compound selector, such as `div.note` or `[data-pagefind-body]`. */
+interface Compound {
+  tag?: string;
+  /** `.class` matches one of the attribute's space-separated words; the others, its whole value. */
+  attributes: { name: string; value?: string; word?: boolean }[];
+}
+
+const SELECTOR_TAG = /[a-z][a-z\d-]*|\*/iy;
+const SELECTOR_PART =
+  /([#.])([\w-]+)|\[\s*([\w:.-]+)\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'\]]+))\s*)?\]/y;
+
+/** Parses a comma-separated list of compound selectors; throws on anything else. */
+function parseSelector(selector: string): Compound[] {
+  return selector.split(',').map((text) => {
+    const source = text.trim();
+    const compound: Compound = { attributes: [] };
+    SELECTOR_TAG.lastIndex = 0;
+    const tag = SELECTOR_TAG.exec(source);
+    let position = tag ? SELECTOR_TAG.lastIndex : 0;
+    if (tag && tag[0] !== '*') compound.tag = tag[0].toLowerCase();
+    while (position < source.length) {
+      SELECTOR_PART.lastIndex = position;
+      const part = SELECTOR_PART.exec(source);
+      if (!part) break;
+      position = SELECTOR_PART.lastIndex;
+      const [, prefix, name = '', attribute = ''] = part;
+      if (prefix === '.') compound.attributes.push({ name: 'class', value: name, word: true });
+      else if (prefix === '#') compound.attributes.push({ name: 'id', value: name });
+      else {
+        const value = part[4] ?? part[5] ?? part[6];
+        compound.attributes.push({
+          name: attribute.toLowerCase(),
+          ...(value === undefined ? {} : { value }),
+        });
+      }
+    }
+    if (!source || position < source.length) {
+      throw new Error(
+        `Unsupported selector "${selector}": use tag names, #ids, .classes and [attributes], combined as in div.content, in a comma-separated list.`,
+      );
+    }
+    return compound;
+  });
+}
+
+const TAG_ATTRIBUTE = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+
+/** The attributes of an opening tag, by lowercase name. Values are not decoded. */
+function attributesOf(attributes: string): Map<string, string> {
+  const found = new Map<string, string>();
+  for (const match of attributes.matchAll(TAG_ATTRIBUTE)) {
+    const key = (match[1] ?? '').toLowerCase();
+    if (!found.has(key)) found.set(key, match[2] ?? match[3] ?? match[4] ?? '');
+  }
+  return found;
+}
+
+function matchesCompound(
+  compound: Compound,
+  tag: string,
+  attributes: Map<string, string>,
+): boolean {
+  if (compound.tag !== undefined && compound.tag !== tag) return false;
+  return compound.attributes.every(({ name, value, word }) => {
+    const actual = attributes.get(name);
+    if (actual === undefined) return false;
+    if (value === undefined) return true;
+    return word ? actual.split(/\s+/).includes(value) : actual === value;
+  });
+}
+
+/**
+ * The outermost elements `selector` matches, left to right, each up to its own closing tag; an
+ * element that is never closed is not matched. Linear: every tag is found in one scan, paired
+ * with its closing tag through a stack per tag name, and matched once.
+ */
+function* select(
+  html: string,
+  selector: string,
+): Generator<{ start: number; end: number; inner: string }> {
+  const compounds = parseSelector(selector);
+  const pattern = /<(\/?)([a-z][a-z\d-]*)(?=[\s/>])([^<>]*)>/gi;
+  const tags: { name: string; close: boolean; start: number; end: number; attributes: string }[] =
+    [];
+  for (let match = pattern.exec(html); match !== null; match = pattern.exec(html)) {
+    tags.push({
+      name: (match[2] ?? '').toLowerCase(),
+      close: match[1] === '/',
+      start: match.index,
+      end: pattern.lastIndex,
+      attributes: match[3] ?? '',
+    });
+  }
+  const closer: (number | undefined)[] = [];
+  const open = new Map<string, number[]>();
+  tags.forEach(({ name, close }, i) => {
+    let stack = open.get(name);
+    if (!stack) {
+      stack = [];
+      open.set(name, stack);
+    }
+    if (!close) {
+      stack.push(i);
+      return;
+    }
+    const opened = stack.pop();
+    if (opened !== undefined) closer[opened] = i;
+  });
+  let after = 0;
+  for (let i = 0; i < tags.length; i++) {
+    const tag = tags[i];
+    const end = tags[closer[i] ?? -1];
+    if (!tag || !end || tag.start < after) continue;
+    const candidates = compounds.filter((c) => c.tag === undefined || c.tag === tag.name);
+    if (candidates.length === 0) continue;
+    const attributes = attributesOf(tag.attributes);
+    if (!candidates.some((compound) => matchesCompound(compound, tag.name, attributes))) continue;
+    yield { start: tag.start, end: end.end, inner: html.slice(tag.end, end.start) };
+    after = end.end;
+  }
+}
+
 /**
  * Where Docusaurus renders a page's Markdown: a doc's `theme-doc-markdown` container, or a blog
  * post's `__blog-post-container` (the element Docusaurus's own feeds read), without the
@@ -267,6 +401,57 @@ function docusaurusMarkdown(html: string): string | undefined {
     }
   }
   return undefined;
+}
+
+const isSpace = (c: string): boolean =>
+  c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f';
+
+/**
+ * `html` with the `<` and `>` inside quoted attribute values written as entities, so every tag
+ * reads as `<…>` with no bracket inside. Highlighters keep code in attributes (Expressive Code's
+ * copy button holds the whole snippet in `data-code`), and a `>` there would otherwise end the
+ * tag early and leak the rest of it as text. One forward scan: a quote that is never closed has
+ * no later quote of its kind, so at most two searches for a closing quote run to the end.
+ */
+function escapeAttributeBrackets(html: string): string {
+  let out = '';
+  let last = 0;
+  for (let i = html.indexOf('<'); i !== -1;) {
+    let k = html[i + 1] === '/' ? i + 2 : i + 1;
+    if (!/[a-z]/i.test(html.charAt(k))) {
+      i = html.indexOf('<', i + 1);
+      continue;
+    }
+    // Where to look for the next tag: after this one's `>`, or at a `<` that shows it was not one.
+    let next = -1;
+    let equals = false;
+    for (; k < html.length; k++) {
+      const c = html.charAt(k);
+      if (c === '>' || c === '<') {
+        next = c === '>' ? k + 1 : k;
+        break;
+      }
+      // A quote opens a value only after `=`; elsewhere (`<p it's>`) it is just a character.
+      if ((c === '"' || c === "'") && equals) {
+        const close = html.indexOf(c, k + 1);
+        if (close === -1) {
+          next = k + 1;
+          break;
+        }
+        const value = html.slice(k + 1, close);
+        if (value.includes('<') || value.includes('>')) {
+          out += html.slice(last, k + 1) + value.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+          last = close;
+        }
+        k = close;
+        equals = false;
+      } else if (c === '=') equals = true;
+      else if (!isSpace(c)) equals = false;
+    }
+    if (next === -1) break;
+    i = html.indexOf('<', next);
+  }
+  return last === 0 ? html : out + html.slice(last);
 }
 
 /** True if any `<meta name="robots">` says noindex. Scans tag by tag, without backtracking. */
@@ -294,32 +479,53 @@ function isNoindex(html: string): boolean {
  * Turns an HTML page into a {@link SourceDocument} whose content is Markdown-shaped text.
  *
  * It reads `<main>` if the page has one, then the outermost `<article>`s, then `<body>`
- * (`root: 'article'` reads the articles first; see {@link HtmlMeta.root}). Navigation, scripts,
- * styles, forms and other chrome are dropped. Headings become `#` lines and keep their `id`
- * attribute as the anchor; `<pre>` becomes a fenced code block. Pages with
+ * (`root: 'article'` reads the articles first, and `root` can also be a selector; see
+ * {@link HtmlMeta.root}). Navigation, scripts, styles, forms and other chrome are dropped, and so
+ * is whatever `ignore` selects. Headings become `#` lines and keep their `id` attribute as the
+ * anchor; `<pre>` becomes a fenced code block. Pages with
  * `<meta name="robots" content="noindex">` return `null`.
  *
  * This is a tag stripper, not a DOM parser: it is fast and dependency-free, and it expects the
  * well-formed output of a static site generator rather than arbitrary HTML.
  */
-export function fromHtml(source: string, meta: HtmlMeta): SourceDocument | null {
-  if (isNoindex(source)) return null;
+export function fromHtml(original: string, meta: HtmlMeta): SourceDocument | null {
+  if (isNoindex(original)) return null;
 
+  const source = escapeAttributeBrackets(original);
   const headTitle = innerOf(source, 'title');
-  const articles = innerOfAll(source, 'article');
-  const article = articles.length > 0 ? articles.join('\n\n') : undefined;
-  let html =
-    (meta.root === 'article'
-      ? // Every <article> left inside the outermost ones is nested: a card or a teaser.
-        ((article === undefined
-          ? undefined
-          : replaceEach(article, outermost(article, 'article'), () => ' ')) ??
-        innerOf(source, 'main'))
-      : (innerOf(source, 'main') ?? article)) ??
-    innerOf(source, 'body') ??
-    source;
+  const selector = meta.root === 'main' || meta.root === 'article' ? undefined : meta.root;
+  let html: string;
+  if (selector === undefined) {
+    const articles = innerOfAll(source, 'article');
+    const article = articles.length > 0 ? articles.join('\n\n') : undefined;
+    html =
+      (meta.root === 'article'
+        ? // Every <article> left inside the outermost ones is nested: a card or a teaser.
+          ((article === undefined
+            ? undefined
+            : replaceEach(article, outermost(article, 'article'), () => ' ')) ??
+          innerOf(source, 'main'))
+        : (innerOf(source, 'main') ?? article)) ??
+      innerOf(source, 'body') ??
+      source;
+  } else {
+    // Commented-out markup and scripts are not elements of the page.
+    let page = removeDelimited(source, '<!--', '-->');
+    for (const tag of ['script', 'style']) {
+      page = replaceElements(
+        page,
+        openTag(tag),
+        () => `</${tag}>`,
+        () => ' ',
+      );
+    }
+    const regions = Array.from(select(page, selector), (region) => region.inner);
+    if (regions.length === 0) return null;
+    html = regions.join('\n\n');
+  }
   html = removeDelimited(html, '<!--', '-->');
-  for (const tag of DROP_ELEMENTS) {
+  if (meta.ignore) html = replaceEach(html, select(html, meta.ignore), () => ' ');
+  for (const tag of selector === undefined ? DROP_ELEMENTS : REGION_DROP_ELEMENTS) {
     html = replaceElements(
       html,
       openTag(tag),
@@ -366,7 +572,12 @@ function htmlToText(html: string): string {
     /<pre(?=[\s>])[^<>]*>/gi,
     () => '</pre>',
     ({ inner }) => {
-      const body = stripTags(inner.replace(/<br\s*\/?>/gi, '\n')).replace(/^\n+|\s+$/g, '');
+      // A line is a `<br>`, or a `<div>` (Expressive Code, which Starlight uses, writes each line
+      // as one with no newline between them). A line's own newline, kept in the markup next to
+      // or inside its `<div>`, does not count twice.
+      const body = stripTags(inner.replace(/<br\s*\/?>/gi, '\n').replace(/<\/div>/gi, ''))
+        .replace(/\n?+\n?/g, '\n')
+        .replace(/^\n+|\s+$/g, '');
       const fence = fenceFor(body);
       blocks.push(`${fence}\n${body}\n${fence}`);
       return `\n\n\uE000${String(blocks.length - 1)}\uE000\n\n`;

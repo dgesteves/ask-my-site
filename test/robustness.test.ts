@@ -45,8 +45,8 @@ describe('linear-time parsing of hostile input', () => {
 describe('linear-time loaders on unclosed constructs', () => {
   // Quadratic before: 0.8 s (unclosed <pre>) to 70 s (unclosed link labels) at this size.
   const n = 40_000;
-  const html = (source: string, root?: 'article') => () =>
-    fromHtml(source, { id: 'x', url: '/x', root });
+  const html = (source: string, root?: string, ignore?: string) => () =>
+    fromHtml(source, { id: 'x', url: '/x', root, ...(ignore ? { ignore } : {}) });
   const md =
     (source: string, mdx = false) =>
     () =>
@@ -67,6 +67,25 @@ describe('linear-time loaders on unclosed constructs', () => {
       html(`<article>${'<div class=theme-doc-markdown>x '.repeat(n)}`, 'article'),
     ],
     ['unclosed <title>', html('<title>x '.repeat(n))],
+    ['unclosed selected elements', html(`<main>${'<div class=x>x '.repeat(n)}</main>`, '.x')],
+    [
+      'nested selected elements',
+      html(`${'<div class=x>'.repeat(n)}${'</div>'.repeat(n)}`, 'div.x'),
+    ],
+    ['many selected elements', html('<div class=x>x</div>'.repeat(n), '[class=x], main')],
+    [
+      'many ignored elements',
+      html(`<main>${'<p data-i>x</p><p>y</p>'.repeat(n)}</main>`, undefined, '[data-i]'),
+    ],
+    [
+      'unclosed ignored elements',
+      html(`<main>${'<p data-i>x '.repeat(n)}</main>`, undefined, '[data-i]'),
+    ],
+    ['brackets in attribute values', html(`<main>${'<a title="<p> => x">y</a>'.repeat(n)}</main>`)],
+    ['values that open tags', html(`<main>${'<a b="<a b="'.repeat(n)}</main>`)],
+    ['a value that never closes', html(`<main><a b="${'<p>x</p>'.repeat(n)}</main>`)],
+    ['tags that never end', html(`<main>${'<a b=c '.repeat(n)}`)],
+    ['attributes without values', html(`<main><p ${'a '.repeat(5 * n)}>x</p></main>`, 'p[b]')],
     ['a heading link full of spaces', html(`<main><h2><a>${' '.repeat(5 * n)}</h2></main>`)],
     ['Markdown links with unclosed destinations', md('[a](('.repeat(n))],
     ['Markdown links without destinations', md('[a]('.repeat(n))],

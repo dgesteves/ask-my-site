@@ -431,7 +431,7 @@ const loaded = loadIndex(serializeIndexFile(index));
 const { hits, answerable, best } = retrieve(loaded, { text: question, vector });
 ```
 
-Also exported: `fromHtml`, `fromDocuments`, `chunkDocument`, `checkIndex`, `parseIndexFile`, `validateIndexFile`, `tokenize`, `createSlugger` (use it in your renderer so anchors always match), and the building blocks `Bm25Index`, `VectorIndex`, `reciprocalRankFusion`, `quantizeInt8`, `encodeVector`, `decodeVector`.
+Also exported: `fromHtml` (`root` picks the part of a page to read, as a selector such as `[data-pagefind-body]`, and `ignore` what to leave out), `fromDocuments`, `chunkDocument`, `checkIndex`, `parseIndexFile`, `validateIndexFile`, `tokenize`, `createSlugger` (use it in your renderer so anchors always match), and the building blocks `Bm25Index`, `VectorIndex`, `reciprocalRankFusion`, `quantizeInt8`, `encodeVector`, `decodeVector`.
 
 ## Design decisions and trade-offs
 
