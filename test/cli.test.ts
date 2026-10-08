@@ -247,6 +247,7 @@ describe('ask-my-site index', () => {
 
   it.each([
     [['index', 'content'], 'No embedding model. Set OPENAI_API_KEY'],
+    [['index', 'content'], 'To try it without a key, use --embedding mock'],
     [['index', 'content', '-e', 'openai:text-embedding-3-small'], 'needs OPENAI_API_KEY'],
     [['index', 'content', '-e', 'bogus'], 'Unknown --embedding bogus. Use openai:<model>'],
     [['index', 'content', '--chunk-size', 'big'], '--chunk-size must be a non-negative integer'],

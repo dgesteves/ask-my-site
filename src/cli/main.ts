@@ -153,8 +153,9 @@ async function chooseEmbedding(
     if (io.env.AI_GATEWAY_API_KEY)
       return resolveSpec('openai/text-embedding-3-small', dims, io, mode);
     throw new UsageError(
-      'No embedding model. Set OPENAI_API_KEY, pass --embedding <spec>, or use ' +
-        '--embedding none for a keyword-only index.',
+      'No embedding model. Set OPENAI_API_KEY or pass --embedding <spec>. To try it without a ' +
+        'key, use --embedding mock (offline, deterministic); --embedding none builds a ' +
+        'keyword-only index.',
     );
   }
   return resolveSpec(spec, dims, io, mode);
