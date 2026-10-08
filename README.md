@@ -37,11 +37,13 @@ const embeddingModel = openai.embedding('text-embedding-3-small');
 export const POST = createAskHandler({ index, model: openai('gpt-5.4-mini'), embeddingModel });
 ```
 
-Render the dialog in your layout, with `import 'ask-my-site/react/styles.css'`:
+Render the dialog in your layout, with `import 'ask-my-site/react/styles.css'` and `import 'ask-my-site/embed/launcher.css'` for its button:
 
 ```tsx
-<AskDialog />
+<AskDialog launcher />
 ```
+
+It opens from a floating "Ask AI" button, as on the plugins' sites, and from <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>K</kbd>. Leave `launcher` out to open it from your own button (`trigger`) or the shortcut alone.
 
 That is the whole integration: five lines, imports aside. [Full setup](#full-setup) is below, and no API key is needed to [try the example](#try-it-without-an-api-key).
 
@@ -113,12 +115,14 @@ export const POST = createAskHandler({
 'use client';
 import { AskDialog } from 'ask-my-site/react';
 import 'ask-my-site/react/styles.css';
+import 'ask-my-site/embed/launcher.css';
 import { useRouter } from 'next/navigation';
 
 export function Ask() {
   const router = useRouter();
   return (
     <AskDialog
+      launcher
       suggestions={['How do I install it?', 'Which runtimes are supported?']}
       onNavigate={(url, event) => {
         event.preventDefault();
@@ -327,7 +331,7 @@ For Hugo, Jekyll, Eleventy, MkDocs or plain HTML, one script tag adds the dialog
 
 It mounts itself once the page has loaded, with its tag's attributes: `data-endpoint` (default `/api/ask`), `data-title`, `data-placeholder`, `data-suggestions` (a JSON array, as in `data-suggestions='["How do I install it?"]'`), `data-shortcut` (default `i`; `"false"` turns it off), `data-button-label` (default "Ask AI"; `"false"` hides the button) and `data-theme` (`auto`, the default, follows `data-theme` on `<html>` when the site sets one, and the system setting otherwise; or `light` or `dark`). With `data-manual` it waits for `window.AskMySite.mount(options)`, which takes the same options and returns `{ open, close, unmount }`, for example to open the dialog from your own search box. Pin an exact version (`ask-my-site@0.4.0`) in production.
 
-In an app with a bundler, `mountAskDialog(options)` from `ask-my-site/embed` does the same with your own React; import `ask-my-site/react/styles.css` and `ask-my-site/embed/launcher.css` with it.
+In an app with a bundler, `mountAskDialog(options)` from `ask-my-site/embed` does the same with your own React (install `react`, `react-dom`, `@radix-ui/react-dialog` and `cmdk`); import `ask-my-site/react/styles.css` and `ask-my-site/embed/launcher.css` with it.
 
 ## Try it without an API key
 
@@ -466,17 +470,18 @@ If the limiter itself fails (Upstash unreachable, a bug in your own), the handle
 
 ### `<AskDialog />` and `useAsk()` from `ask-my-site/react`
 
-| Prop                                  | Default            | Notes                                                                                                 |
-| ------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------- |
-| `endpoint`                            | `/api/ask`         | Also `headers` and a custom `fetch`.                                                                  |
-| `open`, `defaultOpen`, `onOpenChange` | uncontrolled       | Controlled or uncontrolled.                                                                           |
-| `shortcut`                            | `"k"`              | With ⌘ or Ctrl; `false` disables it.                                                                  |
-| `trigger`                             | none               | An element that opens the dialog, e.g. a search button.                                               |
-| `suggestions`                         | `[]`               | Offered before typing, filtered as you type.                                                          |
-| `onNavigate`                          | browser navigation | `(url, event)` for citations and sources; `preventDefault()` to route yourself.                       |
-| `theme`                               | `"system"`         | `"light"` or `"dark"` to pin it.                                                                      |
-| `classNames`                          | none               | Extra classes per part: `overlay`, `content`, `input`, `list`, `item`, `answer`, `sources`, `footer`. |
-| `title`, `placeholder`, `footer`      | sensible defaults  | `title` is the dialog's accessible name.                                                              |
+| Prop                                  | Default            | Notes                                                                                                        |
+| ------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `endpoint`                            | `/api/ask`         | Also `headers` and a custom `fetch`.                                                                         |
+| `open`, `defaultOpen`, `onOpenChange` | uncontrolled       | Controlled or uncontrolled.                                                                                  |
+| `shortcut`                            | `"k"`              | With ⌘ or Ctrl; `false` disables it.                                                                         |
+| `trigger`                             | none               | An element that opens the dialog, e.g. a search button.                                                      |
+| `launcher`                            | `false`            | `true` or a label: a floating "Ask AI" button with the shortcut, styled by `ask-my-site/embed/launcher.css`. |
+| `suggestions`                         | `[]`               | Offered before typing, filtered as you type.                                                                 |
+| `onNavigate`                          | browser navigation | `(url, event)` for citations and sources; `preventDefault()` to route yourself.                              |
+| `theme`                               | `"system"`         | `"light"` or `"dark"` to pin it.                                                                             |
+| `classNames`                          | none               | Extra classes per part: `overlay`, `content`, `input`, `list`, `item`, `answer`, `sources`, `footer`.        |
+| `title`, `placeholder`, `footer`      | sensible defaults  | `title` is the dialog's accessible name.                                                                     |
 
 `useAsk({ endpoint })` returns `{ ask, stop, reset, status, question, answer, sources, refused, truncated, retrieval, error }`. `status` is `idle | loading | streaming | done | error`; `error.kind` is `rate-limited | http | network | stream`, with `retryAfter` for rate limits. When the endpoint answers 404, the visitor reads that answers aren't available, and in development (a dev build, or a page on localhost) the console says which URL the dialog posted to. `truncated` is `true` when the model stopped at its output limit (`generation.maxOutputTokens`, 800 by default), so a `done` answer may be incomplete; the dialog says so under the answer. Sources arrive before the first word, deltas are batched to one render per animation frame, and `stop()` keeps the partial answer. Closing the dialog, by Escape, a click outside or a controlling parent, stops the answer in flight so the model is not left generating for nobody.
 

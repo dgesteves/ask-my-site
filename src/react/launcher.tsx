@@ -15,42 +15,15 @@ export interface AskWithLauncherProps extends AskMySiteDialogOptions {
 }
 
 /**
- * `AskDialog` opened by ⌘/Ctrl+I (by default) and by a floating button with the
+ * `AskDialog` opened by ⌘/Ctrl+I (by default) and by its floating launcher button, with the
  * `ask-my-site-launcher` class, which the integration's stylesheet places and colors.
  */
 export function AskWithLauncher({
   shortcut = 'i',
   buttonLabel = 'Ask AI',
-  theme,
   ...props
 }: AskWithLauncherProps): ReactNode {
-  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
-  const key = shortcut ? shortcut.toUpperCase() : '';
-  return (
-    <AskDialog
-      {...props}
-      shortcut={shortcut}
-      theme={theme}
-      trigger={
-        buttonLabel === false ? undefined : (
-          <button
-            type="button"
-            className="ask-my-site-launcher"
-            data-ask-theme={theme}
-            aria-keyshortcuts={key ? `Meta+${key} Control+${key}` : undefined}
-          >
-            <span aria-hidden="true">✦</span> {buttonLabel}
-            {key ? (
-              <kbd aria-hidden="true">
-                {mac ? '⌘' : 'Ctrl '}
-                {key}
-              </kbd>
-            ) : null}
-          </button>
-        )
-      }
-    />
-  );
+  return <AskDialog {...props} shortcut={shortcut} launcher={buttonLabel} />;
 }
 
 const DARK = '(prefers-color-scheme: dark)';

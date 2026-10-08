@@ -1,6 +1,7 @@
 /*
- * The floating "Ask AI" button of ask-my-site/embed and the script embed. Its colors are custom
- * properties set without specificity, so a plain class selector in the site's CSS overrides them:
+ * The floating "Ask AI" button of ask-my-site/embed, the script embed and `<AskDialog launcher />`.
+ * Its colors are custom properties set without specificity, so a plain class selector in the
+ * site's CSS overrides them:
  *
  *   .ask-my-site-launcher { --ask-launcher-accent: #7c3aed; }
  */
@@ -18,6 +19,16 @@
   --ask-launcher-border: #353c47;
   --ask-launcher-accent: #22d3ee;
   --ask-launcher-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.7);
+}
+/* Without one, as `<AskDialog launcher />` renders it unless its theme is pinned: the system's. */
+@media (prefers-color-scheme: dark) {
+  :where(.ask-my-site-launcher:not([data-ask-theme])) {
+    --ask-launcher-bg: #181c22;
+    --ask-launcher-fg: #f5f7fa;
+    --ask-launcher-border: #353c47;
+    --ask-launcher-accent: #22d3ee;
+    --ask-launcher-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.7);
+  }
 }
 .ask-my-site-launcher {
   position: fixed;

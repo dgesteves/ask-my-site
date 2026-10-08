@@ -6,6 +6,7 @@ import {
   useId,
   useRef,
   useState,
+  useSyncExternalStore,
   type MouseEvent,
   type ReactNode,
 } from 'react';
@@ -28,6 +29,12 @@ export interface AskDialogProps extends Omit<UseAskOptions, 'onFinish'> {
   shortcut?: string | false;
   /** Element that opens the dialog, e.g. a search button. Rendered with Radix `asChild`. */
   trigger?: ReactNode;
+  /**
+   * A floating "Ask AI" button in the corner of the page, as the framework plugins and the script
+   * embed show, with the shortcut on it: `true`, or the button's label. Import
+   * `ask-my-site/embed/launcher.css` for its look, or style `.ask-my-site-launcher` yourself.
+   */
+  launcher?: boolean | string;
   /** Accessible dialog title. Default `"Ask this site"`. */
   title?: string;
   placeholder?: string;
@@ -59,6 +66,9 @@ function SearchIcon(): ReactNode {
     </svg>
   );
 }
+
+const noSubscription = () => () => undefined;
+const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** Text fields, selects and rich text editors. */
 function isEditable(target: EventTarget | null): boolean {
@@ -104,6 +114,7 @@ export function AskDialog({
   onOpenChange,
   shortcut = 'k',
   trigger,
+  launcher = false,
   title = 'Ask this site',
   placeholder = 'Ask a question…',
   suggestions = [],
@@ -120,6 +131,8 @@ export function AskDialog({
   const [query, setQuery] = useState('');
   const state = useAsk(askOptions);
   const descriptionId = useId();
+  // The server renders "Ctrl", and the browser corrects it after hydration.
+  const mac = useSyncExternalStore(noSubscription, isMac, () => false);
 
   useEffect(() => {
     openRef.current = open;
@@ -183,10 +196,29 @@ export function AskDialog({
     ? suggestions.filter((s) => s.toLowerCase().includes(normalized) && s.trim() !== trimmedQuery)
     : suggestions;
   const themeAttribute = theme === 'system' ? undefined : theme;
+  const key = shortcut ? shortcut.toUpperCase() : '';
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       {trigger ? <Dialog.Trigger asChild>{trigger}</Dialog.Trigger> : null}
+      {launcher === false ? null : (
+        <Dialog.Trigger asChild>
+          <button
+            type="button"
+            className="ask-my-site-launcher"
+            data-ask-theme={themeAttribute}
+            aria-keyshortcuts={key ? `Meta+${key} Control+${key}` : undefined}
+          >
+            <span aria-hidden="true">✦</span> {launcher === true ? 'Ask AI' : launcher}
+            {key ? (
+              <kbd aria-hidden="true">
+                {mac ? '⌘' : 'Ctrl '}
+                {key}
+              </kbd>
+            ) : null}
+          </button>
+        </Dialog.Trigger>
+      )}
       <Dialog.Portal>
         <Dialog.Overlay
           className={cx('ask-overlay', classNames.overlay)}

@@ -347,6 +347,26 @@ describe('AskDialog', () => {
     });
   });
 
+  it('shows a floating launcher, with its shortcut, when asked to', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<AskDialog fetch={handlerFetch()} />);
+    expect(screen.queryByRole('button')).toBeNull();
+
+    rerender(<AskDialog fetch={handlerFetch()} launcher theme="dark" />);
+    const button = screen.getByRole('button', { name: /Ask AI/ });
+    expect(button.className).toBe('ask-my-site-launcher');
+    expect(button.dataset.askTheme).toBe('dark');
+    expect(button.getAttribute('aria-keyshortcuts')).toBe('Meta+K Control+K');
+    await user.click(button);
+    expect(await screen.findByRole('dialog', { name: 'Ask this site' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+
+    rerender(<AskDialog fetch={handlerFetch()} launcher="Ask the docs" shortcut={false} />);
+    const custom = screen.getByRole('button', { name: 'Ask the docs' });
+    expect(custom.getAttribute('aria-keyshortcuts')).toBeNull();
+    expect(custom.querySelector('kbd')).toBeNull();
+  });
+
   it('asks a suggestion on click and supports a custom trigger', async () => {
     const user = userEvent.setup();
     render(
