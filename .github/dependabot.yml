@@ -13,6 +13,13 @@ updates:
       # TypeScript 7 is the Go compiler, which typescript-eslint doesn't support yet. Move to it by hand.
       - dependency-name: typescript
         update-types: ['version-update:semver-major']
+      # @types/node follows the Node major the code runs and is tested on (24), not the newest one:
+      # newer types would let code use APIs that Node 24 doesn't have. Move it with .nvmrc and CI.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # jiti stays at the version Docusaurus loads plugins with (1.21.7 in Docusaurus 3.10), so
+      # test/embedding.test.ts reproduces how the plugin is really loaded. Move it with Docusaurus.
+      - dependency-name: jiti
   - package-ecosystem: github-actions
     directory: /
     schedule:
