@@ -107,8 +107,10 @@ export function createIntegration(
         config = resolved;
       },
       'astro:routes:resolved': ({ routes }) => {
+        // An endpoint route, as a page cannot answer a POST: Starlight's `[...slug]` matches any
+        // path.
         const path = endpoint.split(/[?#]/)[0] ?? endpoint;
-        served = routes.some((route) => route.patternRegex.test(path));
+        served = routes.some((route) => route.type === 'endpoint' && route.patternRegex.test(path));
       },
       'astro:server:start': ({ logger }) => {
         if (dev && !served) hintDevEndpoint(endpoint, 'astro dev', logger);

@@ -427,7 +427,10 @@ describe('ask-my-site/astro', () => {
     Reflect.deleteProperty(globalThis, Symbol.for('ask-my-site.devEndpointHint'));
     const logger = { info: vi.fn(), warn: vi.fn() };
     /** Runs the hooks of `astro dev`, with the routes the site has. */
-    const dev = async (integration: AstroIntegration, routes: { patternRegex: RegExp }[]) => {
+    const dev = async (
+      integration: AstroIntegration,
+      routes: { type: string; patternRegex: RegExp }[],
+    ) => {
       const hooks = integration.hooks as Record<string, (options: unknown) => unknown>;
       const injected: string[] = [];
       await hooks['astro:config:setup']?.({
@@ -442,10 +445,14 @@ describe('ask-my-site/astro', () => {
     };
 
     // An SSR site that serves the endpoint itself needs no hint.
-    await dev(askMySite({ embeddingModel: null }), [{ patternRegex: /^\/api\/ask\/?$/ }]);
+    await dev(askMySite({ embeddingModel: null }), [
+      { type: 'endpoint', patternRegex: /^\/api\/ask\/?$/ },
+    ]);
     expect(logger.info).not.toHaveBeenCalled();
-    // A static site does not serve it.
-    await dev(askMySite({ embeddingModel: null }), [{ patternRegex: /^\/guide\/?$/ }]);
+    // A static site does not serve it, though Starlight's `[...slug]` page matches any path.
+    await dev(askMySite({ embeddingModel: null }), [
+      { type: 'page', patternRegex: /^(?:\/(.*?))?\/?$/ },
+    ]);
     expect(logger.info).toHaveBeenCalledWith(
       'The dialog posts to /api/ask, which astro dev does not serve. For answers while you work, build the site once, run `npx ask-my-site dev`, and start the site with ASK_ENDPOINT=http://localhost:8787/api/ask.',
     );
