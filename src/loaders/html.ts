@@ -8,6 +8,12 @@ export interface HtmlMeta {
   url: string;
   /** Title to use when the page has neither `<title>` nor `<h1>`. */
   fallbackTitle?: string;
+  /**
+   * The element that holds the page's own content. Default `main`, then `article`, then `body`.
+   * `article` suits sites whose `<main>` also holds a table of contents or pagination, such as
+   * Docusaurus.
+   */
+  root?: 'main' | 'article';
 }
 
 /** Elements whose content is never prose. */
@@ -206,7 +212,8 @@ function isNoindex(html: string): boolean {
 /**
  * Turns an HTML page into a {@link SourceDocument} whose content is Markdown-shaped text.
  *
- * It reads `<main>` if the page has one, then `<article>`, then `<body>`. Navigation, scripts,
+ * It reads `<main>` if the page has one, then `<article>`, then `<body>` (`root: 'article'` reads the
+ * articles first). Navigation, scripts,
  * styles, forms and other chrome are dropped. Headings become `#` lines and keep their `id`
  * attribute as the anchor; `<pre>` becomes a fenced code block. Pages with
  * `<meta name="robots" content="noindex">` return `null`.
@@ -219,9 +226,11 @@ export function fromHtml(source: string, meta: HtmlMeta): SourceDocument | null 
 
   const headTitle = innerOf(source, 'title');
   const articles = innerOfAll(source, 'article');
+  const article = articles.length > 0 ? articles.join('\n\n') : undefined;
   let html =
-    innerOf(source, 'main') ??
-    (articles.length > 0 ? articles.join('\n\n') : undefined) ??
+    (meta.root === 'article'
+      ? (article ?? innerOf(source, 'main'))
+      : (innerOf(source, 'main') ?? article)) ??
     innerOf(source, 'body') ??
     source;
   html = removeDelimited(html, '<!--', '-->');
@@ -254,10 +263,12 @@ function fenceFor(code: string): string {
 }
 
 /**
- * Permalink anchors (`#`, `¶`, an invisible entity, or an emptied icon) are not heading text.
+ * Permalink anchors (`#`, `¶`, an invisible character or entity, such as the zero-width space
+ * Docusaurus writes, or an emptied icon) are not heading text.
  * The second `\s*` sits inside the optional group, so whitespace has one way to match.
  */
-const PERMALINK = /<a(?=[\s>])[^<>]*>\s*(?:(?:[#¶§]|&[A-Za-z]+;|&#x?[\da-fA-F]+;)\s*)?<\/a>/gi;
+const PERMALINK =
+  /<a(?=[\s>])[^<>]*>\s*(?:(?:[#¶§\u200B-\u200D\u2060\uFEFF]|&[A-Za-z]+;|&#x?[\da-fA-F]+;)\s*)?<\/a>/gi;
 
 function htmlToText(html: string): string {
   // Code blocks are swapped out first so whitespace normalization never touches them.

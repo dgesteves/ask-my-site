@@ -1,7 +1,7 @@
 {
   "name": "ask-my-site",
   "version": "0.2.0",
-  "description": "A drop-in ⌘K ask agent for any website. Build-time static index, hybrid BM25 + vector retrieval in memory, streaming answers with citations. No vector database.",
+  "description": "A drop-in \u2318K ask agent for any website. Build-time static index, hybrid BM25 + vector retrieval in memory, streaming answers with citations. No vector database.",
   "keywords": [
     "rag",
     "ai",
@@ -12,7 +12,9 @@
     "command-palette",
     "docs-search",
     "edge",
-    "react"
+    "react",
+    "docusaurus",
+    "docusaurus-plugin"
   ],
   "homepage": "https://github.com/dgesteves/ask-my-site#readme",
   "bugs": "https://github.com/dgesteves/ask-my-site/issues",
@@ -48,6 +50,10 @@
       "types": "./dist/mock.d.ts",
       "default": "./dist/mock.js"
     },
+    "./docusaurus": {
+      "types": "./dist/docusaurus/index.d.ts",
+      "default": "./dist/docusaurus/index.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {
@@ -72,7 +78,7 @@
     "screenshot": "node scripts/assets/screenshot.mjs",
     "example:build": "pnpm build && pnpm --filter ask-my-site-example-nextjs build",
     "example:dev": "pnpm build && pnpm --filter ask-my-site-example-nextjs dev",
-    "validate": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm check:package && pnpm example:build && pnpm --filter ask-my-site-example-nextjs lint",
+    "validate": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm check:package && pnpm example:build && pnpm --filter ask-my-site-example-nextjs lint && pnpm --filter ask-my-site-example-docusaurus build",
     "changeset": "changeset",
     "release": "pnpm build && changeset publish"
   },
@@ -86,6 +92,8 @@
     "@arethetypeswrong/cli": "^0.18.5",
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
+    "@docusaurus/module-type-aliases": "3.10.2",
+    "@docusaurus/types": "3.10.2",
     "@eslint/js": "^10.0.1",
     "@radix-ui/react-dialog": "^1.1.23",
     "@testing-library/dom": "^10.4.2",
@@ -115,6 +123,7 @@
   },
   "peerDependencies": {
     "@ai-sdk/openai": ">=4",
+    "@docusaurus/core": "^3.0.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "ai": "^7.0.0",
     "cmdk": "^1.1.1",
@@ -123,6 +132,9 @@
   },
   "peerDependenciesMeta": {
     "@ai-sdk/openai": {
+      "optional": true
+    },
+    "@docusaurus/core": {
       "optional": true
     },
     "@radix-ui/react-dialog": {

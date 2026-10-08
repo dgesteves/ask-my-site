@@ -136,6 +136,101 @@ npx ask-my-site index ./content --base-url /docs --check   # exit 1 if stale
 
 Other runtimes take the handler as-is: `app.post('/api/ask', (c) => handler(c.req.raw))` in Hono, `Bun.serve({ fetch: handler })`, or `export default { fetch: handler }` in a Cloudflare Worker.
 
+## Docusaurus
+
+The `ask-my-site/docusaurus` plugin does the indexing and the dialog for a Docusaurus 3 site:
+
+```sh
+npm i ask-my-site @radix-ui/react-dialog cmdk
+```
+
+```ts
+// docusaurus.config.ts
+export default {
+  // …
+  plugins: [['ask-my-site/docusaurus', { endpoint: '/api/ask' }]],
+};
+```
+
+- **After `docusaurus build`** it indexes the pages the site serves (each route's `<article>`, so the docs and blog posts without the navbar, table of contents or pagination) into `build/ask-index.json`, at the exact URLs Docusaurus generated. There is no URL guessing, and nothing to commit: the index is rebuilt with the site, and unchanged pages reuse their vectors from the previous build.
+- **In the browser** it adds a floating "Ask AI" button and <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>I</kbd> (⌘K stays with your search), follows the site's light or dark mode, and routes citations without a page reload.
+- **Embeddings** default to OpenAI's `text-embedding-3-small` when `OPENAI_API_KEY` is set at build time, or the same model through AI Gateway with `AI_GATEWAY_API_KEY`. Without either, it builds a keyword-only index and says so. Pass `embeddingModel` to choose another.
+
+Options: `endpoint`, `embeddingModel`, `embeddingProviderOptions`, `chunking`, `indexFile` (default `ask-index.json`), `exclude` (route prefixes), and `dialog` (`title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`).
+
+A Docusaurus site is static, so the endpoint runs as a function on your host. It must use the same embedding model as the build:
+
+<details>
+<summary><strong>Vercel</strong>: <code>api/ask.ts</code></summary>
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { openai } from '@ai-sdk/openai';
+import { createAskHandler } from 'ask-my-site/server';
+
+export const POST = createAskHandler({
+  index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
+  model: openai('gpt-5.4-mini'),
+  embeddingModel: openai.embedding('text-embedding-3-small'),
+  siteName: 'Acme Docs',
+});
+```
+
+Include the index in the function's bundle with `vercel.json`: `{ "functions": { "api/ask.ts": { "includeFiles": "build/ask-index.json" } } }`.
+
+</details>
+
+<details>
+<summary><strong>Netlify</strong>: <code>netlify/functions/ask.mts</code></summary>
+
+```ts
+import { openai } from '@ai-sdk/openai';
+import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+
+export default createAskHandler({
+  index: () => fetch(new URL('/ask-index.json', process.env.URL)).then((r) => r.text()),
+  model: openai('gpt-5.4-mini'),
+  embeddingModel: openai.embedding('text-embedding-3-small'),
+  rateLimit: memoryRateLimit({
+    limit: 10,
+    windowMs: 60_000,
+    trustedHeader: 'x-nf-client-connection-ip',
+  }),
+});
+
+export const config = { path: '/api/ask' };
+```
+
+</details>
+
+<details>
+<summary><strong>Cloudflare Pages</strong>: <code>functions/api/ask.ts</code></summary>
+
+```ts
+import { createOpenAI } from '@ai-sdk/openai';
+import { createAskHandler } from 'ask-my-site/server';
+
+let handler: ((request: Request) => Promise<Response>) | undefined;
+
+export const onRequest: PagesFunction<{ OPENAI_API_KEY: string; ASSETS: Fetcher }> = ({
+  request,
+  env,
+}) => {
+  const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+  handler ??= createAskHandler({
+    index: () => env.ASSETS.fetch(new URL('/ask-index.json', request.url)).then((r) => r.text()),
+    model: openai('gpt-5.4-mini'),
+    embeddingModel: openai.embedding('text-embedding-3-small'),
+  });
+  return handler(request);
+};
+```
+
+</details>
+
+To try it locally, the [Docusaurus example](./examples/docusaurus) ships a small endpoint: `pnpm --filter ask-my-site-example-docusaurus api`, and build the site with `ASK_ENDPOINT=http://localhost:8787/api/ask`.
+
 ## Try it without an API key
 
 The [Next.js example](./examples/nextjs) is a docs site about ask-my-site that indexes itself.
@@ -338,7 +433,7 @@ At 10,000 chunks, the BM25 half of a query takes 2.3 ms and the vector scan 4.6 
 - **Re-ranking hook:** an optional AI SDK reranking model over the fused candidates.
 - **Retrieval evals in CI:** a golden question set scored for hit rate and refusal precision, next to `--check`.
 - **Bigger corpora:** sharded indexes loaded per section, and binary quantization with int8 rescoring.
-- **Framework adapters:** Astro, Docusaurus and VitePress plugins that index the built site.
+- **More framework plugins:** Starlight and VitePress, after the [Docusaurus](#docusaurus) one; and a `<script>` embed for sites without React.
 - **Language-aware keyword search:** per-language stopwords and stemming.
 
 ## Development

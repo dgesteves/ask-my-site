@@ -8,7 +8,13 @@ export default defineConfig({
     react: 'src/react/index.ts',
     mock: 'src/mock/index.ts',
     cli: 'src/cli/bin.ts',
+    'docusaurus/index': 'src/docusaurus/index.ts',
+    // The plugin finds its theme next to itself, and Docusaurus resolves theme components by file
+    // name: dist/docusaurus/theme/Root.js.
+    'docusaurus/theme/Root': 'src/docusaurus/theme/Root.tsx',
   },
+  // Provided by the Docusaurus site at build time.
+  external: [/^@docusaurus\//, /^@theme(-init|-original)?\//],
   format: 'esm',
   // `node` only governs how built-ins resolve. The core, server, react and mock entries never
   // import a built-in, so their output stays runtime-neutral (edge, workers, browsers).
@@ -19,5 +25,8 @@ export default defineConfig({
   clean: true,
   // React Server Components need the directive at the top of the emitted client entry.
   banner: ({ fileName }) => (fileName === 'react.js' ? { js: "'use client';" } : undefined),
-  copy: [{ from: 'src/react/styles.css', to: 'dist' }],
+  copy: [
+    { from: 'src/react/styles.css', to: 'dist' },
+    { from: 'src/docusaurus/launcher.css', to: 'dist/docusaurus' },
+  ],
 });
