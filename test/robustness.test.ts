@@ -13,11 +13,18 @@ const doc = (content: string, title = 'Page'): SourceDocument => ({
   content,
 });
 
-/** Runs `fn` and returns how long it took, in milliseconds. */
+/**
+ * Runs `fn` three times and returns the fastest, in milliseconds. A GC pause or a busy CI runner
+ * can slow one run several times over; the quadratic cases these tests guard against take seconds.
+ */
 function timed(fn: () => unknown): number {
-  const start = performance.now();
-  fn();
-  return performance.now() - start;
+  let fastest = Infinity;
+  for (let run = 0; run < 3; run++) {
+    const start = performance.now();
+    fn();
+    fastest = Math.min(fastest, performance.now() - start);
+  }
+  return fastest;
 }
 
 describe('linear-time parsing of hostile input', () => {
