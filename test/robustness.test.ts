@@ -75,7 +75,8 @@ describe('linear-time loaders on unclosed constructs', () => {
     ['many selected elements', html('<div class=x>x</div>'.repeat(n), '[class=x], main')],
     [
       'many ignored elements',
-      html(`<main>${'<p data-i>x</p><p>y</p>'.repeat(n)}</main>`, undefined, '[data-i]'),
+      // Two elements a repeat, so half as many repeats: as many elements as the other cases.
+      html(`<main>${'<p data-i>x</p><p>y</p>'.repeat(n / 2)}</main>`, undefined, '[data-i]'),
     ],
     [
       'unclosed ignored elements',
