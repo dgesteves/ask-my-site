@@ -31,7 +31,10 @@ export interface AskMySiteDialogOptions {
   buttonLabel?: string | false;
 }
 
-export interface AskMySiteOptions {
+// A type, not an interface, so it fits Docusaurus's `PluginOptions` index signature in a
+// `docusaurus.config.ts` plugins entry.
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+export type AskMySiteOptions = {
   /** The plugin instance's id, set by Docusaurus. Default `"default"`. */
   id?: string;
   /** URL the dialog posts questions to. Default `/api/ask`. */
@@ -54,7 +57,7 @@ export interface AskMySiteOptions {
    */
   exclude?: string[];
   dialog?: AskMySiteDialogOptions;
-}
+};
 
 /** What the theme reads with `useAllPluginInstancesData('ask-my-site')`. */
 export interface AskMySiteGlobalData {
