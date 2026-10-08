@@ -273,6 +273,9 @@ importers:
       globals:
         specifier: ^17.13.0
         version: 17.13.0
+      jiti:
+        specifier: 1.21.7
+        version: 1.21.7
       jsdom:
         specifier: ^30.1.2
         version: 30.1.2(@noble/hashes@1.8.0)

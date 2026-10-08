@@ -7,6 +7,13 @@ import type { EmbeddingModel } from 'ai';
 
 import { buildIndex, type EmbeddingProviderOptions } from '../build';
 import { parseIndexFile, serializeIndexFile, type AskIndexFile } from '../index-file';
+import {
+  checkEmbeddingSpec,
+  embeddingFromSpec,
+  EmbeddingSpecError,
+  type EmbeddingChoice,
+  type EmbeddingSpec,
+} from '../node/embedding';
 import type { ChunkingOptions, SourceDocument } from '../types';
 
 export interface Logger {
@@ -21,9 +28,19 @@ export interface Logger {
 // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export type IndexOptions = {
   /**
-   * The embedding model for the index; the endpoint must use the same one. Default: OpenAI's
-   * `text-embedding-3-small` when `OPENAI_API_KEY` is set at build time, the same model through
-   * AI Gateway when only `AI_GATEWAY_API_KEY` is, else `null`: a keyword-only index, with a warning.
+   * The embedding model for the index, as the CLI's `--embedding` names it, so the config needs
+   * no provider import: `openai:<model>` (needs @ai-sdk/openai and `OPENAI_API_KEY`),
+   * `<provider>/<model>` through AI Gateway (`AI_GATEWAY_API_KEY`), `mock[:<dims>]`, or `none`
+   * for a keyword-only index. The endpoint must use the same model. Instead of `embeddingModel`.
+   */
+  embedding?: EmbeddingSpec;
+  /** The vector size for `embedding` or the default model, e.g. 512, as the CLI's `--dimensions`. */
+  dimensions?: number;
+  /**
+   * The embedding model for the index, as an AI SDK model; the endpoint must use the same one.
+   * Default: OpenAI's `text-embedding-3-small` when `OPENAI_API_KEY` is set at build time, the
+   * same model through AI Gateway when only `AI_GATEWAY_API_KEY` is, else `null`: a keyword-only
+   * index, with a warning.
    */
   embeddingModel?: EmbeddingModel | null;
   /** Passed to the embedding model, default or not, e.g. `{ openai: { dimensions: 512 } }`. */
@@ -43,25 +60,100 @@ export function consoleLogger(): Logger {
   };
 }
 
-export async function defaultEmbedding(
-  options: IndexOptions,
-  log: Logger,
-): Promise<EmbeddingModel | null> {
-  if (options.embeddingModel !== undefined) return options.embeddingModel;
-  if (process.env.OPENAI_API_KEY) {
+/** Throws on options that contradict each other or name no model, before anything is built. */
+export function checkIndexOptions(options: IndexOptions): void {
+  if (options.embedding !== undefined && options.embeddingModel !== undefined) {
+    throw new Error('ask-my-site: pass `embedding` or `embeddingModel`, not both.');
+  }
+  if (options.dimensions !== undefined && options.embeddingModel !== undefined) {
+    throw new Error(
+      'ask-my-site: `dimensions` applies to `embedding` or the default model. With ' +
+        '`embeddingModel`, set `embeddingProviderOptions` instead.',
+    );
+  }
+  if (options.embedding !== undefined) {
     try {
-      const { createOpenAI } = await import('@ai-sdk/openai');
-      return createOpenAI().embedding('text-embedding-3-small');
-    } catch {
-      log.warn('OPENAI_API_KEY is set but @ai-sdk/openai is not installed: npm i @ai-sdk/openai');
+      checkEmbeddingSpec(options.embedding, `embedding: '${options.embedding}'`);
+    } catch (error) {
+      throw new Error(`ask-my-site: ${(error as Error).message}`, { cause: error });
     }
   }
-  if (process.env.AI_GATEWAY_API_KEY) return 'openai/text-embedding-3-small';
-  log.warn(
-    'No embedding model: building a keyword-only index. Set OPENAI_API_KEY or AI_GATEWAY_API_KEY ' +
-      'at build time, or pass `embeddingModel`, for semantic search.',
-  );
-  return null;
+}
+
+const DEFAULT_MODEL = 'text-embedding-3-small';
+
+/**
+ * The embedding model a build uses, with its provider options: `embeddingModel` or `embedding`
+ * when given, else OpenAI's `text-embedding-3-small` when `OPENAI_API_KEY` is set, the same model
+ * through AI Gateway when only `AI_GATEWAY_API_KEY` is, else none, with a warning. A key that is
+ * set but cannot be used, because its provider package is missing or fails to load, fails the
+ * build rather than quietly building a keyword-only index; `embedding: 'none'` opts out.
+ */
+export async function buildEmbedding(
+  options: IndexOptions,
+  log: Logger,
+): Promise<{ model: EmbeddingModel | null; providerOptions?: EmbeddingProviderOptions }> {
+  checkIndexOptions(options);
+  const given = options.embeddingProviderOptions;
+  if (options.embeddingModel !== undefined) {
+    return { model: options.embeddingModel, ...(given ? { providerOptions: given } : {}) };
+  }
+
+  let spec: string | undefined = options.embedding;
+  if (spec === undefined) {
+    const { OPENAI_API_KEY, AI_GATEWAY_API_KEY } = process.env;
+    if (!OPENAI_API_KEY && !AI_GATEWAY_API_KEY) {
+      log.warn(
+        'No embedding model: building a keyword-only index. Set OPENAI_API_KEY or ' +
+          'AI_GATEWAY_API_KEY at build time, or pass `embedding`, for semantic search.',
+      );
+      return { model: null };
+    }
+    spec = OPENAI_API_KEY ? `openai:${DEFAULT_MODEL}` : `openai/${DEFAULT_MODEL}`;
+  }
+  const name =
+    options.embedding === undefined
+      ? `OPENAI_API_KEY is set, so the default embedding, ${spec},`
+      : `embedding: '${spec}'`;
+
+  let choice: EmbeddingChoice;
+  try {
+    choice = await embeddingFromSpec(spec, {
+      ...(options.dimensions ? { dimensions: options.dimensions } : {}),
+      name,
+    });
+  } catch (error) {
+    // Both keys set, without @ai-sdk/openai: AI Gateway serves the same model.
+    if (
+      options.embedding === undefined &&
+      error instanceof EmbeddingSpecError &&
+      process.env.AI_GATEWAY_API_KEY
+    ) {
+      log.warn(`${error.message.replace(/\.?$/, '.')} Embedding through AI Gateway instead.`);
+      return buildEmbedding({ ...options, embedding: `openai/${DEFAULT_MODEL}` }, log);
+    }
+    const message = (error as Error).message.replace(/\.?$/, '.');
+    const hint =
+      options.embedding === undefined
+        ? " Or set `embedding: 'none'` to build a keyword-only index."
+        : '';
+    throw new Error(`ask-my-site: ${message}${hint}`, { cause: error });
+  }
+  const providerOptions = mergeProviderOptions(given, choice.providerOptions);
+  return { model: choice.model, ...(providerOptions ? { providerOptions } : {}) };
+}
+
+/** `a` with `b` over it, provider by provider: `dimensions` joins any other OpenAI options. */
+function mergeProviderOptions(
+  a: EmbeddingProviderOptions | undefined,
+  b: EmbeddingProviderOptions | undefined,
+): EmbeddingProviderOptions | undefined {
+  if (!a || !b) return a ?? b;
+  const merged = { ...a };
+  for (const [provider, values] of Object.entries(b)) {
+    merged[provider] = { ...a[provider], ...values };
+  }
+  return merged;
 }
 
 /**
@@ -84,6 +176,7 @@ export function excluder(exclude: readonly string[]): (path: string) => boolean 
 export async function writeSiteIndex({
   documents,
   embeddingModel,
+  embeddingProviderOptions,
   options,
   file,
   cache,
@@ -92,6 +185,7 @@ export async function writeSiteIndex({
 }: {
   documents: SourceDocument[];
   embeddingModel: EmbeddingModel | null;
+  embeddingProviderOptions?: EmbeddingProviderOptions | undefined;
   options: IndexOptions;
   file: string;
   cache: string;
@@ -109,9 +203,7 @@ export async function writeSiteIndex({
   const { index, stats } = await buildIndex({
     documents,
     embeddingModel,
-    ...(options.embeddingProviderOptions
-      ? { embeddingProviderOptions: options.embeddingProviderOptions }
-      : {}),
+    ...(embeddingProviderOptions ? { embeddingProviderOptions } : {}),
     ...(options.chunking ? { chunking: options.chunking } : {}),
     previous,
   });

@@ -9,7 +9,7 @@ import { version } from '../../package.json' with { type: 'json' };
 import { buildIndex, checkIndex, embeddingModelId, type EmbeddingProviderOptions } from '../build';
 import { DEFAULT_CHUNKING } from '../chunk';
 import type { AskIndexFile } from '../index-file';
-import { mockEmbeddingModel } from '../mock';
+import { embeddingFromSpec, EmbeddingSpecError } from '../node/embedding';
 import {
   detectFramework,
   loadDirectory,
@@ -163,52 +163,17 @@ async function resolveSpec(
   io: CliIO,
   mode: 'build' | 'check',
 ): Promise<EmbeddingChoice> {
-  if (spec === 'none') return { model: null };
-
-  const mock = /^mock(?::(\d+))?$/.exec(spec);
-  if (mock) {
-    const dimensions = mock[1] ? Number(mock[1]) : dims;
-    const model = mockEmbeddingModel(dimensions ? { dimensions } : {});
-    return { model, ...(dimensions ? { dimensions } : {}) };
-  }
-
-  const openai = /^openai:(.+)$/.exec(spec);
-  if (openai?.[1]) {
-    const modelId = openai[1];
-    const providerOptions = dims ? { openai: { dimensions: dims } } : undefined;
-    const choice = {
-      ...(providerOptions ? { providerOptions } : {}),
+  try {
+    return await embeddingFromSpec(spec, {
       ...(dims ? { dimensions: dims } : {}),
-    };
-    // Checking compares ids only, so it needs neither the provider package nor a key.
-    if (mode === 'check') return { model: modelId, ...choice };
-    if (!io.env.OPENAI_API_KEY) throw new UsageError(`--embedding ${spec} needs OPENAI_API_KEY.`);
-    let provider: typeof import('@ai-sdk/openai');
-    try {
-      provider = await import('@ai-sdk/openai');
-    } catch {
-      throw new UsageError(
-        `--embedding ${spec} needs @ai-sdk/openai. Install it: npm i @ai-sdk/openai`,
-      );
-    }
-    const client = provider.createOpenAI({
-      apiKey: io.env.OPENAI_API_KEY,
-      ...(io.env.OPENAI_BASE_URL ? { baseURL: io.env.OPENAI_BASE_URL } : {}),
+      env: io.env,
+      mode,
+      name: `--embedding ${spec}`,
     });
-    return { model: client.embedding(modelId), ...choice };
+  } catch (error) {
+    if (error instanceof EmbeddingSpecError) throw new UsageError(error.message);
+    throw error;
   }
-
-  const gateway = /^([\w-]+)\/(.+)$/.exec(spec);
-  if (gateway?.[1]) {
-    const providerOptions = dims ? { [gateway[1]]: { dimensions: dims } } : undefined;
-    return {
-      model: spec,
-      ...(providerOptions ? { providerOptions } : {}),
-      ...(dims ? { dimensions: dims } : {}),
-    };
-  }
-
-  throw new UsageError(`Unknown --embedding "${spec}". Run ask-my-site --help.`);
 }
 
 async function loadConfig(path: string | undefined, io: CliIO): Promise<AskConfig> {
