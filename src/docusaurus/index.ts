@@ -17,6 +17,7 @@ import {
   checkIndexOptions,
   consoleLogger,
   excluder,
+  warnMissingDialogPeers,
   writeSiteIndex,
   type IndexOptions,
 } from '../integrations/build';
@@ -70,6 +71,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 export default function askMySite(context: LoadContext, options: AskMySiteOptions = {}) {
   checkIndexOptions(options);
+  warnMissingDialogPeers(consoleLogger());
   const { title: siteTitle, titleDelimiter = '|' } = context.siteConfig;
   const indexFile = (options.indexFile ?? 'ask-index.json').replace(/^\/+/, '');
   const data: AskMySiteGlobalData = {

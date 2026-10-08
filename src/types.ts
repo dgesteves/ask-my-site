@@ -16,6 +16,14 @@ export interface SourceDocument {
    * anchors citations deep-link to.
    */
   content: string;
+  /**
+   * Where heading anchors come from. `slug`, the default, slugs each heading as GitHub,
+   * rehype-slug and Docusaurus do, unless it has an explicit `{#id}`: right for Markdown that a
+   * renderer gives those ids. `explicit` takes only `{#id}`s, for a page that already has its ids,
+   * such as built HTML (`fromHtml` sets it); a heading without one links to the nearest heading
+   * above it that has one, or to the page.
+   */
+  anchors?: 'slug' | 'explicit';
 }
 
 /** A retrievable slice of a document. Chunks never span two sections. */

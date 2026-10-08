@@ -482,7 +482,8 @@ function isNoindex(html: string): boolean {
  * (`root: 'article'` reads the articles first, and `root` can also be a selector; see
  * {@link HtmlMeta.root}). Navigation, scripts, styles, forms and other chrome are dropped, and so
  * is whatever `ignore` selects. Headings become `#` lines and keep their `id` attribute as the
- * anchor; `<pre>` becomes a fenced code block. Pages with
+ * anchor, and a heading without one gets none (`anchors: 'explicit'`); `<pre>` becomes a fenced
+ * code block. Pages with
  * `<meta name="robots" content="noindex">` return `null`.
  *
  * This is a tag stripper, not a DOM parser: it is fast and dependency-free, and it expects the
@@ -546,7 +547,8 @@ export function fromHtml(original: string, meta: HtmlMeta): SourceDocument | nul
   const content = htmlToText(
     (meta.root === 'article' ? docusaurusMarkdown(html) : undefined) ?? html,
   );
-  return { id: meta.id, url: meta.url, title, content };
+  // Headings link only to the ids the page has: one without an id has no anchor to land on.
+  return { id: meta.id, url: meta.url, title, content, anchors: 'explicit' };
 }
 
 /** A fence longer than any backtick run inside the code, so the code can never close it. */

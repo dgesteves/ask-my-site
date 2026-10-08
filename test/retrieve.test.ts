@@ -63,6 +63,39 @@ describe('retrieve', () => {
     expect(result.best.similarity).toBeLessThan(MOCK_MIN_SIMILARITY);
   });
 
+  it('counts a mock similarity only from chunks that share a word with the question', async () => {
+    // A small site's install page: "France" and "npm" hash to the same bucket at 512 dimensions.
+    const { index: file } = await buildIndex({
+      documents: [
+        {
+          id: 'docs/install.html',
+          url: '/docs/install.html',
+          title: 'Installing Acme',
+          content:
+            'Install the package with npm.\n\n## Install with npm\n\nRun `npm install acme-widgets` in your project folder.',
+        },
+      ],
+      embeddingModel: mockEmbeddingModel({ dimensions: DIMS }),
+    });
+    const query = (text: string) => ({ text, vector: hashEmbedding(text, DIMS) });
+    const options = { minSimilarity: MOCK_MIN_SIMILARITY };
+    const offTopic = query('What is the capital of France?');
+
+    // The collision alone clears the threshold, without a word in common...
+    const index = loadIndex(file);
+    const collided = retrieve(index, offTopic, { ...options, similarityNeedsKeyword: false });
+    expect(collided.answerable).toBe(true);
+    expect(collided.best.keywordCoverage).toBe(0);
+    expect(collided.best.similarity).toBeGreaterThan(MOCK_MIN_SIMILARITY);
+    // ...so a mock index does not count it, and still answers what the page is about.
+    expect(retrieve(index, offTopic, options)).toMatchObject({ answerable: false, hits: [] });
+    expect(retrieve(index, query('How do I install it?'), options).answerable).toBe(true);
+
+    // Real embeddings match meaning without shared words, so other indexes count similarity alone.
+    const semantic = loadIndex({ ...file, embedding: { ...file.embedding!, model: 'embed-x' } });
+    expect(retrieve(semantic, offTopic, options).answerable).toBe(true);
+  });
+
   it('lets either signal alone make a chunk relevant', async () => {
     const index = await setup();
     const text = 'memoryRateLimit';

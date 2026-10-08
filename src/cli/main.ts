@@ -47,6 +47,8 @@ Options:
       --ignore <glob>          Skip matching files; repeatable
       --framework <name>       How file paths become URLs: docusaurus | starlight | next | none
                                (default: detected from the framework config above <dir>)
+      --clean-urls             Drop .html from HTML files' URLs, for hosts that serve
+                               page.html at /page (default: keep it)
   -c, --config <file>          Module whose default export is an AskConfig
   -q, --quiet                  Only print errors
   -h, --help                   Show this help
@@ -79,6 +81,7 @@ interface Flags {
   chunking: ChunkingOptions;
   ignore: string[];
   framework?: Framework | 'auto';
+  cleanUrls: boolean;
   config?: string;
   quiet: boolean;
 }
@@ -150,8 +153,9 @@ async function chooseEmbedding(
     if (io.env.AI_GATEWAY_API_KEY)
       return resolveSpec('openai/text-embedding-3-small', dims, io, mode);
     throw new UsageError(
-      'No embedding model. Set OPENAI_API_KEY, pass --embedding <spec>, or use ' +
-        '--embedding none for a keyword-only index.',
+      'No embedding model. Set OPENAI_API_KEY or pass --embedding <spec>. To try it without a ' +
+        'key, use --embedding mock (offline, deterministic); --embedding none builds a ' +
+        'keyword-only index.',
     );
   }
   return resolveSpec(spec, dims, io, mode);
@@ -217,6 +221,7 @@ function parseFlags(args: string[]): {
         'chunk-overlap': { type: 'string' },
         ignore: { type: 'string', multiple: true },
         framework: { type: 'string' },
+        'clean-urls': { type: 'boolean' },
         config: { type: 'string', short: 'c' },
         quiet: { type: 'boolean', short: 'q' },
         help: { type: 'boolean', short: 'h' },
@@ -253,6 +258,7 @@ function parseFlags(args: string[]): {
       },
       ignore: values.ignore ?? [],
       ...(framework ? { framework: framework as Framework | 'auto' } : {}),
+      cleanUrls: values['clean-urls'] ?? false,
       ...(values.config ? { config: values.config } : {}),
       quiet: values.quiet ?? false,
     },
@@ -305,6 +311,7 @@ export async function main(args: string[], io: CliIO): Promise<number> {
         ...(await loadDirectory(root, {
           ...(baseUrl ? { baseUrl } : {}),
           framework,
+          cleanUrls: flags.cleanUrls || (config.cleanUrls ?? false),
           ignore: [...(config.ignore ?? []), ...flags.ignore],
         })),
       );

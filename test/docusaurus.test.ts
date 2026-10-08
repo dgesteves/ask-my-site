@@ -2,11 +2,13 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import askMySite from '../src/docusaurus';
 import { parseIndexFile } from '../src/index-file';
+import { consoleLogger, warnMissingDialogPeers } from '../src/integrations/build';
 import { mockEmbeddingModel } from '../src/mock';
 
 let root: string;
@@ -296,6 +298,23 @@ describe('ask-my-site/docusaurus', () => {
       url: expect.stringMatching(/\/embedding-model$/) as string,
       body: { providerOptions: { openai: { dimensions: 4 } } },
     });
+  });
+
+  it('names the packages the dialog needs when the site lacks them', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { context } = await site();
+    // Installed here, as the site's own packages.
+    askMySite(context, {});
+    expect(warn).not.toHaveBeenCalled();
+
+    // Resolved from a folder with only cmdk installed.
+    await mkdir(join(root, 'node_modules', 'cmdk'), { recursive: true });
+    await writeFile(join(root, 'node_modules', 'cmdk', 'index.js'), '');
+    await writeFile(join(root, 'node_modules', 'cmdk', 'package.json'), '{"name":"cmdk"}');
+    warnMissingDialogPeers(consoleLogger(), pathToFileURL(join(root, 'site.js')));
+    expect(warn).toHaveBeenCalledWith(
+      '[ask-my-site] The ask dialog renders with react, react-dom, @radix-ui/react-dialog, which are not installed: npm i react react-dom @radix-ui/react-dialog',
+    );
   });
 
   it('hands the dialog its settings, and points Docusaurus at files that exist', async () => {

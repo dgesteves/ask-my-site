@@ -69,13 +69,23 @@ const isAbort = (error: unknown): boolean =>
     ? error.name === 'AbortError'
     : (error as { name?: unknown } | null)?.name === 'AbortError';
 
-async function errorFrom(response: Response): Promise<AskError> {
-  let message = `The request failed (${String(response.status)}).`;
+async function errorFrom(response: Response, endpoint: string): Promise<AskError> {
+  let message =
+    response.status === 404
+      ? 'Answers aren’t available here right now.'
+      : `Something went wrong (${String(response.status)}). Please try again.`;
   try {
     const body = (await response.json()) as Partial<AskErrorBody>;
     if (typeof body.error?.message === 'string') message = body.error.message;
   } catch {
     // Not JSON; keep the generic message.
+  }
+  if (response.status === 404 && isDevelopment()) {
+    const url = typeof location === 'undefined' ? endpoint : new URL(endpoint, location.href).href;
+    console.warn(
+      `[ask-my-site] POST ${url} returned 404: no ask endpoint answers there. Point the dialog's ` +
+        '`endpoint` at one (see https://github.com/dgesteves/ask-my-site#readme).',
+    );
   }
   if (response.status === 429) {
     const retryAfter = Number(response.headers.get('retry-after'));
@@ -88,6 +98,20 @@ async function errorFrom(response: Response): Promise<AskError> {
   }
   return { kind: 'http', message, status: response.status };
 }
+
+/** A development build (as the bundler defines `NODE_ENV`), or a page served from this machine. */
+function isDevelopment(): boolean {
+  let env: string | undefined;
+  try {
+    env = process.env.NODE_ENV;
+  } catch {
+    // No bundler defined it, and there is no `process` in a browser.
+  }
+  return (env !== undefined && env !== 'production') || isLocalPage();
+}
+
+const isLocalPage = (): boolean =>
+  typeof location !== 'undefined' && /^(?:localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
 
 /** Coalesces text deltas into at most one state update per animation frame. */
 function frameScheduler(): { schedule: (fn: () => void) => void; flush: () => void } {
@@ -181,7 +205,7 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     if (!response.ok || !response.body) {
       const error = response.ok
         ? { kind: 'stream' as const, message: 'The response had no body.' }
-        : await errorFrom(response);
+        : await errorFrom(response, endpoint);
       // A newer question may have started while the error body was being read.
       if (controller.signal.aborted) return;
       commit({ status: 'error', error });

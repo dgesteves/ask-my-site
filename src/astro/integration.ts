@@ -10,6 +10,7 @@ import {
   buildEmbedding,
   checkIndexOptions,
   excluder,
+  warnMissingDialogPeers,
   writeSiteIndex,
   type IndexOptions,
 } from '../integrations/build';
@@ -70,7 +71,8 @@ export function createIntegration(
   return {
     name: 'ask-my-site',
     hooks: {
-      'astro:config:setup': ({ injectScript, updateConfig }) => {
+      'astro:config:setup': ({ injectScript, updateConfig, logger }) => {
+        warnMissingDialogPeers(logger);
         // The stylesheets go into every page's CSS: a `page` script's CSS is built but not linked.
         injectScript(
           'page-ssr',

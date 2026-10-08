@@ -49,6 +49,13 @@ export interface RetrievalOptions {
    * IDF, so one such word can sink a reasonable question when retrieval is keyword-only.
    */
   minKeywordCoverage?: number;
+  /**
+   * Whether a chunk that clears `minSimilarity` must also share a word with the question to
+   * count. Default: `true` for an index built with `mockEmbeddingModel`, whose similarity comes
+   * from shared words, so without one it is a hash collision; `false` otherwise, since real
+   * embeddings match meaning without shared words.
+   */
+  similarityNeedsKeyword?: boolean;
 }
 
 export interface RetrievalHit {
@@ -79,7 +86,10 @@ export const DEFAULT_RETRIEVAL = {
   rrfK: 60,
   minSimilarity: 0.25,
   minKeywordCoverage: 0.5,
-} as const satisfies Required<RetrievalOptions>;
+} as const satisfies Required<Omit<RetrievalOptions, 'similarityNeedsKeyword'>>;
+
+/** The model id `mockEmbeddingModel` records in an index. */
+const MOCK_EMBEDDING = /^mock-hash-\d+$/;
 
 /**
  * Builds the in-memory search structures from an index file, its JSON text, or the parsed JSON
@@ -146,8 +156,12 @@ export function retrieve(
   const similarities =
     index.vectors && query.vector ? index.vectors.similarities(query.vector) : null;
 
+  const needsKeyword =
+    opts.similarityNeedsKeyword ?? MOCK_EMBEDDING.test(index.embedding?.model ?? '');
   const relevant = (i: number): boolean =>
-    (similarities !== null && (similarities[i] ?? 0) >= opts.minSimilarity) ||
+    (similarities !== null &&
+      (similarities[i] ?? 0) >= opts.minSimilarity &&
+      (!needsKeyword || (keyword.coverage[i] ?? 0) > 0)) ||
     (keyword.coverage[i] ?? 0) >= opts.minKeywordCoverage;
 
   const keywordList = keyword.ranked.slice(0, opts.candidates).filter(relevant);

@@ -37,11 +37,13 @@ const embeddingModel = openai.embedding('text-embedding-3-small');
 export const POST = createAskHandler({ index, model: openai('gpt-5.4-mini'), embeddingModel });
 ```
 
-Render the dialog in your layout, with `import 'ask-my-site/react/styles.css'`:
+Render the dialog in your layout, with `import 'ask-my-site/react/styles.css'` and `import 'ask-my-site/embed/launcher.css'` for its button:
 
 ```tsx
-<AskDialog />
+<AskDialog launcher />
 ```
+
+It opens from a floating "Ask AI" button, as on the plugins' sites, and from <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>K</kbd>. Leave `launcher` out to open it from your own button (`trigger`) or the shortcut alone.
 
 That is the whole integration: five lines, imports aside. [Full setup](#full-setup) is below, and no API key is needed to [try the example](#try-it-without-an-api-key).
 
@@ -51,7 +53,7 @@ That is the whole integration: five lines, imports aside. [Full setup](#full-set
 - **`--check` for CI.** Fails the build when the committed index no longer matches the content. Offline: no model call, no API key.
 - **Hybrid retrieval in memory.** BM25 and cosine similarity over int8 vectors, merged with reciprocal rank fusion. No vector database, no network hop.
 - **Says "I don't know".** A relevance gate refuses before the model is called when nothing relevant is found; the grounded prompt is the second line of defense.
-- **Citations that land.** Every chunk belongs to exactly one heading, so `[1]` links to the section, not the page. Anchors are the slugs GitHub, rehype-slug and Docusaurus generate (github-slugger, applied to the heading as CommonMark renders it), or your own `{#id}` and HTML `id`s.
+- **Citations that land.** Every chunk belongs to exactly one heading, so `[1]` links to the section, not the page. Anchors are the slugs GitHub, rehype-slug and Docusaurus generate (github-slugger, applied to the heading as CommonMark renders it), or your own `{#id}` and HTML `id`s; from built HTML, a citation links only to an `id` the page has.
 - **Any AI SDK model.** Embeddings through `embedMany`/`embed` and answers through `streamText`, from any provider package or an AI Gateway model string.
 - **Web-standard handler.** `(Request) => Promise<Response>` built on Web APIs only, so it mounts in Next.js route handlers, Hono, Bun, Deno or Cloudflare Workers. It streams the AI SDK UI message protocol, so `useChat` can consume it too.
 - **Accessible ⌘K dialog.** Radix Dialog and cmdk; focus management, `aria-live` answer, reduced motion, light and dark themes, unstyled-friendly.
@@ -113,12 +115,14 @@ export const POST = createAskHandler({
 'use client';
 import { AskDialog } from 'ask-my-site/react';
 import 'ask-my-site/react/styles.css';
+import 'ask-my-site/embed/launcher.css';
 import { useRouter } from 'next/navigation';
 
 export function Ask() {
   const router = useRouter();
   return (
     <AskDialog
+      launcher
       suggestions={['How do I install it?', 'Which runtimes are supported?']}
       onNavigate={(url, event) => {
         event.preventDefault();
@@ -321,13 +325,13 @@ For Hugo, Jekyll, Eleventy, MkDocs or plain HTML, one script tag adds the dialog
 ></script>
 ```
 
-1. **Index the site** with the [CLI](#cli): from its Markdown, or from the HTML your generator built, which has the URLs it actually serves (`public` after `hugo`, `_site` after Jekyll or Eleventy, `site` after `mkdocs build`). HTML is read from each page's `<main>`.
+1. **Index the site** with the [CLI](#cli): from its Markdown, or from the HTML your generator built, which has the URLs it actually serves (`public` after `hugo`, `_site` after Jekyll or Eleventy, `site` after `mkdocs build`). HTML is read from each page's `<main>`, and citations link to the headings' own `id`s.
 2. **Deploy the endpoint** next to the site, with one of the [recipes](#docusaurus) or the [full setup](#full-setup), reading your index.
 3. **Add the script tag** to your base template.
 
 It mounts itself once the page has loaded, with its tag's attributes: `data-endpoint` (default `/api/ask`), `data-title`, `data-placeholder`, `data-suggestions` (a JSON array, as in `data-suggestions='["How do I install it?"]'`), `data-shortcut` (default `i`; `"false"` turns it off), `data-button-label` (default "Ask AI"; `"false"` hides the button) and `data-theme` (`auto`, the default, follows `data-theme` on `<html>` when the site sets one, and the system setting otherwise; or `light` or `dark`). With `data-manual` it waits for `window.AskMySite.mount(options)`, which takes the same options and returns `{ open, close, unmount }`, for example to open the dialog from your own search box. Pin an exact version (`ask-my-site@0.4.0`) in production.
 
-In an app with a bundler, `mountAskDialog(options)` from `ask-my-site/embed` does the same with your own React; import `ask-my-site/react/styles.css` and `ask-my-site/embed/launcher.css` with it.
+In an app with a bundler, `mountAskDialog(options)` from `ask-my-site/embed` does the same with your own React (install `react`, `react-dom`, `@radix-ui/react-dialog` and `cmdk`); import `ask-my-site/react/styles.css` and `ask-my-site/embed/launcher.css` with it.
 
 ## Try it without an API key
 
@@ -374,10 +378,14 @@ ask-my-site index [dir] [options]
       --chunk-overlap <chars>  Characters shared by consecutive chunks (default: 150)
       --ignore <glob>          Skip matching files; repeatable
       --framework <name>       docusaurus | starlight | next | none (default: detected)
+      --clean-urls             Drop .html from HTML files' URLs (default: keep it)
   -c, --config <file>          Module whose default export is an AskConfig
+  -q, --quiet                  Only print errors
+  -h, --help                   Show this help
+  -v, --version                Show the version
 ```
 
-Without `--embedding`, it uses `openai:text-embedding-3-small` when `OPENAI_API_KEY` is set (or `openai/text-embedding-3-small` through AI Gateway when only `AI_GATEWAY_API_KEY` is), and fails otherwise rather than silently building a keyword-only index. `.env` and `.env.local` are read without overriding the environment. `index.md`, `_index.md` (Hugo), `index.html` and `README.md` stand for their folder; frontmatter `url` or `permalink` overrides the derived URL, and `draft: true`, `ask: false` or `noindex: true` excludes a page. Symlinked files and folders are followed, except a link back into a folder already being read. Ids and URLs use the file path in Unicode NFC, so a name like `café.md` gets the same id on macOS and Linux. `--ignore` globs support `*`, `**`, `?`, `[...]` and `{a,b}`, matched case-sensitively on every platform.
+Without `--embedding`, it uses `openai:text-embedding-3-small` when `OPENAI_API_KEY` is set (or `openai/text-embedding-3-small` through AI Gateway when only `AI_GATEWAY_API_KEY` is), and fails otherwise rather than silently building a keyword-only index. `.env` and `.env.local` are read without overriding the environment. `index.md`, `_index.md` (Hugo), `index.html` and `README.md` stand for their folder. Other HTML files keep `.html` in their URL (`docs/install.html` → `/docs/install.html`), as a server without clean URLs serves them; `--clean-urls` drops it for a host that serves `/docs/install`. Frontmatter `url` or `permalink` overrides the derived URL, and `draft: true`, `ask: false` or `noindex: true` excludes a page. Symlinked files and folders are followed, except a link back into a folder already being read. Ids and URLs use the file path in Unicode NFC, so a name like `café.md` gets the same id on macOS and Linux. `--ignore` globs support `*`, `**`, `?`, `[...]` and `{a,b}`, matched case-sensitively on every platform.
 
 Citations have to land on the URL your site actually serves, and docs frameworks do not all map files to URLs the same way. The CLI looks for the framework's config in or above the content folder and follows its rules, printing which it picked:
 
@@ -420,7 +428,7 @@ export default {
 | `embeddingProviderOptions` | none                        | Must match the build, e.g. `{ openai: { dimensions: 512 } }` (dimension mismatches are reported).                                                                                                                              |
 | `siteName`                 | `"this site"`               | Used in the instructions and the refusal.                                                                                                                                                                                      |
 | `instructions`             | grounded defaults           | A string, or `(defaults) => string` to extend them.                                                                                                                                                                            |
-| `retrieval`                | tuned                       | `{ topK: 6, candidates: 40, rrfK: 60, minSimilarity: 0.25, minKeywordCoverage: 0.5 }`                                                                                                                                          |
+| `retrieval`                | tuned                       | `{ topK: 6, candidates: 40, rrfK: 60, minSimilarity: 0.25, minKeywordCoverage: 0.5 }`, and `similarityNeedsKeyword`, on for a mock index, whose similarity is lexical.                                                         |
 | `maxContextChars`          | `8000`                      | Source text sent to the model.                                                                                                                                                                                                 |
 | `maxQuestionLength`        | `500`                       | Longer questions get a 400.                                                                                                                                                                                                    |
 | `maxBodyBytes`             | 64 KiB                      | Counted while reading, so a chunked upload cannot exhaust memory.                                                                                                                                                              |
@@ -466,19 +474,20 @@ If the limiter itself fails (Upstash unreachable, a bug in your own), the handle
 
 ### `<AskDialog />` and `useAsk()` from `ask-my-site/react`
 
-| Prop                                  | Default            | Notes                                                                                                 |
-| ------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------- |
-| `endpoint`                            | `/api/ask`         | Also `headers` and a custom `fetch`.                                                                  |
-| `open`, `defaultOpen`, `onOpenChange` | uncontrolled       | Controlled or uncontrolled.                                                                           |
-| `shortcut`                            | `"k"`              | With ⌘ or Ctrl; `false` disables it.                                                                  |
-| `trigger`                             | none               | An element that opens the dialog, e.g. a search button.                                               |
-| `suggestions`                         | `[]`               | Offered before typing, filtered as you type.                                                          |
-| `onNavigate`                          | browser navigation | `(url, event)` for citations and sources; `preventDefault()` to route yourself.                       |
-| `theme`                               | `"system"`         | `"light"` or `"dark"` to pin it.                                                                      |
-| `classNames`                          | none               | Extra classes per part: `overlay`, `content`, `input`, `list`, `item`, `answer`, `sources`, `footer`. |
-| `title`, `placeholder`, `footer`      | sensible defaults  | `title` is the dialog's accessible name.                                                              |
+| Prop                                  | Default            | Notes                                                                                                        |
+| ------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `endpoint`                            | `/api/ask`         | Also `headers` and a custom `fetch`.                                                                         |
+| `open`, `defaultOpen`, `onOpenChange` | uncontrolled       | Controlled or uncontrolled.                                                                                  |
+| `shortcut`                            | `"k"`              | With ⌘ or Ctrl; `false` disables it.                                                                         |
+| `trigger`                             | none               | An element that opens the dialog, e.g. a search button.                                                      |
+| `launcher`                            | `false`            | `true` or a label: a floating "Ask AI" button with the shortcut, styled by `ask-my-site/embed/launcher.css`. |
+| `suggestions`                         | `[]`               | Offered before typing, filtered as you type.                                                                 |
+| `onNavigate`                          | browser navigation | `(url, event)` for citations and sources; `preventDefault()` to route yourself.                              |
+| `theme`                               | `"system"`         | `"light"` or `"dark"` to pin it.                                                                             |
+| `classNames`                          | none               | Extra classes per part: `overlay`, `content`, `input`, `list`, `item`, `answer`, `sources`, `footer`.        |
+| `title`, `placeholder`, `footer`      | sensible defaults  | `title` is the dialog's accessible name.                                                                     |
 
-`useAsk({ endpoint })` returns `{ ask, stop, reset, status, question, answer, sources, refused, truncated, retrieval, error }`. `status` is `idle | loading | streaming | done | error`; `error.kind` is `rate-limited | http | network | stream`, with `retryAfter` for rate limits. `truncated` is `true` when the model stopped at its output limit (`generation.maxOutputTokens`, 800 by default), so a `done` answer may be incomplete; the dialog says so under the answer. Sources arrive before the first word, deltas are batched to one render per animation frame, and `stop()` keeps the partial answer. Closing the dialog, by Escape, a click outside or a controlling parent, stops the answer in flight so the model is not left generating for nobody.
+`useAsk({ endpoint })` returns `{ ask, stop, reset, status, question, answer, sources, refused, truncated, retrieval, error }`. `status` is `idle | loading | streaming | done | error`; `error.kind` is `rate-limited | http | network | stream`, with `retryAfter` for rate limits. When the endpoint answers 404, the visitor reads that answers aren't available, and in development (a dev build, or a page on localhost) the console says which URL the dialog posted to. `truncated` is `true` when the model stopped at its output limit (`generation.maxOutputTokens`, 800 by default), so a `done` answer may be incomplete; the dialog says so under the answer. Sources arrive before the first word, deltas are batched to one render per animation frame, and `stop()` keeps the partial answer. Closing the dialog, by Escape, a click outside or a controlling parent, stops the answer in flight so the model is not left generating for nobody.
 
 Theming is CSS custom properties: `.ask-dialog { --ask-accent: #7c3aed; --ask-radius: 8px; }`. Skip the stylesheet entirely and style the stable `ask-*` classes, or pass Tailwind classes through `classNames`.
 

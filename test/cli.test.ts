@@ -59,7 +59,8 @@ describe('ask-my-site index', () => {
     expect(index.embedding).toEqual({ model: 'mock-hash-512', dimensions: 512 });
     expect(index.documents).toEqual([
       { id: 'guides/deploy.mdx', url: '/docs/guides/deploy', title: 'Deploying' },
-      { id: 'guides/legacy.html', url: '/docs/guides/legacy', title: 'Legacy' },
+      // A server without clean URLs serves the file by its name.
+      { id: 'guides/legacy.html', url: '/docs/guides/legacy.html', title: 'Legacy' },
       { id: 'index.md', url: '/docs', title: 'Home' },
     ]);
     expect(index.chunks.find((c) => c.anchor === 'rollbacks')?.text).toBe(
@@ -210,6 +211,13 @@ describe('ask-my-site index', () => {
     expect(result.stdout).toContain(`, 1 embedded, ${String(total - 1)} reused`);
   });
 
+  it('drops .html from URLs with --clean-urls', async () => {
+    expect((await run('index', 'content', '-e', 'none', '--clean-urls')).code).toBe(0);
+    expect((await readIndex()).documents.find((d) => d.id === 'guides/legacy.html')?.url).toBe(
+      '/guides/legacy',
+    );
+  });
+
   it('builds a keyword-only index with --embedding none', async () => {
     expect((await run('index', 'content', '-e', 'none', '--chunk-size', '400')).code).toBe(0);
     const index = await readIndex();
@@ -239,6 +247,7 @@ describe('ask-my-site index', () => {
 
   it.each([
     [['index', 'content'], 'No embedding model. Set OPENAI_API_KEY'],
+    [['index', 'content'], 'To try it without a key, use --embedding mock'],
     [['index', 'content', '-e', 'openai:text-embedding-3-small'], 'needs OPENAI_API_KEY'],
     [['index', 'content', '-e', 'bogus'], 'Unknown --embedding bogus. Use openai:<model>'],
     [['index', 'content', '--chunk-size', 'big'], '--chunk-size must be a non-negative integer'],
@@ -250,6 +259,17 @@ describe('ask-my-site index', () => {
     const result = await run(...args);
     expect(result.code).toBe(2);
     expect(result.stderr).toContain(message);
+  });
+
+  it('documents every option of --help in the README', async () => {
+    const help = (await run('--help')).stdout;
+    const readme = await readFile(join(import.meta.dirname, '../README.md'), 'utf8');
+    const block = /### CLI\n\n```\n([\s\S]*?)```/.exec(readme)?.[1] ?? '';
+    const options = help.match(/^ +(?:-\w, )?--[\w-]+/gm) ?? [];
+    expect(options.length).toBeGreaterThan(10);
+    for (const option of options.map((line) => line.trim())) {
+      expect([option, block.includes(option)]).toEqual([option, true]);
+    }
   });
 
   it('prints help and version', async () => {

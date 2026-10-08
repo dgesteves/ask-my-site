@@ -3,6 +3,7 @@ import { act, cleanup, render, renderHook, screen, waitFor, within } from '@test
 import userEvent from '@testing-library/user-event';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
+import axe from 'axe-core';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildIndex } from '../src';
@@ -129,6 +130,37 @@ describe('useAsk', () => {
     expect(broken.result.current.error).toMatchObject({ kind: 'http', status: 502 });
   });
 
+  it('explains a missing endpoint kindly, and in development says where it posted', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const notFound = () =>
+      Promise.resolve(
+        new Response('<h1>404</h1>', { status: 404, headers: { 'content-type': 'text/html' } }),
+      );
+    const { result } = renderHook(() => useAsk({ fetch: notFound }));
+    await act(() => result.current.ask('int8'));
+    expect(result.current.error).toEqual({
+      kind: 'http',
+      status: 404,
+      message: 'Answers aren’t available here right now.',
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(`POST ${new URL('/api/ask', location.href).href} returned 404`),
+    );
+
+    // A production build on a deployed site keeps the console quiet.
+    warn.mockClear();
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubGlobal('location', new URL('https://docs.example.com/guide/'));
+    try {
+      await act(() => result.current.ask('int8'));
+      expect(result.current.error?.status).toBe(404);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('stop() keeps the partial answer and ignores the rest of the stream', async () => {
     const slow = handlerFetch({ model: mockLanguageModel({ initialDelayMs: 0, wordDelayMs: 30 }) });
     const { result } = renderHook(() => useAsk({ fetch: slow }));
@@ -250,6 +282,28 @@ describe('AskDialog', () => {
     expect(document.activeElement).toBe(elsewhere);
   });
 
+  it('passes axe before and after it answers', async () => {
+    const user = userEvent.setup();
+    render(<AskDialog fetch={handlerFetch()} defaultOpen suggestions={['How do I install it?']} />);
+    const dialog = await screen.findByRole('dialog');
+    // jsdom has no layout, so color contrast is left to the theme's tests (styles.test.ts).
+    const violations = async () =>
+      (await axe.run(dialog)).violations.map(
+        (v) => `${v.id}: ${v.nodes.map((node) => node.target.join(' ')).join(', ')}`,
+      );
+    expect(await violations()).toEqual([]);
+
+    await user.type(within(dialog).getByRole('combobox'), 'How is an int8 vector scaled?{Enter}');
+    await waitFor(() => {
+      expect(dialog.querySelector('[data-status="done"]')).not.toBeNull();
+    });
+    expect(within(dialog).getByRole('navigation', { name: 'Sources' })).toBeTruthy();
+    // The input's aria-controls still points at the list, which the answer replaced.
+    const controls = within(dialog).getByRole('combobox').getAttribute('aria-controls') ?? '';
+    expect(document.getElementById(controls)).not.toBeNull();
+    expect(await violations()).toEqual([]);
+  });
+
   it('leaves the shortcut to text fields and editors, where ⌘I means italic', async () => {
     const user = userEvent.setup();
     render(
@@ -291,6 +345,26 @@ describe('AskDialog', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
+  });
+
+  it('shows a floating launcher, with its shortcut, when asked to', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<AskDialog fetch={handlerFetch()} />);
+    expect(screen.queryByRole('button')).toBeNull();
+
+    rerender(<AskDialog fetch={handlerFetch()} launcher theme="dark" />);
+    const button = screen.getByRole('button', { name: /Ask AI/ });
+    expect(button.className).toBe('ask-my-site-launcher');
+    expect(button.dataset.askTheme).toBe('dark');
+    expect(button.getAttribute('aria-keyshortcuts')).toBe('Meta+K Control+K');
+    await user.click(button);
+    expect(await screen.findByRole('dialog', { name: 'Ask this site' })).toBeTruthy();
+    await user.keyboard('{Escape}');
+
+    rerender(<AskDialog fetch={handlerFetch()} launcher="Ask the docs" shortcut={false} />);
+    const custom = screen.getByRole('button', { name: 'Ask the docs' });
+    expect(custom.getAttribute('aria-keyshortcuts')).toBeNull();
+    expect(custom.querySelector('kbd')).toBeNull();
   });
 
   it('asks a suggestion on click and supports a custom trigger', async () => {
