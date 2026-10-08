@@ -7,47 +7,34 @@
  * function running `createAskHandler` from `ask-my-site/server`); see the README.
  */
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { EmbeddingModel } from 'ai';
-
-import { buildIndex, type EmbeddingProviderOptions } from '../build';
-import { parseIndexFile, serializeIndexFile, type AskIndexFile } from '../index-file';
+import type { AskMySiteDialogOptions as DialogOptions } from '../embed/options';
+import {
+  consoleLogger,
+  defaultEmbedding,
+  excluder,
+  writeSiteIndex,
+  type IndexOptions,
+} from '../integrations/build';
 import { attribute, fromHtml } from '../loaders/html';
-import type { ChunkingOptions, SourceDocument } from '../types';
+import type { SourceDocument } from '../types';
 
 /** What the dialog shows; passed to `AskDialog`. */
-export interface AskMySiteDialogOptions {
+export interface AskMySiteDialogOptions extends DialogOptions {
   /** The dialog's accessible name. Default "Ask {site title}". */
   title?: string;
-  placeholder?: string;
-  /** Questions offered before the visitor types. */
-  suggestions?: string[];
-  /** Opens the dialog with ⌘ or Ctrl. Default `"i"`, so ⌘K stays with the site's search. `false` disables it. */
-  shortcut?: string | false;
-  /** The floating button's label. Default "Ask AI". `false` hides the button (open it with the shortcut). */
-  buttonLabel?: string | false;
 }
 
 // A type, not an interface, so it fits Docusaurus's `PluginOptions` index signature in a
 // `docusaurus.config.ts` plugins entry.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
-export type AskMySiteOptions = {
+export type AskMySiteOptions = IndexOptions & {
   /** The plugin instance's id, set by Docusaurus. Default `"default"`. */
   id?: string;
   /** URL the dialog posts questions to. Default `/api/ask`. */
   endpoint?: string;
-  /**
-   * The embedding model for the index; the endpoint must use the same one. Default: OpenAI's
-   * `text-embedding-3-small` when `OPENAI_API_KEY` is set at build time, the same model through
-   * AI Gateway when only `AI_GATEWAY_API_KEY` is, else `null`: a keyword-only index, with a warning.
-   */
-  embeddingModel?: EmbeddingModel | null;
-  /** Passed to the embedding model, default or not, e.g. `{ openai: { dimensions: 512 } }`. */
-  embeddingProviderOptions?: EmbeddingProviderOptions;
-  chunking?: ChunkingOptions;
   /** Where the index is written in the build output, and served from. Default `ask-index.json`. */
   indexFile?: string;
   /**
@@ -78,11 +65,6 @@ interface PostBuildProps {
   routesPaths: string[];
 }
 
-interface Logger {
-  info: (message: string) => void;
-  warn: (message: string) => void;
-}
-
 const here = dirname(fileURLToPath(import.meta.url));
 
 export default function askMySite(context: LoadContext, options: AskMySiteOptions = {}) {
@@ -111,53 +93,28 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
     },
 
     async postBuild({ outDir, routesPaths }: PostBuildProps) {
-      const log = logger();
+      const log = consoleLogger();
       const documents = await loadBuiltPages(outDir, routesPaths, context.baseUrl, {
         exclude: options.exclude ?? [],
         titleSuffix: ` ${titleDelimiter} ${siteTitle}`,
       });
-      const embeddingModel = await defaultEmbedding(options, log);
-
-      // The previous build's index, so unchanged pages reuse their vectors instead of being
-      // embedded again. One file per locale and plugin instance, in node_modules/.cache, which
-      // Netlify and Vercel keep between builds (.docusaurus is not kept).
-      const cache = join(
-        context.siteDir,
-        'node_modules',
-        '.cache',
-        'ask-my-site',
-        `${context.i18n.currentLocale}-${options.id ?? 'default'}.json`,
-      );
-      let previous: AskIndexFile | null = null;
-      try {
-        previous = parseIndexFile(await readFile(cache, 'utf8'));
-      } catch {
-        // First build, or an index from an incompatible version: embed everything.
-      }
-
-      const started = Date.now();
-      const { index, stats } = await buildIndex({
+      await writeSiteIndex({
         documents,
-        embeddingModel,
-        ...(options.embeddingProviderOptions
-          ? { embeddingProviderOptions: options.embeddingProviderOptions }
-          : {}),
-        ...(options.chunking ? { chunking: options.chunking } : {}),
-        previous,
+        embeddingModel: await defaultEmbedding(options, log),
+        options,
+        file: join(outDir, indexFile),
+        // One file per locale and plugin instance, in node_modules/.cache, which Netlify and
+        // Vercel keep between builds (.docusaurus is not kept).
+        cache: join(
+          context.siteDir,
+          'node_modules',
+          '.cache',
+          'ask-my-site',
+          `${context.i18n.currentLocale}-${options.id ?? 'default'}.json`,
+        ),
+        name: indexFile,
+        log,
       });
-      const json = serializeIndexFile(index);
-      const target = join(outDir, indexFile);
-      await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, json, 'utf8');
-      await mkdir(dirname(cache), { recursive: true });
-      await writeFile(cache, json, 'utf8');
-
-      const reuse = embeddingModel
-        ? `, ${String(stats.embedded)} embedded, ${String(stats.reused)} reused`
-        : ', keyword-only';
-      log.info(
-        `Indexed ${String(documents.length)} pages into ${String(stats.chunks)} chunks${reuse} → ${indexFile} (${String(Math.round(json.length / 1024))} KB, ${((Date.now() - started) / 1000).toFixed(1)}s)`,
-      );
     },
   };
 }
@@ -210,9 +167,7 @@ async function loadBuiltPages(
   baseUrl: string,
   { exclude, titleSuffix }: { exclude: readonly string[]; titleSuffix: string },
 ): Promise<SourceDocument[]> {
-  const prefixes = exclude.map((prefix) => `/${prefix.replace(/^\/+|\/+$/g, '')}`);
-  const excluded = (path: string) =>
-    prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+  const excluded = excluder(exclude);
   const documents: SourceDocument[] = [];
   for (const route of [...new Set(routesPaths)].sort()) {
     const path = sitePath(route, baseUrl);
@@ -243,36 +198,4 @@ async function readBuiltRoute(outDir: string, path: string): Promise<string | un
     }
   }
   return undefined;
-}
-
-async function defaultEmbedding(
-  options: AskMySiteOptions,
-  log: Logger,
-): Promise<EmbeddingModel | null> {
-  if (options.embeddingModel !== undefined) return options.embeddingModel;
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      const { createOpenAI } = await import('@ai-sdk/openai');
-      return createOpenAI().embedding('text-embedding-3-small');
-    } catch {
-      log.warn('OPENAI_API_KEY is set but @ai-sdk/openai is not installed: npm i @ai-sdk/openai');
-    }
-  }
-  if (process.env.AI_GATEWAY_API_KEY) return 'openai/text-embedding-3-small';
-  log.warn(
-    'No embedding model: building a keyword-only index. Set OPENAI_API_KEY or AI_GATEWAY_API_KEY ' +
-      'at build time, or pass `embeddingModel`, for semantic search.',
-  );
-  return null;
-}
-
-function logger(): Logger {
-  return {
-    info: (message) => {
-      console.log(`[ask-my-site] ${message}`);
-    },
-    warn: (message) => {
-      console.warn(`[ask-my-site] ${message}`);
-    },
-  };
 }
