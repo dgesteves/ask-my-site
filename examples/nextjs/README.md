@@ -27,7 +27,7 @@ echo "OPENAI_CHAT_MODEL=gpt-5.4-mini" >> examples/nextjs/.env.local
 
 | File                     | What it does                                                                                      |
 | ------------------------ | ------------------------------------------------------------------------------------------------- |
-| `content/docs/*.md`      | The pages, with `title`, `description` and `order` frontmatter.                                   |
+| `content/docs/*.md`      | The pages, with `title`, `description`, `section` and `order` frontmatter.                        |
 | `ask-my-site.config.mjs` | The embedding model, shared by the CLI and the route so the index and queries always agree.       |
 | `app/api/ask/route.ts`   | `createAskHandler` mounted as `POST /api/ask`, with an in-memory rate limit.                      |
 | `app/ask.tsx`            | `<AskDialog />` with suggestions, a trigger button and client-side navigation for citations.      |

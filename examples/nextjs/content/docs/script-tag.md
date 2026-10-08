@@ -1,0 +1,74 @@
+---
+title: Script tag
+description: Add the dialog to Hugo, Jekyll, Eleventy, MkDocs or plain HTML with one script tag.
+section: Integrations
+order: 13
+---
+
+For a site that does not build with React, such as Hugo, Jekyll, Eleventy, MkDocs or plain HTML, one script tag adds the dialog and its "Ask AI" button.
+
+## Add the script tag
+
+Add this tag to your base template, before `</body>` or in `<head>`:
+
+```html
+<script
+  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.5/dist/embed.global.js"
+  data-endpoint="/api/ask"
+  defer
+></script>
+```
+
+The script mounts itself once the page has loaded. It opens the dialog from a floating "Ask AI" button and with ⌘I or Ctrl+I, so ⌘K stays with your site's search. Pin an exact version, such as `ask-my-site@0.5.0`, in production.
+
+## Script size
+
+The embed script, `embed.global.js`, is 91 KB gzipped and 294 KB minified. It includes React, the dialog and its styles, so the page needs nothing else, and `defer` loads it without blocking the page. The Docusaurus, Astro and Starlight plugins and React apps bundle the dialog with the site's own React instead.
+
+## Index a static site
+
+The script only adds the dialog; the answers come from an endpoint that reads your index. Build the index with the CLI, either from your Markdown or from the HTML your generator built, which has the URLs it actually serves:
+
+```sh
+hugo && npx ask-my-site index public -e openai:text-embedding-3-small
+```
+
+The output folder is `public` after `hugo`, `_site` after Jekyll or Eleventy, and `site` after `mkdocs build`. HTML is read from each page's `<main>`, and citations link to the headings' own `id`s. `index.html` stands for its folder, and other HTML files keep `.html` in their URLs unless you pass `--clean-urls`, for hosts that serve `/guide.html` at `/guide`.
+
+## Deploy the endpoint for a static site
+
+Deploy the endpoint next to the site with one of the recipes in [Deploying](/docs/deployment): a Vercel function, a Netlify function or a Cloudflare Pages function that reads the index. If the endpoint runs on another origin than the site, give it CORS headers through the handler's `headers` option and use the full URL in `data-endpoint`.
+
+To try it first, run `npx ask-my-site dev` beside the index and set `data-endpoint="http://localhost:8787/api/ask"`.
+
+## Script tag attributes
+
+| Attribute           | Default           | What it does                                                                    |
+| ------------------- | ----------------- | ------------------------------------------------------------------------------- |
+| `data-endpoint`     | `/api/ask`        | Where the dialog posts questions.                                               |
+| `data-title`        | "Ask this site"   | The dialog's accessible name.                                                   |
+| `data-placeholder`  | "Ask a question…" | The input's placeholder.                                                        |
+| `data-suggestions`  | none              | A JSON array, as in `data-suggestions='["How do I install it?"]'`.              |
+| `data-shortcut`     | `i`               | The key used with ⌘ or Ctrl; `"false"` turns it off.                            |
+| `data-button-label` | "Ask AI"          | The floating button's label; `"false"` hides the button.                        |
+| `data-theme`        | `auto`            | `auto` follows `data-theme` on `<html>`, then the system; or `light` or `dark`. |
+| `data-manual`       | off               | Don't mount; wait for `window.AskMySite.mount()`.                               |
+
+## Open it from your own search box
+
+With `data-manual`, the script waits for you to call `window.AskMySite.mount(options)`, which takes the same options as the attributes and returns `{ open, close, unmount }`. Use it to open the dialog from your own button:
+
+```html
+<script
+  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.5/dist/embed.global.js"
+  data-manual
+></script>
+<script type="module">
+  const ask = window.AskMySite.mount({ endpoint: '/api/ask', buttonLabel: false });
+  document.querySelector('#ask-button').addEventListener('click', () => ask.open());
+</script>
+```
+
+## With a bundler
+
+In an app with a bundler, `mountAskDialog(options)` from `ask-my-site/embed` does the same with your own copy of React. Install `react`, `react-dom`, `@radix-ui/react-dialog` and `cmdk`, and import `ask-my-site/react/styles.css` and `ask-my-site/embed/launcher.css` with it.

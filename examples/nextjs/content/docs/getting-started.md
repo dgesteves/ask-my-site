@@ -1,32 +1,42 @@
 ---
 title: Getting started
-description: Install, index your content, add the endpoint and the dialog.
+description: Install the package, build the index, deploy the endpoint and add the dialog.
+section: Get started
 order: 2
 ---
 
-Setup takes four steps and works with any AI SDK provider.
+Every setup has the same two halves: an index built with your site, and an endpoint that answers from it. The integration you pick decides how much of that is done for you.
+
+## Pick your setup
+
+- **Docusaurus.** One line in `docusaurus.config.ts`: the plugin builds the index and adds the dialog. See [Docusaurus](/docs/docusaurus).
+- **Astro or Starlight.** One plugin or integration in `astro.config.mjs`, which builds the index and adds the dialog. See [Astro and Starlight](/docs/astro).
+- **Next.js or another React app.** Index with the CLI, mount `createAskHandler` as a route, and render `<AskDialog />`. See [Next.js and React](/docs/nextjs).
+- **Any other site.** Index the built HTML with the CLI, deploy the endpoint, and add one script tag. See [Script tag](/docs/script-tag).
 
 ## Install
 
-Install the package with the AI SDK, a provider, and the two packages the dialog is built on (leave those out if you only need the endpoint):
+Install the package with the Vercel AI SDK and a model provider. The two packages the dialog is built on, `@radix-ui/react-dialog` and `cmdk`, are optional peer dependencies: leave them out if you only deploy the endpoint.
 
 ```sh
-pnpm add ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
 ```
+
+ask-my-site needs Node.js 22.12 or later to build the index. The endpoint itself uses Web APIs only, so it also runs on Bun, Deno and Cloudflare Workers.
 
 ## Build the index
 
-Point the CLI at the folder that holds your pages. It reads Markdown, MDX and HTML, chunks them, embeds the chunks and writes `ask-index.json`:
+Point the CLI at your content. It reads Markdown, MDX and HTML, splits pages at every heading, embeds the chunks and writes `ask-index.json`:
 
 ```sh
-npx ask-my-site index content --base-url /docs --embedding openai:text-embedding-3-small --dimensions 512
+npx ask-my-site index ./docs --base-url /docs -e openai:text-embedding-3-small --dimensions 512
 ```
 
-Commit the file. Rebuilding after an edit only re-embeds the chunks whose text changed.
+With the Docusaurus, Astro or Starlight plugin you skip this step: the plugin indexes the built site after every build.
 
 ## Add the endpoint
 
-Create a route handler. The handler is a plain `(request) => Response` function, so in Next.js you export it as `POST`:
+The endpoint is one function. It takes a Web `Request` and returns a streaming `Response`, and it must embed questions with the same model the index was built with:
 
 ```ts
 import { openai } from '@ai-sdk/openai';
@@ -41,19 +51,22 @@ export const POST = createAskHandler({
 });
 ```
 
+[Deploying](/docs/deployment) has ready-made versions for Vercel, Netlify and Cloudflare.
+
 ## Add the dialog
 
-Render the dialog once, near the root of your app, and import the default theme:
+In a React app, render the dialog once near the root and import its two stylesheets:
 
 ```tsx
 import { AskDialog } from 'ask-my-site/react';
 import 'ask-my-site/react/styles.css';
+import 'ask-my-site/embed/launcher.css';
 
-<AskDialog endpoint="/api/ask" suggestions={['How do I install it?']} />;
+<AskDialog launcher suggestions={['How do I install it?']} />;
 ```
 
-Press ⌘K (or Ctrl+K) to open it.
+`launcher` adds a floating "Ask AI" button. The dialog also opens with ⌘K on macOS and Ctrl+K elsewhere. The plugins and the script tag add the same dialog for you, opened with ⌘I or Ctrl+I so that ⌘K stays with your site's search.
 
 ## Try it without an API key
 
-The `ask-my-site/mock` entry provides a deterministic embedding model and a scripted language model. Build the index with `--embedding mock` and pass `mockLanguageModel()` to the handler to run the whole pipeline offline.
+Mock mode runs the whole pipeline offline: a deterministic embedding model and a scripted model that answers by quoting the best-matching sentences, with citations. Build with `-e mock` and serve the endpoint locally with `npx ask-my-site dev`. [Try it locally](/docs/local-development) walks through it.
