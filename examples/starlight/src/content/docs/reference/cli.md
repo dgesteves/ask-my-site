@@ -1,8 +1,9 @@
 ---
-title: CLI and config file
-description: Every flag of ask-my-site index and ask-my-site dev, and the config module.
-section: Reference
-order: 30
+# Generated from examples/nextjs/content/docs/cli.md by scripts/sync-example-docs.mjs. Edit that file instead.
+title: 'CLI and config file'
+description: 'Every flag of ask-my-site index and ask-my-site dev, and the config module.'
+sidebar:
+  order: 30
 ---
 
 The `ask-my-site` command has two subcommands: `index` builds or checks the index, and `dev` serves the endpoint on your machine. Run either with `npx ask-my-site`, or from a `package.json` script.
@@ -45,7 +46,7 @@ The CLI reads `.env` and `.env.local` from the working directory, without overri
 | `--origin <origin>` | any                                                                  | Origin allowed to call it (CORS). Repeatable.           |
 | `--model <id>`      | `gpt-5.4-mini`                                                       | OpenAI model for answers, when `OPENAI_API_KEY` is set. |
 
-It embeds questions with the model the index records, answers with OpenAI when `OPENAI_API_KEY` is set and with the mock model otherwise, and reloads the index when the file changes. [Try it locally](/docs/local-development) shows it with each integration.
+It embeds questions with the model the index records, answers with OpenAI when `OPENAI_API_KEY` is set and with the mock model otherwise, and reloads the index when the file changes. [Try it locally](/get-started/local-development/) shows it with each integration.
 
 ## The config file
 

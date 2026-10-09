@@ -1,29 +1,60 @@
 ---
-title: Indexing content
-description: Loaders, frontmatter, URLs, chunking and the --check mode.
-sidebar_position: 3
+# Generated from examples/nextjs/content/docs/indexing.md by scripts/sync-example-docs.mjs. Edit that file instead.
+title: 'Indexing content'
+description: 'What gets indexed, how files become URLs, chunking, excluding pages and the --check mode.'
 ---
 
-Indexing turns pages into chunks, embeds each chunk, and writes everything to one JSON file.
+Indexing turns your pages into chunks, embeds each chunk and writes everything to one JSON file. The CLI does it for any folder; the Docusaurus, Astro and Starlight plugins do it after every build.
 
-## Supported sources
+## Supported content
 
-The CLI reads `.md`, `.mdx`, `.markdown`, `.html` and `.htm` files recursively. Dot-folders and `node_modules` are skipped. For content that is not on disk, such as a CMS, pass a plain array of `{ id, url, title, content }` records through a config file or call `buildIndex` directly.
+The CLI reads `.md`, `.mdx`, `.markdown`, `.html` and `.htm` files recursively, and skips dot-folders and `node_modules`. MDX is reduced to text without being evaluated, so code fences stay as they are but components that render content from props are invisible to the index. HTML is read from each page's `<main>`, then its `<article>`s, then `<body>`, with navigation, scripts, forms and other chrome stripped and heading `id`s kept.
+
+For content that is not on disk, such as a CMS, pass `{ id, url, title, content }` records through the `documents` field of a [config file](./cli.md#the-config-file), or call `buildIndex` yourself.
 
 ## Frontmatter
 
-Markdown files can set `title` and `url` (or `permalink`) in YAML frontmatter. Without a title, the first `# Heading` is used, then the file name. Pages with `draft: true`, `ask: false` or `noindex: true` are left out of the index.
+Markdown files can set `title` and `url` (or `permalink`) in YAML frontmatter. Without a title, the first `# Heading` is used, then the file name.
 
-## URLs
+## Excluding pages
 
-A file path becomes a URL by dropping the extension, so `guides/setup.md` is served at `/guides/setup`. Files named `index` or `README` stand for their folder. Use `--base-url` to add a prefix such as `/docs` or a full origin.
+There are four ways to keep pages out of the index:
+
+- Frontmatter: `draft: true`, `ask: false` or `noindex: true` leaves a page out.
+- The CLI: `--ignore 'changelog/**'` skips matching files, and is repeatable. Globs support `*`, `**`, `?`, `[...]` and `{a,b}`.
+- The plugins: `exclude: ['/changelog']` leaves out a path and everything under it.
+- HTML: a page with `<meta name="robots" content="noindex">` is skipped, and in Starlight, anything marked `data-pagefind-ignore`.
+
+## How files become URLs
+
+A file path becomes a URL by dropping the extension, so `guides/setup.md` is cited as `/guides/setup`. `index.md`, `_index.md` (Hugo), `index.html` and `README.md` stand for their folder. Other HTML files keep `.html` (`docs/install.html` is `/docs/install.html`) unless you pass `--clean-urls`. `--base-url /docs` adds a prefix, or a full origin. Frontmatter `url` or `permalink` always wins.
+
+Docs frameworks don't all map files to URLs the same way, so the CLI looks for a framework's config in or above the content folder and follows its rules:
+
+| Framework                        | Detected from                              | Rules                                                                                                   |
+| -------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Docusaurus                       | `docusaurus.config.*`                      | `slug` and `id` frontmatter, number prefixes dropped (`01-intro.md` is `intro`), `_` files are partials |
+| Starlight                        | `astro.config.*` with `@astrojs/starlight` | `slug` frontmatter, slugified path segments, `_` files skipped                                          |
+| Next.js-style (Fumadocs, Nextra) | `next.config.*` or `source.config.ts`      | `(group)` folders left out, `page.mdx` is its folder's page                                             |
+
+`--framework` overrides the detection. Docusaurus serves docs under `/docs` by default, so pass `--base-url /docs` there. The Docusaurus rules were checked against Docusaurus's own `getSlug`: all 92 pages of docusaurus.io's docs get the URL Docusaurus serves.
 
 ## Chunking
 
-Chunks never cross a heading, so every chunk has exactly one heading path and one anchor. Within a section, paragraphs are packed up to 1,200 characters by default. Consecutive chunks of the same section share up to 150 characters of overlap, cut at a sentence boundary. Code blocks are never split in the middle of a line.
+Chunks never cross a heading, so every chunk has exactly one heading path and one anchor, and a citation links to the section, not just the page. Within a section, paragraphs are packed up to 1,200 characters (`--chunk-size`). Oversized blocks are split by line, then sentence, then word, and consecutive chunks of a section share up to 150 characters (`--chunk-overlap`). Code blocks are never split in the middle of a line.
 
-Each chunk is embedded together with its page title and heading path, so a short paragraph under "Rate limiting › Upstash" still carries that context.
+Each chunk is embedded together with its page title and heading path, as in `Deploying › Netlify`, so a short section keeps its context. Anchors are the slugs GitHub, rehype-slug and Docusaurus generate, or your own `{#id}`.
+
+## Incremental rebuilds
+
+Every chunk records a hash of exactly the text it was embedded from. On a rebuild, unchanged chunks reuse their previous vectors, so only edited sections are sent to the embedding model. The plugins keep the previous vectors in `node_modules/.cache/ask-my-site` between builds.
 
 ## Checking the index in CI
 
-Run `ask-my-site index --check` in CI to fail the build when the committed index is stale. The check re-chunks the content and compares content hashes. It never calls an embedding model and needs no API key, and on failure it lists which chunks were added, changed or removed.
+To fail CI when the index is stale, run the same command with `--check`. It exits with code 1 when the committed index no longer matches the content, and lists which chunks were added, changed or removed:
+
+```sh
+npx ask-my-site index ./docs --base-url /docs --check
+```
+
+The check re-chunks the content and compares content hashes. It never calls an embedding model and needs no API key. The plugins rebuild the index with the site, so they need no check.

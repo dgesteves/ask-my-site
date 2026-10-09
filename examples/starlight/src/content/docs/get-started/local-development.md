@@ -1,8 +1,9 @@
 ---
-title: Try it locally
-description: Run the whole pipeline on your machine with mock mode and ask-my-site dev, no API key.
-section: Get started
-order: 3
+# Generated from examples/nextjs/content/docs/local-development.md by scripts/sync-example-docs.mjs. Edit that file instead.
+title: 'Try it locally'
+description: 'Run the whole pipeline on your machine with mock mode and ask-my-site dev, no API key.'
+sidebar:
+  order: 3
 ---
 
 You can try ask-my-site on your own content in about two minutes, without an API key. Mock mode replaces both models with offline stand-ins, and `ask-my-site dev` serves the endpoint on your machine.

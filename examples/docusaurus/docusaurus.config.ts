@@ -9,7 +9,7 @@ import { themes as prismThemes } from 'prism-react-renderer';
 const askMySite: AskMySiteOptions = {
   ...(process.env.OPENAI_API_KEY ? {} : { embedding: 'mock' as const }),
   dialog: {
-    suggestions: ['How do I install it?', 'When does it answer "I don\'t know"?'],
+    suggestions: ['How do I add it to Docusaurus?', 'Do I need a vector database?'],
   },
 };
 
@@ -20,6 +20,11 @@ const config: Config = {
   url: 'https://ask-my-site-docusaurus.vercel.app',
   baseUrl: '/',
   onBrokenLinks: 'throw',
+  // The pages are generated from the website's docs (scripts/sync-example-docs.mjs); a link or an
+  // anchor the generator got wrong fails the build.
+  onBrokenAnchors: 'throw',
+  // Plain Markdown, as on the other two sites: no MDX, so text like `{ id, url }` stays text.
+  markdown: { format: 'detect' },
   i18n: { defaultLocale: 'en', locales: ['en'] },
   future: { v4: true, faster: true },
 

@@ -1,8 +1,7 @@
 ---
-title: Next.js and React
-description: Index with the CLI, mount createAskHandler as a route handler, and render AskDialog.
-section: Integrations
-order: 12
+# Generated from examples/nextjs/content/docs/nextjs.md by scripts/sync-example-docs.mjs. Edit that file instead.
+title: 'Next.js and React'
+description: 'Index with the CLI, mount createAskHandler as a route handler, and render AskDialog.'
 ---
 
 In a Next.js app, or any React app with a server, ask-my-site is three pieces: an index built by the CLI, a route handler made with `createAskHandler`, and the `<AskDialog />` component. The ask-my-site website is built exactly this way.
@@ -91,7 +90,7 @@ Leave `launcher` out and pass `trigger` to open the dialog from an element of yo
 
 ## Build your own interface
 
-`useAsk()` from `ask-my-site/react` is the hook behind the dialog. It returns `ask`, `stop` and `reset`, plus the streaming `answer`, its `sources` and a `status`, so you can render answers inline on a page instead of in a dialog. `AskAnswer` renders an answer with clickable citations. See [The ask dialog](/docs/ask-dialog#the-useask-hook).
+`useAsk()` from `ask-my-site/react` is the hook behind the dialog. It returns `ask`, `stop` and `reset`, plus the streaming `answer`, its `sources` and a `status`, so you can render answers inline on a page instead of in a dialog. `AskAnswer` renders an answer with clickable citations. See [The ask dialog](./ask-dialog.md#the-useask-hook).
 
 ## Keep the index fresh in CI
 

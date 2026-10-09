@@ -1,6 +1,6 @@
 # ask-my-site Starlight example
 
-The ask-my-site docs as a Starlight site, with the `ask-my-site/starlight` plugin. Without `OPENAI_API_KEY` it uses the offline mock models, so it runs with no key.
+The ask-my-site docs as a Starlight site, with the `ask-my-site/starlight` plugin. The pages are generated from the website's, in `examples/nextjs/content/docs`, by `pnpm examples:sync`: edit them there. The changelog page is this site's own. Without `OPENAI_API_KEY` it uses the offline mock models, so it runs with no key.
 
 ```sh
 pnpm install && pnpm build                       # in the repository root, once

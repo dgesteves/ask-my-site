@@ -1,13 +1,14 @@
 ---
-title: FAQ
-description: Short answers to the questions people ask first, with links to the details.
-section: Reference
-order: 36
+# Generated from examples/nextjs/content/docs/faq.md by scripts/sync-example-docs.mjs. Edit that file instead.
+title: 'FAQ'
+description: 'Short answers to the questions people ask first, with links to the details.'
+sidebar:
+  order: 36
 ---
 
 ## What is ask-my-site?
 
-ask-my-site is a self-hosted "Ask AI" box for documentation sites: a build-time index, in-memory hybrid search, and streamed answers with citations from a model you choose. It is an open-source npm package, not a hosted service. See the [introduction](/docs/introduction).
+ask-my-site is a self-hosted "Ask AI" box for documentation sites: a build-time index, in-memory hybrid search, and streamed answers with citations from a model you choose. It is an open-source npm package, not a hosted service. See the [introduction](/).
 
 ## Is it free?
 
@@ -15,7 +16,7 @@ Yes. ask-my-site is free and open source under the MIT license, with no paid tie
 
 ## How much does it cost to run?
 
-An answered question costs one embedding call and one model call, with at most 8,000 characters of sources in and 800 tokens out by default. A question the docs can't answer costs the embedding call only, because the model is never called. Hosting is one function and one static file. See [cost](/docs/deployment#cost).
+An answered question costs one embedding call and one model call, with at most 8,000 characters of sources in and 800 tokens out by default. A question the docs can't answer costs the embedding call only, because the model is never called. Hosting is one function and one static file. See [cost](/guides/deployment/#cost).
 
 ## Do I need a vector database?
 
@@ -23,27 +24,27 @@ No. The index is a static JSON file built with your site, and the endpoint searc
 
 ## Do I need an API key to try it?
 
-No. Mock mode runs the whole pipeline offline with a deterministic embedder and a model that quotes your pages: `npx ask-my-site index ./docs -e mock`, then `npx ask-my-site dev`. In production you need a key for your model provider. See [Try it locally](/docs/local-development).
+No. Mock mode runs the whole pipeline offline with a deterministic embedder and a model that quotes your pages: `npx ask-my-site index ./docs -e mock`, then `npx ask-my-site dev`. In production you need a key for your model provider. See [Try it locally](/get-started/local-development/).
 
 ## Can I use Claude or other models?
 
-Yes. Answers come from any Vercel AI SDK language model: OpenAI, Anthropic's Claude, Google, Mistral, or any model on AI Gateway. Embeddings come from any AI SDK embedding model; Anthropic has none, so pair Claude with OpenAI or Cohere embeddings, or build a keyword-only index. See [Model providers](/docs/model-providers).
+Yes. Answers come from any Vercel AI SDK language model: OpenAI, Anthropic's Claude, Google, Mistral, or any model on AI Gateway. Embeddings come from any AI SDK embedding model; Anthropic has none, so pair Claude with OpenAI or Cohere embeddings, or build a keyword-only index. See [Model providers](/guides/model-providers/).
 
 ## Where are my docs and questions sent?
 
-Only to your own model provider. Your endpoint sends the question to the embedding model, and the question with the retrieved excerpts to the language model, under your API key. ask-my-site runs no service and sends no telemetry. See [Privacy](/docs/security#privacy-what-leaves-your-servers).
+Only to your own model provider. Your endpoint sends the question to the embedding model, and the question with the retrieved excerpts to the language model, under your API key. ask-my-site runs no service and sends no telemetry. See [Privacy](/guides/security/#privacy-what-leaves-your-servers).
 
 ## Where does the index live?
 
-In `ask-index.json`, a static file next to your site: in your repository when you build it with the CLI, or in `build/` or `dist/` when a plugin builds it. The endpoint imports it, reads it from the build output, or fetches it from a URL. See [Where the index lives](/docs/deployment#where-the-index-lives).
+In `ask-index.json`, a static file next to your site: in your repository when you build it with the CLI, or in `build/` or `dist/` when a plugin builds it. The endpoint imports it, reads it from the build output, or fetches it from a URL. See [Where the index lives](/guides/deployment/#where-the-index-lives).
 
 ## How large can my site be?
 
-ask-my-site is comfortable on sites as large as 10,000 chunks, and workable to about 50,000. At 10,000 chunks the index is 15.7 MB, loads in 339 ms and answers a query in about 7 ms. Every section of a page makes at least one chunk, of up to 1,200 characters. See [Benchmarks](/docs/benchmarks).
+ask-my-site is comfortable on sites as large as 10,000 chunks, and workable to about 50,000. At 10,000 chunks the index is 15.7 MB, loads in 339 ms and answers a query in about 7 ms. Every section of a page makes at least one chunk, of up to 1,200 characters. See [Benchmarks](/reference/benchmarks/).
 
 ## What happens when the docs don't cover a question?
 
-The relevance gate finds nothing good enough and the endpoint answers "I don't know. I couldn't find anything about that on this site." without calling the model. That refusal is fast, free and deterministic. See [Saying "I don't know"](/docs/retrieval#saying-i-dont-know).
+The relevance gate finds nothing good enough and the endpoint answers "I don't know. I couldn't find anything about that on this site." without calling the model. That refusal is fast, free and deterministic. See [Saying "I don't know"](/guides/retrieval/#saying-i-dont-know).
 
 ## Does it support follow-up questions?
 
@@ -67,7 +68,7 @@ Yes. A site on GitHub Pages or another static host can call an endpoint on Verce
 
 ## Does it work with versioned docs and several languages?
 
-Yes. Docusaurus and Starlight sites get one index per locale. Versioned Docusaurus docs index every version; leave old ones out with `exclude: ['/docs/1.0']`. See [Docusaurus](/docs/docusaurus#locales-and-versions).
+Yes. Docusaurus and Starlight sites get one index per locale. Versioned Docusaurus docs index every version; leave old ones out with `exclude: ['/docs/1.0']`. See [Docusaurus](/integrations/docusaurus/#locales-and-versions).
 
 ## How is the ask-my-site website built?
 
