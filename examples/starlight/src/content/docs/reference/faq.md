@@ -28,7 +28,11 @@ No. Mock mode runs the whole pipeline offline with a deterministic embedder and 
 
 ## Can I use Claude or other models?
 
-Yes. Answers come from any Vercel AI SDK language model: OpenAI, Anthropic's Claude, Google, Mistral, or any model on AI Gateway. Embeddings come from any AI SDK embedding model; Anthropic has none, so pair Claude with OpenAI or Cohere embeddings, or build a keyword-only index. See [Model providers](/guides/model-providers/).
+Yes. Answers come from any Vercel AI SDK language model: OpenAI's, Anthropic's Claude, Google's Gemini, xAI's Grok, Mistral's, or any model on AI Gateway. Embeddings come from any AI SDK embedding model, such as OpenAI's or Google's. Anthropic and xAI have none, so pair Claude or Grok with another provider's embeddings, or build a keyword-only index. See [Model providers](/guides/model-providers/).
+
+## Can I use my ChatGPT Plus, Claude Pro or SuperGrok subscription?
+
+No. A site that answers its visitors calls a model through an API, and chat subscriptions such as ChatGPT Plus, Claude Pro or SuperGrok don't include API access: the API is billed on its own, per use, with an API key from the provider's developer platform. The free option is a model you run yourself, for example with Ollama or LM Studio, which serve an OpenAI-compatible endpoint the AI SDK can call; it needs a machine your endpoint can reach.
 
 ## Where are my docs and questions sent?
 
