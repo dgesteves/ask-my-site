@@ -1,11 +1,11 @@
 ---
 title: Model providers
-description: Bring your own key for OpenAI, Anthropic, AI Gateway or any AI SDK provider, and configure the embedding model.
+description: Bring your own key for OpenAI, Anthropic, Google, xAI, AI Gateway or any AI SDK provider, and configure the embedding model.
 section: Guides
 order: 21
 ---
 
-ask-my-site uses the Vercel AI SDK for every model call, so it works with any provider the AI SDK supports. You bring your own API key: requests go from your function straight to your provider, and ask-my-site never sees or proxies them.
+ask-my-site uses the Vercel AI SDK for every model call, so it works with OpenAI, Anthropic, Google and xAI, and with any other provider the AI SDK supports. You bring your own API key: requests go from your function straight to your provider, and ask-my-site never sees or proxies them.
 
 ## Two models, two jobs
 
@@ -52,13 +52,65 @@ export const POST = createAskHandler({
 
 Or build a keyword-only index with `-e none` and leave `embeddingModel` out, so the only key you need is Anthropic's.
 
+## Google Gemini
+
+Google offers both a chat model and an embedding model, so one `GOOGLE_GENERATIVE_AI_API_KEY` covers answers and vectors. Install `@ai-sdk/google`, and build the index from a [config file](/docs/cli#the-config-file), since the CLI's `-e` specs name OpenAI and AI Gateway models:
+
+```js
+// ask-my-site.config.mjs
+import { google } from '@ai-sdk/google';
+
+/** @type {import('ask-my-site/node').AskConfig} */
+export default {
+  embeddingModel: google.embedding('gemini-embedding-001'),
+  embeddingProviderOptions: { google: { outputDimensionality: 768 } },
+};
+```
+
+Then give the handler the same embedding model and options, with a Gemini model for answers:
+
+```ts
+import { google } from '@ai-sdk/google';
+import { createAskHandler } from 'ask-my-site/server';
+import index from './ask-index.json';
+
+export const POST = createAskHandler({
+  index,
+  model: google('gemini-3.5-flash'),
+  embeddingModel: google.embedding('gemini-embedding-001'),
+  embeddingProviderOptions: { google: { outputDimensionality: 768 } },
+});
+```
+
+`outputDimensionality` shrinks Gemini's vectors, as `dimensions` does OpenAI's; leave it out to keep the model's full size. The relevance gate's similarity threshold is calibrated for OpenAI, so [check it](#tuning-for-another-embedding-model) against Gemini's scores.
+
+## xAI and Grok
+
+xAI's Grok writes answers, but xAI has no embedding model in the AI SDK. Install `@ai-sdk/xai`, set `XAI_API_KEY`, and pair Grok with another provider's embeddings, such as OpenAI's:
+
+```ts
+import { openai } from '@ai-sdk/openai';
+import { xai } from '@ai-sdk/xai';
+import { createAskHandler } from 'ask-my-site/server';
+import index from './ask-index.json';
+
+export const POST = createAskHandler({
+  index,
+  model: xai('grok-4.20-non-reasoning'),
+  embeddingModel: openai.embedding('text-embedding-3-small'),
+  embeddingProviderOptions: { openai: { dimensions: 512 } },
+});
+```
+
+Or build a keyword-only index with `-e none` and leave `embeddingModel` out, so the only key you need is xAI's. Through AI Gateway the model is a string, under the name AI Gateway lists xAI's models with: `model: 'spacexai/grok-4.20-non-reasoning'`.
+
 ## AI Gateway
 
 With Vercel's AI Gateway, one `AI_GATEWAY_API_KEY` reaches every provider, and models are plain strings such as `model: 'openai/gpt-5.4-mini'` and `embeddingModel: 'openai/text-embedding-3-small'`. The CLI and the plugins take gateway ids as embedding specs, as in `-e cohere/embed-v4.0`, and use AI Gateway on their own when only `AI_GATEWAY_API_KEY` is set.
 
 ## Any other AI SDK provider
 
-`model` takes any AI SDK language model, so Google, Mistral, Groq, Amazon Bedrock, a local model through an OpenAI-compatible endpoint, or any other provider package works the same way. Answers are streamed with `streamText`, and `generation` passes settings such as `temperature`, `maxOutputTokens` or `providerOptions` through to it.
+`model` takes any AI SDK language model, so Mistral, Groq, Amazon Bedrock, a local model through an OpenAI-compatible endpoint (Ollama or LM Studio, with `@ai-sdk/openai-compatible`), or any other provider package works the same way. Answers are streamed with `streamText`, and `generation` passes settings such as `temperature`, `maxOutputTokens` or `providerOptions` through to it.
 
 ## Configure the embedding model
 
