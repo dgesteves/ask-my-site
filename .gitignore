@@ -12,3 +12,6 @@ bench/results/*.json
 examples/nextjs/ask-index.json
 examples/nextjs/next-env.d.ts
 .astro
+
+# Original README while `npm pack` swaps in the npm version (scripts/npm-readme.mjs)
+.npm-readme-backup.md
