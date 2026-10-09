@@ -1,6 +1,6 @@
 # ask-my-site
 
-**A drop-in ⌘K "ask" box for any website: build-time index, in-memory hybrid search, streaming answers with citations. No vector database.**
+**Self-hosted Ask AI for docs sites: a build-time index, in-memory hybrid search and streamed answers with citations. No vector database.** Plugins for Docusaurus and Starlight, or one script tag on any other site.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/dgesteves/ask-my-site/ci.yml?branch=main&label=CI&style=flat-square&labelColor=181c22)](https://github.com/dgesteves/ask-my-site/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/ask-my-site?style=flat-square&labelColor=181c22&color=22d3ee)](https://www.npmjs.com/package/ask-my-site)

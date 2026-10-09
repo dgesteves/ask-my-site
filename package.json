@@ -1,7 +1,7 @@
 {
   "name": "ask-my-site",
   "version": "0.5.1",
-  "description": "A drop-in \u2318K ask agent for any website. Build-time static index, hybrid BM25 + vector retrieval in memory, streaming answers with citations. No vector database.",
+  "description": "Self-hosted Ask AI for docs sites. Build-time static index, hybrid BM25 + vector retrieval in memory, streaming answers with citations. No vector database. Docusaurus and Starlight plugins, or one script tag.",
   "keywords": [
     "rag",
     "ai",
