@@ -124,7 +124,9 @@ export function HeroDemo({ suggestions, initial, mode }: HeroDemoProps) {
           ) : null}
           {ask.error ? (
             <p role="alert" className="demo-error">
-              {ask.error.message}
+              {ask.error.kind === 'rate-limited' && ask.error.retryAfter
+                ? `Too many questions. Try again in ${String(ask.error.retryAfter)} seconds.`
+                : ask.error.message}
             </p>
           ) : null}
         </div>
