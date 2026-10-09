@@ -1,5 +1,11 @@
 # ask-my-site
 
+## 0.5.2
+
+### Patch Changes
+
+- [#31](https://github.com/dgesteves/ask-my-site/pull/31) [`a9e3c0e`](https://github.com/dgesteves/ask-my-site/commit/a9e3c0e0c07456ffcdab91bddf8e45440c85ec62) Thanks [@dgesteves](https://github.com/dgesteves)! - Refresh the README and description on npm: self-hosted Ask AI for docs sites, with the Docusaurus and Starlight plugins and the supported model providers, and the hero image where GitHub shows the demo video.
+
 ## 0.5.1
 
 ### Patch Changes
