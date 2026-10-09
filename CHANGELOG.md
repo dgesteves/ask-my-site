@@ -1,5 +1,11 @@
 # ask-my-site
 
+## 0.5.3
+
+### Patch Changes
+
+- [#33](https://github.com/dgesteves/ask-my-site/pull/33) [`054c7ca`](https://github.com/dgesteves/ask-my-site/commit/054c7ca828447fc774229d78e8904a7dd23c9086) Thanks [@dgesteves](https://github.com/dgesteves)! - The README on npm opens with the demo animated, the same one GitHub plays as a video, instead of a still image.
+
 ## 0.5.2
 
 ### Patch Changes
