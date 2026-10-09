@@ -61,9 +61,10 @@ export function AskAnswer({ text, sources, onNavigate, className }: AskAnswerPro
   let key = 0;
   for (const segment of splitFenced(text)) {
     if (segment.code) {
-      // Streaming: an unclosed fence is still a code block, so code renders as it arrives.
+      // Streaming: an unclosed fence is still a code block, so code renders as it arrives. A long
+      // line scrolls sideways, so the block takes focus: keyboard users can scroll it too.
       blocks.push(
-        <pre key={`b${String(key++)}`} className="ask-pre">
+        <pre key={`b${String(key++)}`} className="ask-pre" tabIndex={0}>
           <code>{fenceBody(segment.text)}</code>
         </pre>,
       );

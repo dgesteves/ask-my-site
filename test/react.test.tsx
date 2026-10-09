@@ -225,6 +225,16 @@ describe('AskAnswer', () => {
     expect(document.querySelector('strong')?.textContent).toBe('index');
     expect(document.querySelector('pre code')?.textContent).toBe('pnpm build');
   });
+
+  it('lets the keyboard reach a code block, which can scroll sideways', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <AskAnswer text={'Add it:\n\n```ts\nexport default { plugins: [] };\n```'} sources={[]} />,
+    );
+    await user.tab();
+    expect(document.activeElement).toBe(container.querySelector('pre.ask-pre'));
+    expect((await axe.run(container)).violations).toEqual([]);
+  });
 });
 
 describe('AskDialog', () => {
