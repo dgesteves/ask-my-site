@@ -41,6 +41,6 @@ With `OPENAI_API_KEY` set, `ask-my-site dev` answers with OpenAI's `gpt-5.4-mini
 
 The CLI and `ask-my-site dev` read `.env` and `.env.local` in the working directory, without overriding variables that are already set.
 
-## The demo on this site
+## The demo website
 
-This site runs in mock mode. It is a Next.js app that indexes its own pages with `ask-my-site index` at build time and answers through `createAskHandler` with `mockLanguageModel()`. The answers you get here are quotes from these docs, picked by word overlap; with a real model, answers are written in full sentences from the same sources.
+The ask-my-site website runs in mock mode. It is a Next.js app that indexes these pages with `ask-my-site index` at build time and answers through `createAskHandler` with `mockLanguageModel()`, so its answers are quotes from these docs, picked by the words they share with the question. With a real model, answers are written in full sentences from the same sources. The Docusaurus and Starlight examples in the repository answer the same way through `ask-my-site dev`.

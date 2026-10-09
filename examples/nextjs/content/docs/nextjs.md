@@ -5,7 +5,7 @@ section: Integrations
 order: 12
 ---
 
-In a Next.js app, or any React app with a server, ask-my-site is three pieces: an index built by the CLI, a route handler made with `createAskHandler`, and the `<AskDialog />` component. This site is built exactly this way.
+In a Next.js app, or any React app with a server, ask-my-site is three pieces: an index built by the CLI, a route handler made with `createAskHandler`, and the `<AskDialog />` component. The ask-my-site website is built exactly this way.
 
 ## Install for Next.js
 

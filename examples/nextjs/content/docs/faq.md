@@ -69,6 +69,6 @@ Yes. A site on GitHub Pages or another static host can call an endpoint on Verce
 
 Yes. Docusaurus and Starlight sites get one index per locale. Versioned Docusaurus docs index every version; leave old ones out with `exclude: ['/docs/1.0']`. See [Docusaurus](/docs/docusaurus#locales-and-versions).
 
-## How is this site built?
+## How is the ask-my-site website built?
 
-This site is a Next.js app that uses ask-my-site on its own docs. `ask-my-site index` builds the index from these Markdown pages before every build, `createAskHandler` serves `/api/ask`, and `<AskDialog />` is the dialog. It runs in mock mode, so its answers are quotes picked from these pages rather than written by a model.
+The website is a Next.js app that uses ask-my-site on these docs. `ask-my-site index` builds the index from the Markdown pages before every build, `createAskHandler` serves `/api/ask`, and `<AskDialog />` is the dialog. It runs in mock mode, so its answers are quotes picked from the pages rather than written by a model. The repository's Docusaurus and Starlight examples build the same pages with their plugins.

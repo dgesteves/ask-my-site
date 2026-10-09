@@ -81,4 +81,4 @@ export default {
 | `cleanUrls`                | Drop `.html` from HTML files' URLs.                                                 |
 | `documents`                | `{ id, url, title, content }` records from elsewhere, or a function returning them. |
 
-`defineConfig` from `ask-my-site/node` types the object without a JSDoc comment. Share the config with your route handler, as this site does, so the index and the queries always use the same embedding model.
+`defineConfig` from `ask-my-site/node` types the object without a JSDoc comment. Share the config with your route handler, as the ask-my-site website does, so the index and the queries always use the same embedding model.
