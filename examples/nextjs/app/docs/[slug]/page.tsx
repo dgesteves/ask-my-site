@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { getDoc, getDocs } from '../../../lib/docs';
@@ -21,9 +22,28 @@ export default async function DocPage(props: PageProps<'/docs/[slug]'>) {
   return (
     <div className="doc-layout">
       <article className="doc">
+        <p className="doc-section">{doc.section}</p>
         <h1>{doc.title}</h1>
         {doc.description ? <p className="lead">{doc.description}</p> : null}
         <div className="prose" dangerouslySetInnerHTML={{ __html: doc.html }} />
+        {doc.previous || doc.next ? (
+          <nav aria-label="Previous and next pages" className="pager">
+            {doc.previous ? (
+              <Link href={`/docs/${doc.previous.slug}`} className="pager-link" rel="prev">
+                <span className="pager-kicker">Previous</span>
+                <span className="pager-title">{doc.previous.title}</span>
+              </Link>
+            ) : (
+              <span />
+            )}
+            {doc.next ? (
+              <Link href={`/docs/${doc.next.slug}`} className="pager-link pager-next" rel="next">
+                <span className="pager-kicker">Next</span>
+                <span className="pager-title">{doc.next.title}</span>
+              </Link>
+            ) : null}
+          </nav>
+        ) : null}
       </article>
       {toc.length > 0 ? (
         <nav aria-label="On this page" className="toc">

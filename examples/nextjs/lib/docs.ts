@@ -3,7 +3,9 @@ import path from 'node:path';
 import { cache } from 'react';
 
 import { createSlugger, decodeEntities, parseFrontmatter } from 'ask-my-site';
-import { Marked } from 'marked';
+import { Marked, type Tokens } from 'marked';
+
+import { codeBlock } from './highlight';
 
 const DOCS_DIR = path.join(process.cwd(), 'content/docs');
 
@@ -26,6 +28,9 @@ export interface DocSection {
 export interface Doc extends DocMeta {
   html: string;
   headings: { depth: number; text: string; id: string }[];
+  /** The pages before and after it in sidebar order. */
+  previous: DocMeta | null;
+  next: DocMeta | null;
 }
 
 async function readDoc(slug: string): Promise<{ meta: DocMeta; body: string } | null> {
@@ -86,8 +91,13 @@ export const getDoc = cache(async (slug: string): Promise<Doc | null> => {
   if (!doc) return null;
   const slugify = createSlugger();
   const headings: Doc['headings'] = [];
+  // Code is highlighted before rendering, since marked's renderer is synchronous.
+  const highlighted = new Map<Tokens.Code, string>();
   const marked = new Marked({
     renderer: {
+      code(token) {
+        return highlighted.get(token) ?? '';
+      },
       heading({ tokens, depth, text }) {
         const id = slugify(text);
         const label = decodeEntities(this.parser.parseInline(tokens).replace(/<[^>]+>/g, ''));
@@ -119,10 +129,29 @@ export const getDoc = cache(async (slug: string): Promise<Doc | null> => {
           )
           .join('\n');
         const numeric = align.includes('right');
-        return `<div class="table-scroll"><table${numeric ? '' : ' class="table-stack"'}><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>\n`;
+        const name = labels.slice(0, 3).join(', ');
+        return `<div class="table-scroll" tabindex="0" role="region" aria-label="Table: ${name}"><table${numeric ? '' : ' class="table-stack"'}><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>\n`;
       },
     },
   });
-  const html = await marked.parse(doc.body);
-  return { ...doc.meta, html, headings };
+  const tokens = marked.lexer(doc.body);
+  const code: Tokens.Code[] = [];
+  void marked.walkTokens(tokens, (token) => {
+    if (token.type === 'code') code.push(token as Tokens.Code);
+  });
+  await Promise.all(
+    code.map(async (token) => {
+      highlighted.set(token, await codeBlock(token.text, token.lang ?? ''));
+    }),
+  );
+  const html = marked.parser(tokens);
+  const docs = await getDocs();
+  const index = docs.findIndex((other) => other.slug === slug);
+  return {
+    ...doc.meta,
+    html,
+    headings,
+    previous: docs[index - 1] ?? null,
+    next: docs[index + 1] ?? null,
+  };
 });

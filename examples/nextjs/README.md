@@ -1,6 +1,6 @@
-# Next.js example
+# The ask-my-site site
 
-A small docs site that indexes its own pages at build time and answers questions about them with ⌘K. The docs are about ask-my-site itself, so you can ask it how it works.
+The site at [ask-my-site-demo.vercel.app](https://ask-my-site-demo.vercel.app): a landing page and the docs, which index their own pages at build time and answer questions about them with ⌘K. The docs are about ask-my-site itself, so you can ask it how it works.
 
 ## Run it
 
@@ -29,8 +29,10 @@ echo "OPENAI_CHAT_MODEL=gpt-5.4-mini" >> examples/nextjs/.env.local
 | ------------------------ | ------------------------------------------------------------------------------------------------- |
 | `content/docs/*.md`      | The pages, with `title`, `description`, `section` and `order` frontmatter.                        |
 | `ask-my-site.config.mjs` | The embedding model, shared by the CLI and the route so the index and queries always agree.       |
-| `app/api/ask/route.ts`   | `createAskHandler` mounted as `POST /api/ask`, with an in-memory rate limit.                      |
-| `app/ask.tsx`            | `<AskDialog />` with suggestions, a trigger button and client-side navigation for citations.      |
+| `lib/ask-handler.ts`     | `createAskHandler` with an in-memory rate limit, mounted as `POST /api/ask` in `app/api/ask`.     |
+| `components/ask.tsx`     | `<AskDialog />` with suggestions, opened by ⌘K or any `AskButton`, routing citations client-side. |
+| `components/landing/*`   | The home page's live demo (`useAsk` and `AskAnswer`), setup tabs and diagram.                     |
 | `lib/docs.ts`            | Renders pages with ask-my-site's own slugger, so every citation anchor matches a real heading id. |
+| `lib/highlight.ts`       | Highlights code with Shiki at build time; pages ship plain HTML.                                  |
 
 `pnpm index` writes `ask-index.json` (git-ignored here) and runs before `dev` and `build`. In a real project, commit the index and run `pnpm index:check` in CI instead.
