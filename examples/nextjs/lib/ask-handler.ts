@@ -11,7 +11,9 @@ export const askHandler = createAskHandler({
   ...(embeddingProviderOptions ? { embeddingProviderOptions } : {}),
   siteName: 'the ask-my-site docs',
   ...(minSimilarity ? { retrieval: { minSimilarity } } : {}),
-  // Keyed by the last X-Forwarded-For entry, which Vercel sets. On Netlify, Cloudflare or Fly,
-  // pass `trustedHeader` (see "Rate limits and client IPs" in the ask-my-site README).
-  rateLimit: memoryRateLimit({ limit: 20, windowMs: 60_000 }),
+  // Five questions a minute per visitor: in production every answer is a paid model call. A
+  // token bucket, so a burst of five, then one more every 12 seconds. Keyed by the last
+  // X-Forwarded-For entry, which Vercel sets. On Netlify, Cloudflare or Fly, pass
+  // `trustedHeader` (see "Rate limits and client IPs" in the ask-my-site README).
+  rateLimit: memoryRateLimit({ limit: 5, windowMs: 60_000 }),
 });
