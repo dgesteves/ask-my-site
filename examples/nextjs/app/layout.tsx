@@ -8,7 +8,7 @@ import 'ask-my-site/react/styles.css';
 import './globals.css';
 
 import { mode } from '../lib/ai';
-import { getDocs } from '../lib/docs';
+import { getSections } from '../lib/docs';
 import { Ask } from './ask';
 import { Sidebar } from './sidebar';
 
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const docs = await getDocs();
+  const sections = await getSections();
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body>
@@ -45,7 +45,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           </div>
         </header>
         <div className="shell">
-          <Sidebar docs={docs} />
+          <Sidebar sections={sections} />
           <main id="content" className="content">
             {children}
           </main>

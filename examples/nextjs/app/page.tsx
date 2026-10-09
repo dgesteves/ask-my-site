@@ -1,10 +1,10 @@
 import Link from 'next/link';
 
 import { mode } from '../lib/ai';
-import { getDocs } from '../lib/docs';
+import { getSections } from '../lib/docs';
 
 export default async function Home() {
-  const docs = await getDocs();
+  const sections = await getSections();
   return (
     <article className="home">
       <p className="eyebrow">Example app</p>
@@ -19,16 +19,21 @@ export default async function Home() {
           ? 'Running in mock mode: deterministic embeddings and a scripted, extractive model. No API key needed.'
           : 'Running with OpenAI: text-embedding-3-small for retrieval and a chat model for answers.'}
       </p>
-      <ul className="cards">
-        {docs.map((doc) => (
-          <li key={doc.slug}>
-            <Link href={`/docs/${doc.slug}`} className="card">
-              <span className="card-title">{doc.title}</span>
-              <span className="card-description">{doc.description}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {sections.map((section) => (
+        <section key={section.title} className="card-section" aria-label={section.title}>
+          <h2 className="sidebar-heading">{section.title}</h2>
+          <ul className="cards">
+            {section.docs.map((doc) => (
+              <li key={doc.slug}>
+                <Link href={`/docs/${doc.slug}`} className="card">
+                  <span className="card-title">{doc.title}</span>
+                  <span className="card-description">{doc.description}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </article>
   );
 }
