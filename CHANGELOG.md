@@ -1,5 +1,13 @@
 # ask-my-site
 
+## 0.5.1
+
+### Patch Changes
+
+- [#20](https://github.com/dgesteves/ask-my-site/pull/20) [`fb222d9`](https://github.com/dgesteves/ask-my-site/commit/fb222d98600bf358b1b710c49fa13c29ecdd10ee) Thanks [@dgesteves](https://github.com/dgesteves)! - Code blocks in an answer now take keyboard focus, so a long line that scrolls sideways can be scrolled without a mouse, and they show a focus ring in the dialog's accent color. axe flagged them as scrollable regions that the keyboard could not reach.
+
+- [#19](https://github.com/dgesteves/ask-my-site/pull/19) [`162cb14`](https://github.com/dgesteves/ask-my-site/commit/162cb14554ea83191f1bf590a693a47e722aaa40) Thanks [@dgesteves](https://github.com/dgesteves)! - `mockLanguageModel` answers better from the same sources. It weighs the question's rarer words over words every source shares, counts each source's title and heading, and leads with the best sentence, so "How do I deploy to Netlify?" quotes the Netlify section instead of a passing mention. A sentence that introduces a code block, a list or a table now quotes it too, so a "how do I" question gets the snippet. List items and table rows are no longer run together into one sentence, sentences are not split inside quotes, and what is left of a link ("See Deploying.") is skipped. It still quotes only the sources, and cites each.
+
 ## 0.5.0
 
 ### Minor Changes
