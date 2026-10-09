@@ -1,0 +1,95 @@
+---
+# Generated from examples/nextjs/content/docs/model-providers.md by scripts/sync-example-docs.mjs. Edit that file instead.
+title: 'Model providers'
+description: 'Bring your own key for OpenAI, Anthropic, AI Gateway or any AI SDK provider, and configure the embedding model.'
+sidebar:
+  order: 21
+---
+
+ask-my-site uses the Vercel AI SDK for every model call, so it works with any provider the AI SDK supports. You bring your own API key: requests go from your function straight to your provider, and ask-my-site never sees or proxies them.
+
+## Two models, two jobs
+
+ask-my-site uses two models. The embedding model turns chunks into vectors at build time and each question into a vector at request time; it must be the same model in both places. The language model writes the answer from the retrieved sources; you can change it at any time without rebuilding the index.
+
+The index records which embedding model built it, and the handler checks it: a handler that embeds questions with another model fails with an error that names both, instead of returning poor answers.
+
+## OpenAI
+
+OpenAI is the default. Install `@ai-sdk/openai`, set `OPENAI_API_KEY` at build time and in your deployment, and pass both models to the handler:
+
+```ts
+import { openai } from '@ai-sdk/openai';
+import { createAskHandler } from 'ask-my-site/server';
+import index from './ask-index.json';
+
+export const POST = createAskHandler({
+  index,
+  model: openai('gpt-5.4-mini'),
+  embeddingModel: openai.embedding('text-embedding-3-small'),
+  embeddingProviderOptions: { openai: { dimensions: 512 } },
+});
+```
+
+At 512 dimensions each vector is 512 bytes, stored as 684 characters of base64: a third of what the model's default 1,536 dimensions take. The CLI builds the matching index with `-e openai:text-embedding-3-small --dimensions 512`.
+
+## Anthropic and Claude
+
+To answer with Claude, install `@ai-sdk/anthropic`, set `ANTHROPIC_API_KEY`, and pass an Anthropic model as `model`. Anthropic does not offer an embedding model, so keep embeddings on another provider, such as OpenAI:
+
+```ts
+import { anthropic } from '@ai-sdk/anthropic';
+import { openai } from '@ai-sdk/openai';
+import { createAskHandler } from 'ask-my-site/server';
+import index from './ask-index.json';
+
+export const POST = createAskHandler({
+  index,
+  model: anthropic('claude-haiku-4-5'),
+  embeddingModel: openai.embedding('text-embedding-3-small'),
+  embeddingProviderOptions: { openai: { dimensions: 512 } },
+});
+```
+
+Or build a keyword-only index with `-e none` and leave `embeddingModel` out, so the only key you need is Anthropic's.
+
+## AI Gateway
+
+With Vercel's AI Gateway, one `AI_GATEWAY_API_KEY` reaches every provider, and models are plain strings such as `model: 'openai/gpt-5.4-mini'` and `embeddingModel: 'openai/text-embedding-3-small'`. The CLI and the plugins take gateway ids as embedding specs, as in `-e cohere/embed-v4.0`, and use AI Gateway on their own when only `AI_GATEWAY_API_KEY` is set.
+
+## Any other AI SDK provider
+
+`model` takes any AI SDK language model, so Google, Mistral, Groq, Amazon Bedrock, a local model through an OpenAI-compatible endpoint, or any other provider package works the same way. Answers are streamed with `streamText`, and `generation` passes settings such as `temperature`, `maxOutputTokens` or `providerOptions` through to it.
+
+## Configure the embedding model
+
+The CLI and the plugins name the embedding model with a spec string, so a config file needs no provider import:
+
+| Spec                    | Model                                                | Needs                |
+| ----------------------- | ---------------------------------------------------- | -------------------- |
+| `openai:<model>`        | An OpenAI embedding model, through `@ai-sdk/openai`  | `OPENAI_API_KEY`     |
+| `<provider>/<model>`    | Any model on AI Gateway, such as `cohere/embed-v4.0` | `AI_GATEWAY_API_KEY` |
+| `mock` or `mock:<dims>` | The offline mock embedder                            | nothing              |
+| `none`                  | No vectors: a keyword-only index                     | nothing              |
+
+`--dimensions 512` (or `dimensions: 512` in a plugin) shrinks vectors for models that support it, and the handler must pass the same size in `embeddingProviderOptions`. For a provider package the specs don't cover, export the model from a [config file](/reference/cli/#the-config-file):
+
+```js
+// ask-my-site.config.mjs
+import { cohere } from '@ai-sdk/cohere';
+
+/** @type {import('ask-my-site/node').AskConfig} */
+export default {
+  embeddingModel: cohere.embedding('embed-multilingual-v3.0'),
+};
+```
+
+The handler then uses `cohere.embedding('embed-multilingual-v3.0')` as its `embeddingModel`. Changing the embedding model re-embeds every chunk on the next build.
+
+## Keyword-only, without embeddings
+
+An index built with `-e none` has no vectors, and retrieval is BM25 alone. It costs nothing to build and answers questions that use the docs' own words well, but it misses paraphrases. Its relevance gate relies on keyword coverage alone, so lower `retrieval.minKeywordCoverage` if it refuses reasonable questions.
+
+## Tuning for another embedding model
+
+The relevance gate's similarity threshold, 0.25, is calibrated for OpenAI's `text-embedding-3-small`. Other embedding models produce other similarity ranges, so check the `best` scores that `retrieve()` reports on real questions and pass `retrieval: { minSimilarity }` to the handler. [How retrieval works](/guides/retrieval/#tuning) explains the gate.

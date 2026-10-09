@@ -1,33 +1,70 @@
 ---
-title: The ask endpoint
-description: createAskHandler options, the streaming protocol and rate limiting.
+# Generated from examples/nextjs/content/docs/ask-endpoint.md by scripts/sync-example-docs.mjs. Edit that file instead.
+title: 'The ask endpoint'
+description: 'createAskHandler options, the request and response, errors and the streaming protocol.'
 sidebar:
-  order: 2
+  order: 31
 ---
 
-`createAskHandler` returns a function that takes a Web `Request` and returns a `Response`. It runs in Next.js route handlers, Hono, Bun, Deno and Cloudflare Workers.
+`createAskHandler(options)` from `ask-my-site/server` returns the endpoint: a function that takes a Web `Request` and returns a `Promise<Response>`. It runs in Next.js route handlers, Hono, Bun, Deno, Cloudflare Workers and Vercel or Netlify Functions.
 
 ## What happens per request
 
-1. The body must be JSON (`content-type: application/json`), so another site cannot post to the endpoint from its visitors' browsers without a CORS preflight.
+1. The body must be JSON (`content-type: application/json`); anything else gets a 415.
 2. The rate limiter runs, if one is configured.
-3. The body is validated: `{ "question": string }`, up to 500 characters.
-4. The question is embedded and retrieval runs over the in-memory index.
-5. If nothing is relevant, the "I don't know" message is streamed without calling the model.
-6. Otherwise the top sources are numbered and sent to the model with grounding instructions, and the answer streams back.
+3. The body is validated: `{ "question": string }` of up to 500 characters, in at most 64 KiB.
+4. The question is embedded, and hybrid retrieval runs over the in-memory index.
+5. If nothing clears the relevance gate, the "I don't know" message streams back and the model is never called.
+6. Otherwise the top sources are numbered and sent to the model with grounding instructions, and the answer streams back with its citations.
 
-If embedding the question fails, the request falls back to keyword retrieval instead of failing.
+## Handler options
 
-## Streaming protocol
+| Option                     | Default                     | Notes                                                                                                            |
+| -------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `index`                    | required                    | Parsed JSON, its text, a `loadIndex` result, or a function returning one. Loaded once; a failed load is retried. |
+| `model`                    | required                    | Any AI SDK language model, or an AI Gateway model id.                                                            |
+| `embeddingModel`           | none                        | Must match the index, which is checked. Without it, retrieval is keyword-only.                                   |
+| `embeddingProviderOptions` | none                        | Must match the build, such as `{ openai: { dimensions: 512 } }`.                                                 |
+| `siteName`                 | `"this site"`               | Used in the instructions and the "I don't know" message.                                                         |
+| `instructions`             | grounded defaults           | A string, or `(defaults) => string` to extend them.                                                              |
+| `retrieval`                | tuned                       | `{ topK, candidates, rrfK, minSimilarity, minKeywordCoverage, similarityNeedsKeyword }`.                         |
+| `maxContextChars`          | `8000`                      | Characters of source text sent to the model.                                                                     |
+| `maxQuestionLength`        | `500`                       | Longer questions get a 400.                                                                                      |
+| `maxBodyBytes`             | 64 KiB                      | Counted while reading the body.                                                                                  |
+| `noAnswerMessage`          | "I don't know. I couldn't…" | Streamed when nothing is relevant.                                                                               |
+| `rateLimit`                | none                        | `(request) => { success, limit?, remaining?, reset? }`, sync or async.                                           |
+| `rateLimitFailure`         | `"closed"`                  | When `rateLimit` throws: `"closed"` answers 503, `"open"` answers anyway.                                        |
+| `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`…                                |
+| `headers`                  | none                        | Added to every response, such as CORS headers.                                                                   |
+| `onFinish`                 | none                        | Called after each answer with `{ question, answer, sources, refused, retrieval, usage }`.                        |
+| `onError`                  | `console.error`             | Handled errors: embedding fallbacks, model failures, a failing limiter, misconfiguration.                        |
 
-The response is an AI SDK UI message stream over Server-Sent Events. It starts with metadata, then one `source-url` part per numbered source, then the answer text. Because sources arrive before the text, citations are clickable as soon as they appear. The same stream works with `useChat` from `@ai-sdk/react`.
+## Logging questions and answers
 
-## Rate limiting
+`onFinish` runs once per answered request, after the answer has streamed, with the question, the answer, its sources, whether it was refused and the token usage. Use it to log questions your docs don't answer, or to send analytics. If it throws, the error goes to `onError`, and the answer the visitor got is unaffected.
 
-Pass `rateLimit` to limit requests per client. `memoryRateLimit({ limit: 10, windowMs: 60_000 })` keeps a token bucket per IP inside one server instance. For a limit shared across instances and regions, wrap an `@upstash/ratelimit` instance with `upstashRateLimit`. Rejected requests get a 429 with a `Retry-After` header.
+## Request body
 
-The client IP comes from one header, and only a header your platform sets on every request can be trusted: a client can send any other. The default is the last `X-Forwarded-For` entry, which is right on Vercel and behind a proxy that appends to it. On Netlify, Cloudflare or Fly.io, name the platform's header, for example `memoryRateLimit({ trustedHeader: 'cf-connecting-ip' })`, or pass `key` to choose the bucket yourself.
+Send `{ "question": "…" }` as `application/json`. The `{ messages }` body that the AI SDK's `useChat` sends is accepted too, and its last user message is the question. Answers are single-turn: earlier messages are not used.
 
 ## Errors
 
-Model errors are masked in the stream so provider details never reach the browser, and reported through `onError`. A misconfigured embedding model, one that does not match the index, fails loudly with a 500 rather than returning poor answers.
+Errors are JSON, `{ "error": { "code", "message" } }`, with status 400 (invalid body or question), 405 (not a POST), 413 (body too large), 415 (not JSON), 429 (rate limited, with `Retry-After`), 500 (misconfigured, such as an embedding model that does not match the index) or 503 (the rate limiter failed). A client that disconnects before the answer starts gets a bare 499 and is not reported as an error. Model errors during an answer are masked in the stream, so provider details never reach the browser.
+
+## Streaming protocol
+
+The response is an AI SDK UI message stream over Server-Sent Events. It starts with metadata, then one `source-url` part per numbered source, then the answer text:
+
+```
+data: {"type":"start","messageMetadata":{"refused":false,"retrieval":"hybrid"}}
+data: {"type":"source-url","sourceId":"1","url":"/docs/retrieval#saying-i-dont-know","title":"How retrieval works › Saying \"I don't know\""}
+data: {"type":"text-delta","id":"…","delta":"When no chunk clears the gate, "}
+data: {"type":"finish"}
+data: [DONE]
+```
+
+Because sources arrive before the text, citations are clickable as soon as they appear. The same stream works with `useChat` from `@ai-sdk/react`, and `readAskStream` from `ask-my-site/react` parses it without the AI SDK.
+
+## Using it outside Next.js
+
+The handler is the whole integration in any runtime: `app.post('/api/ask', (c) => handler(c.req.raw))` in Hono, `Bun.serve({ fetch: handler })` in Bun, `Deno.serve(handler)` in Deno, or `export default { fetch: handler }` in a Cloudflare Worker. It answers `OPTIONS` with a 204 and your `headers`, for CORS preflights.

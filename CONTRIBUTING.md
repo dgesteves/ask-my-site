@@ -37,6 +37,8 @@ pnpm build && npm pack --pack-destination /tmp
 node scripts/consumer-site.mjs docusaurus /tmp/ask-my-site-*.tgz /tmp/site
 ```
 
+The docs live in `examples/nextjs/content/docs`, and the Docusaurus and Starlight examples' pages are generated from them: after editing a page, run `pnpm build && pnpm examples:sync` and commit the result. CI fails when they drift.
+
 Parsers must stay linear on hostile input: if you touch `src/loaders` or `src/chunk.ts`, add a case to `test/robustness.test.ts`.
 
 ## Changesets

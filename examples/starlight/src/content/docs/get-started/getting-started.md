@@ -2,16 +2,18 @@
 # Generated from examples/nextjs/content/docs/getting-started.md by scripts/sync-example-docs.mjs. Edit that file instead.
 title: 'Getting started'
 description: 'Install the package, build the index, deploy the endpoint and add the dialog.'
+sidebar:
+  order: 2
 ---
 
 Every setup has the same two halves: an index built with your site, and an endpoint that answers from it. The integration you pick decides how much of that is done for you.
 
 ## Pick your setup
 
-- **Docusaurus.** One line in `docusaurus.config.ts`: the plugin builds the index and adds the dialog. See [Docusaurus](./docusaurus.md).
-- **Astro or Starlight.** One plugin or integration in `astro.config.mjs`, which builds the index and adds the dialog. See [Astro and Starlight](./astro.md).
-- **Next.js or another React app.** Index with the CLI, mount `createAskHandler` as a route, and render `<AskDialog />`. See [Next.js and React](./nextjs.md).
-- **Any other site.** Index the built HTML with the CLI, deploy the endpoint, and add one script tag. See [Script tag](./script-tag.md).
+- **Docusaurus.** One line in `docusaurus.config.ts`: the plugin builds the index and adds the dialog. See [Docusaurus](/integrations/docusaurus/).
+- **Astro or Starlight.** One plugin or integration in `astro.config.mjs`, which builds the index and adds the dialog. See [Astro and Starlight](/integrations/astro/).
+- **Next.js or another React app.** Index with the CLI, mount `createAskHandler` as a route, and render `<AskDialog />`. See [Next.js and React](/integrations/nextjs/).
+- **Any other site.** Index the built HTML with the CLI, deploy the endpoint, and add one script tag. See [Script tag](/integrations/script-tag/).
 
 ## Install
 
@@ -50,7 +52,7 @@ export const POST = createAskHandler({
 });
 ```
 
-[Deploying](./deployment.md) has ready-made versions for Vercel, Netlify and Cloudflare.
+[Deploying](/guides/deployment/) has ready-made versions for Vercel, Netlify and Cloudflare.
 
 ## Add the dialog
 
@@ -68,4 +70,4 @@ import 'ask-my-site/embed/launcher.css';
 
 ## Try it without an API key
 
-Mock mode runs the whole pipeline offline: a deterministic embedding model and a scripted model that answers by quoting the best-matching sentences, with citations. Build with `-e mock` and serve the endpoint locally with `npx ask-my-site dev`. [Try it locally](./local-development.md) walks through it.
+Mock mode runs the whole pipeline offline: a deterministic embedding model and a scripted model that answers by quoting the best-matching sentences, with citations. Build with `-e mock` and serve the endpoint locally with `npx ask-my-site dev`. [Try it locally](/get-started/local-development/) walks through it.
