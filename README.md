@@ -9,9 +9,19 @@
 
 **Website: [ask-my-site-demo.vercel.app](https://ask-my-site-demo.vercel.app)**, with the [docs](https://ask-my-site-demo.vercel.app/docs) and a live demo: the docs answer questions about this library. The demo runs in mock mode (offline embeddings, answers quoted from the docs), so no API key is involved.
 
+<!-- npm-readme:video -->
+
 https://github.com/user-attachments/assets/a6cc9565-cdee-4654-8616-be30ae4d7a8b
 
 <sub>The <a href="https://ask-my-site-demo.vercel.app">live demo</a>: a question, a streamed answer with citations, and a citation opening the section it came from. On that docs page, the Ask button answers a setup question with the exact config. Then the one-line setup for Docusaurus, Starlight and any other site.</sub>
+
+<!-- npm-readme:image
+<p align="center">
+  <a href="https://ask-my-site-demo.vercel.app"><img src=".github/assets/hero.png" alt="The ask dialog over a docs page: a streamed answer with numbered citation chips, and a list of three sources linking to the exact sections it came from." width="900"></a>
+</p>
+
+<sub>A 20-second demo video of the live site plays in the <a href="https://github.com/dgesteves/ask-my-site#readme">README on GitHub</a>.</sub>
+-->
 
 ## Why
 
