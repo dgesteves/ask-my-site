@@ -3,10 +3,21 @@ import Link from 'next/link';
 
 import { getSections } from '../../lib/docs';
 
+const description =
+  'Set up ask-my-site with Docusaurus, Astro, Starlight, Next.js or a script tag, choose a model provider, deploy the endpoint, and tune retrieval.';
+
 export const metadata: Metadata = {
   title: 'Documentation',
-  description:
-    'Set up ask-my-site with Docusaurus, Astro, Starlight, Next.js or a script tag, choose a model provider, deploy the endpoint, and tune retrieval.',
+  description,
+  alternates: { canonical: '/docs' },
+  openGraph: {
+    type: 'website',
+    siteName: 'ask-my-site',
+    title: 'ask-my-site documentation',
+    description,
+    url: '/docs',
+  },
+  twitter: { card: 'summary_large_image', title: 'ask-my-site documentation', description },
 };
 
 export default async function DocsHome() {

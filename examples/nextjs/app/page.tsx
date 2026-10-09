@@ -15,7 +15,7 @@ import './landing.css';
 
 export const metadata: Metadata = {
   title: { absolute: 'ask-my-site: a self-hosted Ask AI box for docs sites' },
-  alternates: { canonical: '/' },
+  alternates: { canonical: '/', types: { 'text/plain': '/llms.txt' } },
 };
 
 const DEPLOY_STEP = {

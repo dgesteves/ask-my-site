@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square&labelColor=181c22)](./LICENSE)
 [![Types](https://img.shields.io/badge/types-included-22d3ee?style=flat-square&labelColor=181c22)](#api)
 
-**[Try the live demo →](https://ask-my-site-demo.vercel.app)** A docs site that answers questions about this library. It runs in mock mode (offline embeddings, scripted extractive answers), so no API key is involved.
+**Website: [ask-my-site-demo.vercel.app](https://ask-my-site-demo.vercel.app)**, with the [docs](https://ask-my-site-demo.vercel.app/docs) and a live demo: the docs answer questions about this library. The demo runs in mock mode (offline embeddings, answers quoted from the docs), so no API key is involved.
 
 <p align="center">
   <img src=".github/assets/hero.png" alt="The ask dialog over a docs page: a streamed answer with numbered citation chips, and a list of three sources linking to the exact sections it came from." width="900">
@@ -331,7 +331,7 @@ For Hugo, Jekyll, Eleventy, MkDocs or plain HTML, one script tag adds the dialog
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.4/dist/embed.global.js"
+  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.5/dist/embed.global.js"
   data-endpoint="/api/ask"
   defer
 ></script>
@@ -341,13 +341,13 @@ For Hugo, Jekyll, Eleventy, MkDocs or plain HTML, one script tag adds the dialog
 2. **Deploy the endpoint** next to the site, with one of the [recipes](#docusaurus) or the [full setup](#full-setup), reading your index. To try it first, run `npx ask-my-site dev` beside the index and set `data-endpoint="http://localhost:8787/api/ask"`.
 3. **Add the script tag** to your base template.
 
-It mounts itself once the page has loaded, with its tag's attributes: `data-endpoint` (default `/api/ask`), `data-title`, `data-placeholder`, `data-suggestions` (a JSON array, as in `data-suggestions='["How do I install it?"]'`), `data-shortcut` (default `i`; `"false"` turns it off), `data-button-label` (default "Ask AI"; `"false"` hides the button) and `data-theme` (`auto`, the default, follows `data-theme` on `<html>` when the site sets one, and the system setting otherwise; or `light` or `dark`). With `data-manual` it waits for `window.AskMySite.mount(options)`, which takes the same options and returns `{ open, close, unmount }`, for example to open the dialog from your own search box. Pin an exact version (`ask-my-site@0.4.0`) in production.
+It mounts itself once the page has loaded, with its tag's attributes: `data-endpoint` (default `/api/ask`), `data-title`, `data-placeholder`, `data-suggestions` (a JSON array, as in `data-suggestions='["How do I install it?"]'`), `data-shortcut` (default `i`; `"false"` turns it off), `data-button-label` (default "Ask AI"; `"false"` hides the button) and `data-theme` (`auto`, the default, follows `data-theme` on `<html>` when the site sets one, and the system setting otherwise; or `light` or `dark`). With `data-manual` it waits for `window.AskMySite.mount(options)`, which takes the same options and returns `{ open, close, unmount }`, for example to open the dialog from your own search box. Pin an exact version (`ask-my-site@0.5.0`) in production.
 
 In an app with a bundler, `mountAskDialog(options)` from `ask-my-site/embed` does the same with your own React (install `react`, `react-dom`, `@radix-ui/react-dialog` and `cmdk`); import `ask-my-site/react/styles.css` and `ask-my-site/embed/launcher.css` with it.
 
 ## Example site
 
-The [Next.js example](./examples/nextjs), which the [live demo](https://ask-my-site-demo.vercel.app) runs, is a docs site about ask-my-site that indexes itself.
+The [Next.js example](./examples/nextjs) is [the website](https://ask-my-site-demo.vercel.app): a landing page and docs about ask-my-site that index themselves.
 
 ```sh
 pnpm install && pnpm example:dev   # http://localhost:3000, then press ⌘K

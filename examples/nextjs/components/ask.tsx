@@ -1,10 +1,14 @@
 'use client';
 
-import { AskDialog } from 'ask-my-site/react';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
-
-import { SUGGESTIONS } from '../lib/site';
+import dynamic from 'next/dynamic';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 
 const OPEN_EVENT = 'ask-my-site:open';
 
@@ -13,49 +17,60 @@ export function openAsk(): void {
   window.dispatchEvent(new Event(OPEN_EVENT));
 }
 
+// The dialog's code (Radix, cmdk, the dialog itself) loads once the page is idle, or on the first
+// ⌘K or click, so it never competes with the first paint.
+const SiteAskDialog = dynamic(() => import('./ask-dialog').then((m) => m.SiteAskDialog), {
+  ssr: false,
+});
+
+/** Text fields and editors keep ⌘K, as the dialog's own shortcut does. */
+const isEditable = (target: EventTarget | null): boolean =>
+  target instanceof Element &&
+  target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])') !==
+    null;
+
 /** The ask dialog, mounted once in the root layout and opened by ⌘K or any `AskButton`. */
 export function Ask({ mode }: { mode: 'openai' | 'mock' }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const openRef = useRef(false);
+  const setOpen = useCallback((next: boolean) => {
+    openRef.current = next;
+    setOpenState(next);
+  }, []);
+
   useEffect(() => {
+    const load = () => {
+      setLoaded(true);
+    };
     const show = () => {
+      load();
       setOpen(true);
     };
+    // ⌘K is handled here rather than by the dialog, so it works before the dialog has loaded.
+    // As in the dialog: a text field keeps it, except the dialog's own input, which closes it.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;
+      if (!openRef.current && isEditable(event.target)) return;
+      event.preventDefault();
+      load();
+      setOpen(!openRef.current);
+    };
     window.addEventListener(OPEN_EVENT, show);
+    window.addEventListener('keydown', onKeyDown);
+    const idle =
+      typeof window.requestIdleCallback === 'function'
+        ? window.requestIdleCallback(load, { timeout: 4000 })
+        : window.setTimeout(load, 2000);
     return () => {
       window.removeEventListener(OPEN_EVENT, show);
+      window.removeEventListener('keydown', onKeyDown);
+      if (typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idle);
+      else window.clearTimeout(idle);
     };
-  }, []);
-  return (
-    <AskDialog
-      endpoint="/api/ask"
-      open={open}
-      onOpenChange={setOpen}
-      theme="dark"
-      title="Ask the ask-my-site docs"
-      placeholder="Ask the docs a question…"
-      suggestions={SUGGESTIONS}
-      onNavigate={(url, event) => {
-        // Same-site links go through the client router; anything else navigates normally.
-        if (url.startsWith('/')) {
-          event.preventDefault();
-          router.push(url);
-        }
-      }}
-      footer={
-        <div className="ask-footer">
-          <span>
-            {mode === 'mock'
-              ? 'Mock mode: offline embeddings, answers quoted from these docs.'
-              : 'Answers are generated from these docs and can be wrong. Check the sources.'}
-          </span>
-          <span className="ask-footer-keys" aria-hidden="true">
-            <kbd className="ask-kbd">↵</kbd> ask <kbd className="ask-kbd">esc</kbd> close
-          </span>
-        </div>
-      }
-    />
-  );
+  }, [setOpen]);
+
+  return loaded ? <SiteAskDialog mode={mode} open={open} onOpenChange={setOpen} /> : null;
 }
 
 const noSubscription = () => () => undefined;

@@ -53,6 +53,11 @@ async function readDoc(slug: string): Promise<{ meta: DocMeta; body: string } | 
   };
 }
 
+/** A page's Markdown, without its frontmatter. */
+export const getDocSource = cache(
+  async (slug: string): Promise<string | null> => (await readDoc(slug))?.body ?? null,
+);
+
 export const getDocs = cache(async (): Promise<DocMeta[]> => {
   const files = (await readdir(DOCS_DIR)).filter((file) => file.endsWith('.md'));
   const docs = await Promise.all(files.map((file) => readDoc(file.replace(/\.md$/, ''))));

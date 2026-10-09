@@ -12,7 +12,22 @@ export async function generateStaticParams() {
 
 export async function generateMetadata(props: PageProps<'/docs/[slug]'>): Promise<Metadata> {
   const doc = await getDoc((await props.params).slug);
-  return doc ? { title: doc.title, description: doc.description } : {};
+  if (!doc) return {};
+  const url = `/docs/${doc.slug}`;
+  const title = `${doc.title} · ask-my-site`;
+  return {
+    title: doc.title,
+    description: doc.description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: 'article',
+      siteName: 'ask-my-site',
+      title,
+      description: doc.description,
+      url,
+    },
+    twitter: { card: 'summary_large_image', title, description: doc.description },
+  };
 }
 
 export default async function DocPage(props: PageProps<'/docs/[slug]'>) {
