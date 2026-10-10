@@ -76,7 +76,7 @@ and render `<AskDialog launcher />` from `ask-my-site/react` in your layout.
 **Any other site.** Index the HTML it builds (`npx ask-my-site index public`), deploy the endpoint, and add:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/ask-my-site@0.5/dist/embed.global.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/ask-my-site@0.6/dist/embed.global.js" defer></script>
 ```
 
 **Try it without a key.** `npx ask-my-site index ./docs -e mock`, then `npx ask-my-site dev`, serves the ask endpoint and the MCP server on localhost, with offline embeddings and a mock model that quotes your docs. See [Try it locally](https://ask-my-site-demo.vercel.app/docs/local-development).

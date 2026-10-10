@@ -122,7 +122,7 @@ async function setupTabs(): Promise<SetupTab[]> {
         {
           title: 'Add the script tag',
           code: await codeBlock(
-            '<script\n  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.5/dist/embed.global.js"\n  data-endpoint="/api/ask"\n  defer\n></script>',
+            '<script\n  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.6/dist/embed.global.js"\n  data-endpoint="/api/ask"\n  defer\n></script>',
             'html',
           ),
         },
