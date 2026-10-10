@@ -86,7 +86,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        site: [next, docusaurus, starlight]
+        # The last two install the plugin under its own package's name, from packages/.
+        site: [next, docusaurus, starlight, docusaurus-plugin-ask-my-site, starlight-ask-my-site]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

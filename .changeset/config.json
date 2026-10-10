@@ -4,10 +4,14 @@
   "commit": false,
   "access": "public",
   "baseBranch": "main",
-  "fixed": [],
+  "fixed": [["ask-my-site", "docusaurus-plugin-ask-my-site", "starlight-ask-my-site"]],
   "linked": [],
   "updateInternalDependencies": "patch",
-  "privatePackages": { "version": false, "tag": false },
-  "ignore": [],
+  "privatePackages": { "version": true, "tag": false },
+  "ignore": [
+    "ask-my-site-example-docusaurus",
+    "ask-my-site-example-nextjs",
+    "ask-my-site-example-starlight"
+  ],
   "changedFilePatterns": ["src/**", "package.json", "README.md"]
 }

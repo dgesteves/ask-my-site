@@ -25,6 +25,8 @@
     "withastro",
     "starlight",
     "starlight-plugin",
+    "chatbot",
+    "ui",
     "utility"
   ],
   "homepage": "https://github.com/dgesteves/ask-my-site#readme",
