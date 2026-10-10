@@ -32,7 +32,7 @@ MDX is reduced to text without being evaluated, so components that render conten
 
 ## Rate limits per instance
 
-`memoryRateLimit` counts per server instance, so on a serverless platform with many instances it limits each noisy client, not your total spend. Use `upstashRateLimit`, or your provider's spend limits, for a global cap.
+`memoryRateLimit` counts per server instance, so on a serverless platform with many instances it limits each noisy client, not your total spend. A `budget` caps the total, but its memory store also counts per instance: give it `upstashBudgetStore` (and the limiter `upstashRateLimit`) for one count across instances, and set your provider's spend limit as the hard cap.
 
 ## Tuning per embedding model
 

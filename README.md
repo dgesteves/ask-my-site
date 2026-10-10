@@ -80,7 +80,7 @@ Then point the dialog at `http://localhost:8787/api/ask`: start a site that uses
 - **Web-standard handler.** `(Request) => Promise<Response>` built on Web APIs only, so it mounts in Next.js route handlers, Hono, Bun, Deno or Cloudflare Workers. It streams the AI SDK UI message protocol, so `useChat` can consume it too.
 - **Accessible ⌘K dialog.** Radix Dialog and cmdk; focus management, `aria-live` answer, reduced motion, light and dark themes, unstyled-friendly.
 - **Plugins and a script tag.** [Docusaurus](#docusaurus), [Astro and Starlight](#astro-and-starlight) plugins index the built site at the URLs it serves and add the dialog; [one `<script>` tag](#any-static-site-script-embed) adds it to Hugo, Jekyll, Eleventy, MkDocs or plain HTML.
-- **Production hygiene.** zod-validated input, body-size cap, pluggable rate limiting (in-memory or Upstash) keyed on the one client IP header your platform controls, masked model errors, keyword fallback when the embedding provider is down.
+- **Production hygiene.** zod-validated input, body-size cap, pluggable rate limiting (in-memory or Upstash) keyed on the one client IP header your platform controls, a daily budget of questions and model tokens, an answer cache for repeated questions, masked model errors, keyword fallback when the embedding provider is down.
 - **Offline mock mode.** A deterministic embedder and a scripted extractive model run the whole pipeline with no key, for demos and tests.
 
 ## How it works
@@ -473,11 +473,13 @@ export default {
 | `rateLimit`                | none                        | `(request) => { success, limit?, remaining?, reset? }`, sync or async. See [rate limits and client IPs](#rate-limits-and-client-ips).                                                                                          |
 | `rateLimitFailure`         | `"closed"`                  | When `rateLimit` throws (e.g. Redis is down): `"closed"` answers 503 without calling the model, `"open"` answers anyway. Reported to `onError` either way.                                                                     |
 | `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`, …                                                                                                                                            |
+| `budget`                   | none                        | `{ requestsPerDay, tokensPerDay, store }`: a daily cap on questions and model tokens, then a 429 `budget_exceeded`. See [daily budget and answer cache](#daily-budget-and-answer-cache).                                       |
+| `answerCache`              | off                         | `true`, or `{ store, ttlSeconds }`: a repeated question is answered from the cache, with no embedding or model call.                                                                                                           |
 | `headers`                  | none                        | Added to every response, including the 204 that answers a CORS preflight. Cross-origin: set `access-control-allow-origin` and `access-control-allow-headers: content-type`, and in Next.js also `export const OPTIONS = POST`. |
-| `onFinish`                 | none                        | `{ question, answer, sources, refused, retrieval, usage }` after each answer. If it throws or rejects, the error goes to `onError` and the answer the visitor got is unaffected.                                               |
+| `onFinish`                 | none                        | `{ question, answer, sources, refused, retrieval, usage, cached }` after each answer. If it throws or rejects, the error goes to `onError` and the answer the visitor got is unaffected.                                       |
 | `onError`                  | `console.error`             | Handled errors: embedding fallbacks, model failures, generations aborted by `generation.timeout` (not client disconnects), a failing `rateLimit` or `onFinish`, misconfiguration.                                              |
 
-The body is `{ "question": string }` sent as `application/json`; the `{ messages }` body that `useChat` sends is accepted too, using the last user message. Any other content type gets a 415: browsers only send a cross-origin POST without a CORS preflight when its type is `text/plain`, a form encoding or missing, so requiring JSON means another site's page cannot make its visitors' browsers spend your model budget unless your `headers` allow its origin. Errors are JSON `{ error: { code, message } }` with 400, 405, 413, 415, 429 (with `Retry-After` and `RateLimit-*` headers), 500 or 503 (the rate limiter failed). A client that disconnects before the answer starts gets a bare 499 and is not reported as an error.
+The body is `{ "question": string }` sent as `application/json`; the `{ messages }` body that `useChat` sends is accepted too, using the last user message. Any other content type gets a 415: browsers only send a cross-origin POST without a CORS preflight when its type is `text/plain`, a form encoding or missing, so requiring JSON means another site's page cannot make its visitors' browsers spend your model budget unless your `headers` allow its origin. Errors are JSON `{ error: { code, message } }` with 400, 405, 413, 415, 429 (code `rate_limited`, with `Retry-After` and `RateLimit-*` headers, or `budget_exceeded`, with `Retry-After`), 500 or 503 (the rate limiter or the budget store failed). A client that disconnects before the answer starts gets a bare 499 and is not reported as an error.
 
 The response is an [AI SDK UI message stream](https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol) (SSE):
 
@@ -494,7 +496,7 @@ Rate limiters: `memoryRateLimit({ limit, windowMs })` is a per-instance token bu
 
 #### Rate limits and client IPs
 
-A rate limit is only as strong as its key. Both limiters key each request by the client IP read from **one** header, and a header can only be trusted if your platform sets it on every request, replacing whatever the client sent. Any other header passes through from the client unchanged, so trusting it lets a client pick a new key for every request and never be limited. ask-my-site cannot know which headers your platform controls, so it never guesses from a list: it reads the last entry of `X-Forwarded-For` unless you name the header with `trustedHeader`.
+A rate limit is only as strong as its key. Both limiters key each request by the client IP read from **one** header, and a header can only be trusted if your platform sets it on every request, replacing whatever the client sent. Any other header passes through from the client unchanged, so trusting it lets a client pick a new key for every request and never be limited. ask-my-site cannot know which headers your platform controls, so it never guesses from a list: it reads the last entry of `X-Forwarded-For` unless you name the header with `trustedHeader`. An IPv6 address is keyed by its /64, since one subscriber is usually given a whole /64 and could otherwise use a new address for every request.
 
 | Where the handler runs                                     | Configure                                                                                                                                                           |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -508,6 +510,28 @@ A rate limit is only as strong as its key. Both limiters key each request by the
 Use your platform's header even when others are present: on Vercel, for example, a client can send its own `cf-connecting-ip`. When the header holds a list, the last entry (added by the nearest proxy) is used, so with several proxies in a chain, name a header the outermost one sets. Requests that lack the header share one `"anonymous"` bucket rather than falling back to a header the client controls. `key: (request) => string` replaces the lookup entirely, for example to limit per signed-in user; `clientKey(request, { trustedHeader })` is exported for custom limiters.
 
 If the limiter itself fails (Upstash unreachable, a bug in your own), the handler fails closed: it reports the error and answers 503 without calling the model. The limiter is what stands between a public endpoint and an unbounded model bill, and its outage can be provoked, for example by a flood that exhausts a Redis plan's request quota, so its failure should not quietly switch it off. Set `rateLimitFailure: 'open'` if you would rather keep answering during an outage and rely on your provider's spend limits. (`@upstash/ratelimit` already allows requests when Redis is merely slow, after its own `timeout`.)
+
+#### Daily budget and answer cache
+
+A rate limit is per client, so many clients, or one rotating its IPs, can still run up the bill. `budget` caps the whole endpoint per UTC day:
+
+```ts
+import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+
+export const POST = createAskHandler({
+  // …
+  rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000 }),
+  budget: { requestsPerDay: 1_000, tokensPerDay: 3_000_000 }, // about 3k tokens an answer
+  answerCache: true,
+});
+```
+
+- **`requestsPerDay`** counts the questions that go on to retrieval and the model. **`tokensPerDay`** counts model tokens, input plus output, from each answer's `usage`. Before the model is called, the answer's worst case (its prompt plus `maxOutputTokens`) is reserved, and it goes ahead only if that fits in what is left; once it ends, the reservation is corrected to the real usage. So concurrent answers cannot overshoot the cap, and an answer the visitor abandons keeps its reservation.
+- **Once either is spent**, questions get a 429 with code `budget_exceeded` and `Retry-After` until midnight UTC, without a model call, and the dialog says "The assistant has reached its daily limit. Please try again later." (`message` replaces it).
+- **The store** is in memory by default, so on a serverless platform each instance counts its own budget. For one budget across every instance, pass `store: upstashBudgetStore(Redis.fromEnv())` with `@upstash/redis` (any client with `incrby` and `expire` works), or your own `{ increment(key, amount, ttlSeconds) }`. If the store fails, the handler answers 503, or answers anyway with `rateLimitFailure: 'open'`.
+- **Either way, set a spend limit with your model provider.** It is the only hard cap: the budget bounds what this handler spends, not what your key spends elsewhere.
+
+`answerCache: true` answers a question asked again from memory, with no embedding call and no model call, so the questions everyone asks cost nothing after the first time. Questions are compared normalized (case, spacing and trailing punctuation aside), and the key also covers the index's content hash, the model and the instructions, so a rebuilt index or a new prompt starts fresh. Answers that were cut short or made while the embedding provider was down are not kept. Pass `{ store: upstashAnswerCache(Redis.fromEnv()), ttlSeconds }` (default a day) to share it between instances; `onFinish` receives `cached: true` for an answer from the cache.
 
 ### `<AskDialog />` and `useAsk()` from `ask-my-site/react`
 
@@ -524,7 +548,7 @@ If the limiter itself fails (Upstash unreachable, a bug in your own), the handle
 | `classNames`                          | none               | Extra classes per part: `overlay`, `content`, `input`, `list`, `item`, `answer`, `sources`, `footer`.        |
 | `title`, `placeholder`, `footer`      | sensible defaults  | `title` is the dialog's accessible name.                                                                     |
 
-`useAsk({ endpoint })` returns `{ ask, stop, reset, status, question, answer, sources, refused, truncated, retrieval, error }`. `status` is `idle | loading | streaming | done | error`; `error.kind` is `rate-limited | http | network | stream`, with `retryAfter` for rate limits. When the endpoint answers 404, the visitor reads that answers aren't available, and in development (a dev build, or a page on localhost) the console says which URL the dialog posted to. `truncated` is `true` when the model stopped at its output limit (`generation.maxOutputTokens`, 800 by default), so a `done` answer may be incomplete; the dialog says so under the answer. Sources arrive before the first word, deltas are batched to one render per animation frame, and `stop()` keeps the partial answer. Closing the dialog, by Escape, a click outside or a controlling parent, stops the answer in flight so the model is not left generating for nobody.
+`useAsk({ endpoint })` returns `{ ask, stop, reset, status, question, answer, sources, refused, truncated, retrieval, error }`. `status` is `idle | loading | streaming | done | error`; `error.kind` is `rate-limited | http | network | stream`, with `retryAfter` for rate limits and `code`, the server's error code (`rate_limited`, or `budget_exceeded` once the daily budget is spent). When the endpoint answers 404, the visitor reads that answers aren't available, and in development (a dev build, or a page on localhost) the console says which URL the dialog posted to. `truncated` is `true` when the model stopped at its output limit (`generation.maxOutputTokens`, 800 by default), so a `done` answer may be incomplete; the dialog says so under the answer. Sources arrive before the first word, deltas are batched to one render per animation frame, and `stop()` keeps the partial answer. Closing the dialog, by Escape, a click outside or a controlling parent, stops the answer in flight so the model is not left generating for nobody.
 
 Theming is CSS custom properties: `.ask-dialog { --ask-accent: #7c3aed; --ask-radius: 8px; }`. Skip the stylesheet entirely and style the stable `ask-*` classes, or pass Tailwind classes through `classNames`.
 

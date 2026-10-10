@@ -26,7 +26,9 @@ export interface ClientKeyOptions {
 }
 
 /**
- * The client's IP, read from one header, or `"anonymous"` when that header is missing.
+ * The client's IP, read from one header, or `"anonymous"` when that header is missing. An IPv6
+ * address is reduced to its /64 network (`2001:db8:1:2::/64`): one subscriber is usually given a
+ * whole /64, and can use a new address from it for every request.
  *
  * By default it is the *last* `x-forwarded-for` entry: proxies append to that header, so its
  * last entry is the address the nearest proxy saw, while everything before it is whatever the
@@ -36,7 +38,61 @@ export interface ClientKeyOptions {
  */
 export function clientKey(request: Request, options: ClientKeyOptions = {}): string {
   const header = options.trustedHeader ?? 'x-forwarded-for';
-  return request.headers.get(header)?.split(',').at(-1)?.trim() || 'anonymous';
+  const address = request.headers.get(header)?.split(',').at(-1)?.trim();
+  return address ? addressKey(address) : 'anonymous';
+}
+
+const IPV4 = /^(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?$/;
+const HEXTET = /^[\da-f]{1,4}$/;
+
+/**
+ * The key for one address: an IPv4 address as it is (without a port), an IPv6 address as its /64
+ * (an IPv4-mapped one, `::ffff:192.0.2.1`, as the IPv4 address). Anything that parses as neither
+ * is kept as it is.
+ */
+function addressKey(raw: string): string {
+  const value = raw.toLowerCase();
+  const v4 = IPV4.exec(value);
+  if (v4?.[1]) return v4[1];
+  // `[2001:db8::1]:443`, and a zone (`fe80::1%eth0`).
+  const bare = (value.startsWith('[') ? value.slice(1, value.indexOf(']')) : value).replace(
+    /%.*$/,
+    '',
+  );
+  const groups = ipv6Groups(bare);
+  if (!groups) return value;
+  if (groups.slice(0, 5).every((group) => group === 0) && groups[5] === 0xffff) {
+    const [high = 0, low = 0] = groups.slice(6);
+    return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.');
+  }
+  return `${groups
+    .slice(0, 4)
+    .map((group) => group.toString(16))
+    .join(':')}::/64`;
+}
+
+/** The eight 16-bit groups of an IPv6 address, or `null` if it is not one. */
+function ipv6Groups(address: string): number[] | null {
+  if (!address.includes(':')) return null;
+  let text = address;
+  // A trailing dotted quad (`::ffff:192.0.2.1`) is the last two groups.
+  const quad = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text);
+  if (quad) {
+    const bytes = quad.slice(1).map(Number);
+    if (bytes.some((byte) => byte > 255)) return null;
+    const [a = 0, b = 0, c = 0, d = 0] = bytes;
+    text = `${text.slice(0, quad.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const parse = (part: string | undefined): string[] => (part ? part.split(':') : []);
+  const head = parse(halves[0]);
+  const tail = parse(halves[1]);
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 1) return null;
+  const groups = [...head, ...Array<string>(halves.length === 1 ? 0 : missing).fill('0'), ...tail];
+  if (!groups.every((group) => HEXTET.test(group))) return null;
+  return groups.map((group) => parseInt(group, 16));
 }
 
 export interface MemoryRateLimitOptions extends ClientKeyOptions {
