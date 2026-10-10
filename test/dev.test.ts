@@ -81,10 +81,10 @@ describe('ask-my-site dev', () => {
     expect((await fetch(server.endpoint.replace('/api/ask', '/'))).status).toBe(404);
   });
 
-  it('allows any origin by default, or only the ones it is given', async () => {
+  it('allows pages on this machine by default, and other origins only when it is told to', async () => {
     await indexAt('ask-index.json');
-    const open = await serve('ask-index.json');
-    const preflight = await fetch(open.server.endpoint, {
+    const local = await serve('ask-index.json');
+    const preflight = await fetch(local.server.endpoint, {
       method: 'OPTIONS',
       headers: {
         origin: 'http://localhost:3000',
@@ -93,18 +93,25 @@ describe('ask-my-site dev', () => {
       },
     });
     expect(preflight.status).toBe(204);
-    expect(preflight.headers.get('access-control-allow-origin')).toBe('*');
+    expect(preflight.headers.get('access-control-allow-origin')).toBe('http://localhost:3000');
     expect(preflight.headers.get('access-control-allow-headers')).toBe('content-type');
     expect(preflight.headers.get('access-control-allow-methods')).toContain('POST');
+    expect(preflight.headers.get('vary')).toBe('origin');
 
-    const { server } = await serve('ask-index.json', { origins: ['http://localhost:4321'] });
-    const site = await ask(server.endpoint, 'int8', { origin: 'http://localhost:4321' });
-    expect(site.headers.get('access-control-allow-origin')).toBe('http://localhost:4321');
+    const { server } = await serve('ask-index.json', { origins: ['https://docs.example.com'] });
+    const site = await ask(server.endpoint, 'int8', { origin: 'https://docs.example.com' });
+    expect(site.headers.get('access-control-allow-origin')).toBe('https://docs.example.com');
     expect(site.headers.get('vary')).toBe('origin');
     await site.body?.cancel();
     const other = await ask(server.endpoint, 'int8', { origin: 'http://evil.example' });
+    expect(other.status).toBe(403);
     expect(other.headers.get('access-control-allow-origin')).toBeNull();
     await other.body?.cancel();
+
+    const any = await serve('ask-index.json', { origins: ['*'] });
+    const anywhere = await ask(any.server.endpoint, 'int8', { origin: 'http://evil.example' });
+    expect(anywhere.headers.get('access-control-allow-origin')).toBe('*');
+    await anywhere.body?.cancel();
   });
 
   it('picks up a rebuilt index on the next question', async () => {

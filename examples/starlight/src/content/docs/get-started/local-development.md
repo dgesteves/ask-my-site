@@ -18,7 +18,7 @@ npx ask-my-site index ./docs -e mock   # writes ask-index.json
 npx ask-my-site dev                    # serves POST http://localhost:8787/api/ask
 ```
 
-`ask-my-site dev` answers from `ask-index.json`, or from `build/ask-index.json` or `dist/ask-index.json`, where the Docusaurus and Astro plugins write theirs. It listens on 127.0.0.1 port 8787 (`--port`), allows any origin by default (`--origin` to list some), and picks up a rebuilt index on the next question.
+`ask-my-site dev` answers from `ask-index.json`, or from `build/ask-index.json` or `dist/ask-index.json`, where the Docusaurus and Astro plugins write theirs. It listens on 127.0.0.1 port 8787 (`--port`), answers pages on this machine only (`--allow-origin` adds another origin), and picks up a rebuilt index on the next question.
 
 ## Point the dialog at it
 

@@ -28,7 +28,9 @@ Options:
       --index <file>           Index file (default: ask-index.json, then build/ask-index.json,
                                then dist/ask-index.json)
       --port <n>               Port on 127.0.0.1 (default: 8787)
-      --origin <origin>        Origin allowed to call it (CORS); repeatable (default: any)
+      --allow-origin <origin>  Another origin allowed to call it, such as https://docs.example.com;
+                               repeatable, or * for any (default: localhost, 127.0.0.1 and [::1]
+                               origins, on any port)
       --model <id>             OpenAI model for answers (default: gpt-5.4-mini)
   -h, --help                   Show this help
 
@@ -157,7 +159,10 @@ export interface DevServerOptions {
   file: string;
   /** Default 8787; 0 picks a free port. */
   port?: number;
-  /** Origins allowed to call the endpoint; `*` (the default) allows any. */
+  /**
+   * Origins allowed to call the endpoint besides local ones (localhost, 127.0.0.1 and [::1], on
+   * any port), or `*` for any.
+   */
   origins?: readonly string[];
   /** OpenAI model for answers, when OPENAI_API_KEY is set. */
   answerModel?: string;
@@ -175,12 +180,42 @@ export interface DevServer {
   close: () => Promise<void>;
 }
 
+/** Largest request body `dev` reads, as `createAskHandler`'s default `maxBodyBytes`. */
+const MAX_BODY_BYTES = 64 * 1024;
+
+/** `localhost`, a name under it, `127.0.0.1` or `[::1]`: names only this machine answers to. */
+const LOCAL_HOSTNAME = /^(?:(?:[a-z\d-]+\.)*localhost|127\.0\.0\.1|\[::1\])$/i;
+
+/** Whether a `Host` header names this machine (with any port), not a name that resolves to it. */
+export function isLocalHost(host: string | undefined): boolean {
+  if (!host) return false;
+  const name = host.replace(/:\d+$/, '');
+  return LOCAL_HOSTNAME.test(name);
+}
+
+/** Whether an `Origin` is a page served from this machine: http(s) on a local host name. */
+export function isLocalOrigin(origin: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return false;
+  }
+  return (url.protocol === 'http:' || url.protocol === 'https:') && isLocalHost(url.host);
+}
+
 /**
- * Serves `createAskHandler` at `/api/ask` on 127.0.0.1, with CORS for `origins`. The index is read
- * again, with its models chosen again, when the file changes, so rebuilding the site is enough.
+ * Serves `createAskHandler` at `/api/ask` on 127.0.0.1. Only pages on this machine may call it,
+ * plus any of `origins`, so a site you visit cannot spend your key through it; requests must name
+ * this machine in `Host` (which defeats DNS rebinding, where another name resolves to 127.0.0.1);
+ * and bodies are capped as the handler caps them. The index is read again, with its models chosen
+ * again, when the file changes, so rebuilding the site is enough.
  */
 export async function startDevServer(options: DevServerOptions): Promise<DevServer> {
-  const origins = options.origins?.length ? options.origins : ['*'];
+  const origins = options.origins ?? [];
+  const anyOrigin = origins.includes('*');
+  const originAllowed = (origin: string): boolean =>
+    anyOrigin || isLocalOrigin(origin) || origins.includes(origin);
   const load = async () => {
     const index = await readIndexFile(options.file);
     if (!index) throw new DevError(`No index at ${options.file}.`);
@@ -215,17 +250,28 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 
   const cors = (request: IncomingMessage): Record<string, string> => {
     const origin = request.headers.origin;
-    const allowed = origins.includes('*')
-      ? '*'
-      : origin && origins.includes(origin)
-        ? origin
-        : undefined;
+    const allowed = anyOrigin ? '*' : origin && originAllowed(origin) ? origin : undefined;
     return {
       ...(allowed ? { 'access-control-allow-origin': allowed } : {}),
       'access-control-allow-methods': 'POST, OPTIONS',
       'access-control-allow-headers': 'content-type',
       ...(allowed === '*' ? {} : { vary: 'origin' }),
     };
+  };
+
+  const refuse = (
+    request: IncomingMessage,
+    response: ServerResponse,
+    status: number,
+    code: string,
+    message: string,
+  ): void => {
+    response.writeHead(status, {
+      'content-type': 'application/json',
+      connection: 'close',
+      ...cors(request),
+    });
+    response.end(JSON.stringify({ error: { code, message } }));
   };
 
   const server = createServer((request, response) => {
@@ -241,6 +287,22 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
   });
 
   async function serve(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    // A page on another site can reach 127.0.0.1 through a name it controls that resolves there
+    // (DNS rebinding), and then its requests are same-origin, so CORS cannot stop them. Its Host
+    // header still carries that name.
+    if (!isLocalHost(request.headers.host)) {
+      options.error(`  ✗ Refused a request for host ${request.headers.host ?? '(none)'}.`);
+      refuse(request, response, 403, 'forbidden', 'ask-my-site dev only answers on localhost.');
+      return;
+    }
+    const origin = request.headers.origin;
+    if (origin !== undefined && !originAllowed(origin)) {
+      options.error(
+        `  ✗ Refused a request from ${origin}: pass --allow-origin ${origin} to allow it.`,
+      );
+      refuse(request, response, 403, 'forbidden', `Origin ${origin} is not allowed.`);
+      return;
+    }
     const url = new URL(request.url ?? '/', 'http://localhost');
     if (url.pathname !== '/api/ask') {
       response.writeHead(404, { 'content-type': 'application/json', ...cors(request) });
@@ -251,8 +313,24 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
       );
       return;
     }
-    const chunks: Buffer[] = [];
-    for await (const chunk of request) chunks.push(chunk as Buffer);
+    const tooLarge = (): void => {
+      refuse(request, response, 413, 'payload_too_large', 'Request body too large.');
+      // Discard what is left of it for a moment, so the client reads the 413 rather than a reset,
+      // then hang up: an endless upload must not keep the connection.
+      request.resume();
+      response.on('finish', () => {
+        setTimeout(() => request.destroy(), 1000).unref();
+      });
+    };
+    if (Number(request.headers['content-length'] ?? 0) > MAX_BODY_BYTES) {
+      tooLarge();
+      return;
+    }
+    const body = await readBody(request, MAX_BODY_BYTES);
+    if (body === null) {
+      tooLarge();
+      return;
+    }
     // Stops the answer when the browser goes away, as a platform would.
     const controller = new AbortController();
     response.on('close', () => {
@@ -270,7 +348,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
         method,
         headers,
         signal: controller.signal,
-        ...(method === 'GET' || method === 'HEAD' ? {} : { body: Buffer.concat(chunks) }),
+        ...(method === 'GET' || method === 'HEAD' ? {} : { body }),
       }),
     );
     response.writeHead(answer.status, { ...Object.fromEntries(answer.headers), ...cors(request) });
@@ -308,6 +386,30 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
   };
 }
 
+/**
+ * The request body, or `null` as soon as it passes `limit` bytes, without reading the rest: a
+ * chunked upload has no length to check up front, and could otherwise go on forever.
+ */
+function readBody(request: IncomingMessage, limit: number): Promise<Buffer<ArrayBuffer> | null> {
+  return new Promise((resolveBody, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    const onData = (chunk: Buffer): void => {
+      size += chunk.byteLength;
+      if (size <= limit) {
+        chunks.push(chunk);
+        return;
+      }
+      request.off('data', onData).off('end', onEnd).pause();
+      resolveBody(null);
+    };
+    const onEnd = (): void => {
+      resolveBody(Buffer.concat(chunks));
+    };
+    request.on('data', onData).once('end', onEnd).once('error', reject);
+  });
+}
+
 /** Aborts on Ctrl+C or a termination signal. */
 function untilInterrupted(): AbortSignal {
   const controller = new AbortController();
@@ -329,6 +431,8 @@ export async function dev(args: string[], io: CliIO): Promise<number> {
       options: {
         index: { type: 'string' },
         port: { type: 'string' },
+        'allow-origin': { type: 'string', multiple: true },
+        // The flag's earlier name.
         origin: { type: 'string', multiple: true },
         model: { type: 'string' },
         help: { type: 'boolean', short: 'h' },
@@ -348,6 +452,15 @@ export async function dev(args: string[], io: CliIO): Promise<number> {
     return 2;
   }
 
+  const origins = [...(values['allow-origin'] ?? []), ...(values.origin ?? [])];
+  const invalid = origins.find((origin) => origin !== '*' && !/^https?:\/\/[^/]+$/.test(origin));
+  if (invalid !== undefined) {
+    io.stderr(
+      `--allow-origin takes an origin, such as https://docs.example.com, or * (got ${invalid}).`,
+    );
+    return 2;
+  }
+
   let server: DevServer;
   let file: string;
   try {
@@ -355,7 +468,7 @@ export async function dev(args: string[], io: CliIO): Promise<number> {
     server = await startDevServer({
       file,
       port,
-      ...(values.origin ? { origins: values.origin } : {}),
+      origins,
       ...(values.model ? { answerModel: values.model } : {}),
       env: io.env,
       log: io.stdout,
@@ -369,8 +482,7 @@ export async function dev(args: string[], io: CliIO): Promise<number> {
 
   const { endpoint } = server;
   const label = relative(io.cwd, file) || file;
-  const cors =
-    values.origin?.length && !values.origin.includes('*') ? values.origin.join(', ') : 'any origin';
+  const cors = origins.includes('*') ? 'any origin' : ['localhost', ...origins].join(', ');
   io.stdout(
     [
       `ask-my-site dev: ${label} (${String(server.chunks)} chunks), ${server.description}`,
