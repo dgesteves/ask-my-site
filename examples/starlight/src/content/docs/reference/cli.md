@@ -39,14 +39,14 @@ The CLI reads `.env` and `.env.local` from the working directory, without overri
 
 `ask-my-site dev [options]` serves `POST /api/ask` on 127.0.0.1, answering from a built index, for the dialog on your site's dev server.
 
-| Flag                | Default                                                              | What it does                                            |
-| ------------------- | -------------------------------------------------------------------- | ------------------------------------------------------- |
-| `--index <file>`    | `ask-index.json`, `build/ask-index.json`, then `dist/ask-index.json` | The index to serve.                                     |
-| `--port <n>`        | `8787`                                                               | Port to listen on.                                      |
-| `--origin <origin>` | any                                                                  | Origin allowed to call it (CORS). Repeatable.           |
-| `--model <id>`      | `gpt-5.4-mini`                                                       | OpenAI model for answers, when `OPENAI_API_KEY` is set. |
+| Flag                      | Default                                                              | What it does                                            |
+| ------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------- |
+| `--index <file>`          | `ask-index.json`, `build/ask-index.json`, then `dist/ask-index.json` | The index to serve.                                     |
+| `--port <n>`              | `8787`                                                               | Port to listen on.                                      |
+| `--allow-origin <origin>` | localhost                                                            | Another origin allowed to call it, or `*`. Repeatable.  |
+| `--model <id>`            | `gpt-5.4-mini`                                                       | OpenAI model for answers, when `OPENAI_API_KEY` is set. |
 
-It embeds questions with the model the index records, answers with OpenAI when `OPENAI_API_KEY` is set and with the mock model otherwise, and reloads the index when the file changes. [Try it locally](/get-started/local-development/) shows it with each integration.
+It embeds questions with the model the index records, answers with OpenAI when `OPENAI_API_KEY` is set and with the mock model otherwise, and reloads the index when the file changes. It only answers pages on this machine (localhost, 127.0.0.1 and [::1] origins, on any port) and requests addressed to localhost, so a site you visit cannot spend your key through it, and it caps request bodies at 64 KiB. [Try it locally](/get-started/local-development/) shows it with each integration.
 
 ## The config file
 

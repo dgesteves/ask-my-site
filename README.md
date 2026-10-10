@@ -423,12 +423,16 @@ ask-my-site dev [options]
       --index <file>           Index file (default: ask-index.json, then build/ask-index.json,
                                then dist/ask-index.json)
       --port <n>               Port on 127.0.0.1 (default: 8787)
-      --origin <origin>        Origin allowed to call it (CORS); repeatable (default: any)
+      --allow-origin <origin>  Another origin allowed to call it, such as https://docs.example.com;
+                               repeatable, or * for any (default: localhost, 127.0.0.1 and [::1]
+                               origins, on any port)
       --model <id>             OpenAI model for answers (default: gpt-5.4-mini)
   -h, --help                   Show this help
 ```
 
 It embeds questions with the model the index records: the mock one, OpenAI's with `OPENAI_API_KEY`, AI Gateway's with `AI_GATEWAY_API_KEY`, or none for a keyword-only index. An index it cannot match, such as one embedded with OpenAI when no key is set, is refused with what would fix it. Answers come from OpenAI when `OPENAI_API_KEY` is set, else from the mock model. A rebuilt index is picked up on the next question, and on start it prints the endpoint and what to set: `ASK_ENDPOINT`, `endpoint`, or `data-endpoint`.
+
+With a key set, `dev` spends it on every answer, so it only answers pages on this machine: requests from another origin get a 403 unless `--allow-origin` names it, requests whose `Host` is not `localhost`, `127.0.0.1` or `[::1]` get a 403 (a site that points its own domain at 127.0.0.1, DNS rebinding, would otherwise get past CORS), and bodies over 64 KiB get a 413 while they are read. A tool on this machine, such as `curl`, sends no `Origin` and is answered.
 
 Citations have to land on the URL your site actually serves, and docs frameworks do not all map files to URLs the same way. The CLI looks for the framework's config in or above the content folder and follows its rules, printing which it picked:
 
