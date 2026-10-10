@@ -728,11 +728,21 @@ function linkTarget(href: string, page: string): string | null {
 
 /** Links, images and emphasis as Markdown; the tags they were are dropped later. */
 function markdownInline(html: string, page: string): string {
+  // A page links to the same few places over and over: resolve each once.
+  const targets = new Map<string, string | null>();
+  const target = (href: string): string | null => {
+    let resolved = targets.get(href);
+    if (resolved === undefined && !targets.has(href)) {
+      resolved = linkTarget(href, page);
+      targets.set(href, resolved);
+    }
+    return resolved ?? null;
+  };
   const withImages = html.replace(/<img(?=[\s/>])[^<>]*>/gi, (tag) => {
     const alt = decodeEntities(attribute(tag, 'alt') ?? '')
       .replace(/[[\]]/g, '')
       .trim();
-    const src = linkTarget(attribute(tag, 'src') ?? '', page);
+    const src = target(attribute(tag, 'src') ?? '');
     return alt && src ? `![${alt}](${src})` : alt;
   });
   const withLinks = replaceElements(
@@ -744,7 +754,7 @@ function markdownInline(html: string, page: string): string {
         .replace(/<[^<>]*>/g, '')
         .replace(/\s+/g, ' ')
         .trim();
-      const href = linkTarget(attribute(` ${open[1] ?? ''}`, 'href') ?? '', page);
+      const href = target(attribute(` ${open[1] ?? ''}`, 'href') ?? '');
       if (!label) return '';
       return href
         ? `[${label.replace(/[[\]]/g, '\\$&')}](${href.replace(/[()\s]/g, encodeURIComponent)})`
