@@ -23,6 +23,7 @@ description: 'createAskHandler options, the request and response, errors and the
 | Option                     | Default                     | Notes                                                                                                                                                                             |
 | -------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `index`                    | required                    | Parsed JSON, its text, a `loadIndex` result, a function returning one, or a `remoteIndex(url)`, which is checked again every five minutes. Loaded once; a failed load is retried. |
+| `indexes`                  | none                        | The index of each other locale, by the locale the dialog sends: `{ fr: () => readFile('build/fr/ask-index.json', 'utf8') }`.                                                      |
 | `model`                    | required                    | Any AI SDK language model, or an AI Gateway model id.                                                                                                                             |
 | `embeddingModel`           | none                        | Must match the index, which is checked. Without it, retrieval is keyword-only.                                                                                                    |
 | `embeddingProviderOptions` | none                        | Must match the build, such as `{ openai: { dimensions: 512 } }`.                                                                                                                  |
@@ -54,7 +55,7 @@ With `onFeedback`, the stream's metadata says `feedback: true`, and the dialog o
 
 ## Request body
 
-Send `{ "question": "…" }` as `application/json` for a question on its own, or the conversation as `{ messages }`, as the dialog and the AI SDK's `useChat` send it: the last user message is the question, and the messages before it are the conversation.
+Send `{ "question": "…" }` as `application/json` for a question on its own, or the conversation as `{ messages }`, as the dialog and the AI SDK's `useChat` send it: the last user message is the question, and the messages before it are the conversation. Either can carry the page's `locale`, which the plugins and the dialog send on a page in a locale other than the default: the handler answers it from `indexes[locale]`, and from `index` for a locale it has no index for.
 
 ## Follow-up questions
 

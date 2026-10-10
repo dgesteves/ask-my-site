@@ -124,6 +124,31 @@ describe('ask-my-site init: what it writes per host', () => {
       [],
     ],
     [
+      'Docusaurus in three locales on Netlify',
+      {
+        'package.json': JSON.stringify({
+          name: 'acme-docs',
+          dependencies: { '@docusaurus/core': '3' },
+        }),
+        'docusaurus.config.ts':
+          "export default {\n  title: 'Acme Docs',\n  url: 'https://acme.github.io',\n  baseUrl: '/',\n  i18n: { defaultLocale: 'en', locales: ['en', 'fr', 'pt-BR'] },\n};\n",
+        'netlify.toml': '',
+      },
+      [],
+    ],
+    [
+      'Starlight in two locales on a Cloudflare Worker',
+      {
+        'package.json': JSON.stringify({
+          dependencies: { astro: '7', '@astrojs/starlight': '0.42' },
+        }),
+        'astro.config.mjs':
+          "import starlight from '@astrojs/starlight';\nexport default { site: 'https://docs.acme.dev', integrations: [starlight({ title: 'Acme', locales: { root: { label: 'English', lang: 'en' }, fr: { label: 'Français' } } })] };\n",
+        'wrangler.jsonc': '{\n  "name": "acme",\n  "assets": { "directory": "./dist" }\n}\n',
+      },
+      [],
+    ],
+    [
       'Hugo on a GitHub Pages workflow',
       {
         'hugo.toml': 'baseURL = "https://acme.github.io/site/"\ntitle = "Acme"\n',

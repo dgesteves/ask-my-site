@@ -11,6 +11,7 @@
 import { mountWithLoader, type MountAskDialogOptions, type MountedAskDialog } from './mount';
 
 export type { AskMySiteDialogOptions, AskMySiteTheme } from './options';
+export type { AskDialogLabels } from '../react/labels';
 export type { MountAskDialogOptions, MountedAskDialog } from './mount';
 
 /**

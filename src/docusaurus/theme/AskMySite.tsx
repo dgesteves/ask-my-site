@@ -26,7 +26,7 @@ export default function AskMySite({ pluginId }: Props): ReactNode {
   return <BrowserOnly>{() => <Ask {...data} />}</BrowserOnly>;
 }
 
-function Ask({ endpoint, dialog }: AskMySiteGlobalData): ReactNode {
+function Ask({ endpoint, dialog, locale }: AskMySiteGlobalData): ReactNode {
   const history = useHistory();
   // `Root` sits outside Docusaurus's color mode provider, so this follows the `data-theme`
   // attribute Docusaurus sets on `<html>` instead of its hook.
@@ -38,6 +38,7 @@ function Ask({ endpoint, dialog }: AskMySiteGlobalData): ReactNode {
     <AskWithLauncher
       {...dialog}
       endpoint={endpoint}
+      {...(locale ? { locale } : {})}
       theme={theme}
       onNavigate={(url, event) => {
         // Same-site links route without a full page load.

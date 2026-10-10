@@ -32,11 +32,27 @@ import type { SourceDocument } from '../types';
 import type { RouteSettings } from './route';
 
 /** What the dialog shows; passed to `mountAskDialog` from `ask-my-site/embed`. */
+/** What the dialog shows in one locale, over the dialog's own options. */
+export type AskMySiteLocaleDialogOptions = Pick<
+  DialogOptions,
+  'labels' | 'placeholder' | 'suggestions' | 'buttonLabel'
+> & { title?: string };
+
 export interface AskMySiteDialogOptions extends DialogOptions {
-  /** The dialog's accessible name. Default "Ask this site", or "Ask {site title}" in Starlight. */
+  /**
+   * The dialog's accessible name. Default "Ask this site", or "Ask {site title}" in Starlight, or
+   * `labels.title`.
+   */
   title?: string;
   /** Default `auto`: the `data-theme` on `<html>` when the site sets one, else the system's. */
   theme?: AskMySiteTheme;
+  /**
+   * Options for each locale, by its path prefix (`fr`, `pt-br`), over these: the labels, the
+   * title and the suggestions in that language. The dialog picks its locale from the page's
+   * path, uses its options, and sends the locale with each question, so the endpoint answers
+   * from that locale's index.
+   */
+  locales?: Record<string, AskMySiteLocaleDialogOptions>;
 }
 
 /**
@@ -145,6 +161,8 @@ export interface IntegrationPreset {
   title?: string;
   /** The site's title, which names the MCP server in clients and heads `llms.txt`. */
   siteTitle?: string;
+  /** The dialog's title in each locale, by path prefix, unless the site sets one. */
+  localeTitles?: Record<string, string>;
   /** The site's description, for `llms.txt`. */
   siteDescription?: string;
   /** Plugins of the framework that write llms files, by name, e.g. Starlight plugins. */
@@ -203,6 +221,13 @@ export function createIntegration(
                 (astro.site ? new URL(astro.site).host : 'this site'),
               ...(astro.site ? { siteUrl: new URL(astro.site).origin } : {}),
               indexPath: injected.indexPath,
+              // Each locale's index, which the dialog asks for on that locale's pages.
+              localeIndexPaths: Object.fromEntries(
+                (preset.locales ?? astroLocales(astro)).map((locale) => [
+                  locale,
+                  `${base}/${locale}/${indexFile}`,
+                ]),
+              ),
               rateLimit: perMinute(routeOptions?.rateLimit, 10),
               mcpRateLimit: perMinute(routeOptions?.mcpRateLimit, 60),
               budget: routeOptions?.budget ?? DEFAULT_ROUTE_BUDGET,
@@ -241,7 +266,17 @@ export function createIntegration(
             .join('\n'),
         );
         // Bundled by Vite with each page's scripts, so React is the site's own copy, if it has one.
-        injectScript('page', pageScript(endpoint, options, preset));
+        injectScript(
+          'page',
+          pageScript(
+            endpoint,
+            options,
+            preset,
+            preset.locales ?? astroLocales(astro),
+            // A test's partial config may have no base.
+            astro.base || '/',
+          ),
+        );
         updateConfig({
           vite: {
             plugins: [
@@ -560,15 +595,51 @@ function pageScript(
   endpoint: string,
   options: AskMySiteOptions,
   preset: IntegrationPreset,
+  locales: readonly string[],
+  base: string,
 ): string {
+  const { locales: perLocale, ...dialog } = options.dialog ?? {};
   const mount = {
     endpoint,
-    ...options.dialog,
-    title: options.dialog?.title ?? preset.title,
+    ...dialog,
+    title: dialog.title ?? dialog.labels?.title ?? preset.title,
   };
+  if (locales.length === 0) {
+    return [
+      "import { mountAskDialog } from 'ask-my-site/embed';",
+      `mountAskDialog(${JSON.stringify(mount)});`,
+    ].join('\n');
+  }
+  // Each locale's options over the dialog's, its labels over the dialog's labels.
+  const byLocale = Object.fromEntries(
+    locales.map((locale) => {
+      const own = perLocale?.[locale];
+      const labels = { ...dialog.labels, ...own?.labels };
+      const title =
+        own?.title ??
+        own?.labels?.title ??
+        dialog.title ??
+        preset.localeTitles?.[locale] ??
+        mount.title;
+      return [
+        locale,
+        {
+          ...own,
+          ...(Object.keys(labels).length > 0 ? { labels } : {}),
+          ...(title ? { title } : {}),
+          locale,
+        },
+      ];
+    }),
+  );
   return [
     "import { mountAskDialog } from 'ask-my-site/embed';",
-    `mountAskDialog(${JSON.stringify(mount)});`,
+    `const options = ${JSON.stringify(mount)};`,
+    `const locales = ${JSON.stringify(byLocale)};`,
+    // The page's locale, from its path under `base`: `/docs/fr/guides/` is French.
+    `const path = location.pathname.slice(${String(base.replace(/\/+$/, '').length)}).replace(/^\\/+/, '');`,
+    'const locale = Object.keys(locales).find((key) => path === key || path.startsWith(`${key}/`));',
+    'mountAskDialog(locale ? { ...options, ...locales[locale] } : options);',
   ].join('\n');
 }
 

@@ -16,7 +16,8 @@ import {
 
 import { AskAnswer, citedSourceIds, safeHref, type AnswerLinks } from './answer';
 import type { AskDialogProps, AskDialogSlot } from './ask-dialog';
-import { useAsk, type AskState } from './use-ask';
+import { fill, resolveLabels, type ResolvedLabels } from './labels';
+import { useAsk, type AskError, type AskState } from './use-ask';
 
 /** What `AskDialog` hands the dialog: its props, with the open state it keeps. */
 export type DialogPanelProps = Omit<
@@ -65,7 +66,13 @@ function Thumb({ down = false }: { down?: boolean }): ReactNode {
  * Thumbs up and down on the answer, then an optional comment, sent to the endpoint's
  * `onFeedback`. Shown only when the endpoint says it takes feedback.
  */
-function Feedback({ state }: { state: ReturnType<typeof useAsk> }): ReactNode {
+function Feedback({
+  state,
+  labels,
+}: {
+  state: ReturnType<typeof useAsk>;
+  labels: ResolvedLabels;
+}): ReactNode {
   const labelId = useId();
   const [comment, setComment] = useState<'closed' | 'open' | 'sent'>('closed');
   const [text, setText] = useState('');
@@ -89,13 +96,13 @@ function Feedback({ state }: { state: ReturnType<typeof useAsk> }): ReactNode {
       {state.rating === null ? (
         <>
           <span id={labelId} className="ask-feedback-label">
-            Was this helpful?
+            {labels.helpfulQuestion}
           </span>
           <span role="group" aria-labelledby={labelId} className="ask-feedback-buttons">
             <button
               type="button"
               className="ask-feedback-button"
-              aria-label="Yes, it helped"
+              aria-label={labels.helpful}
               onClick={() => void send('up')}
             >
               <Thumb />
@@ -103,7 +110,7 @@ function Feedback({ state }: { state: ReturnType<typeof useAsk> }): ReactNode {
             <button
               type="button"
               className="ask-feedback-button"
-              aria-label="No, it did not help"
+              aria-label={labels.notHelpful}
               onClick={() => void send('down')}
             >
               <Thumb down />
@@ -112,12 +119,12 @@ function Feedback({ state }: { state: ReturnType<typeof useAsk> }): ReactNode {
         </>
       ) : comment === 'sent' ? (
         <span className="ask-feedback-label" role="status">
-          Thanks for the comment.
+          {labels.thanksComment}
         </span>
       ) : (
         <>
           <span className="ask-feedback-label" role="status">
-            Thanks for the feedback.
+            {labels.thanks}
           </span>
           {comment === 'closed' ? (
             <button
@@ -127,14 +134,14 @@ function Feedback({ state }: { state: ReturnType<typeof useAsk> }): ReactNode {
                 setComment('open');
               }}
             >
-              Add a comment
+              {labels.addComment}
             </button>
           ) : (
             <form className="ask-feedback-form" onSubmit={submit} onKeyDown={keepKeys}>
               <input
                 className="ask-feedback-input"
-                aria-label="Comment"
-                placeholder="What was missing or wrong?"
+                aria-label={labels.comment}
+                placeholder={labels.commentPlaceholder}
                 maxLength={1000}
                 value={text}
                 autoFocus
@@ -143,7 +150,7 @@ function Feedback({ state }: { state: ReturnType<typeof useAsk> }): ReactNode {
                 }}
               />
               <button type="submit" className="ask-feedback-more">
-                Send
+                {labels.send}
               </button>
             </form>
           )}
@@ -151,25 +158,60 @@ function Feedback({ state }: { state: ReturnType<typeof useAsk> }): ReactNode {
       )}
       {failed ? (
         <span className="ask-feedback-error" role="alert">
-          The feedback could not be sent.
+          {labels.feedbackFailed}
         </span>
       ) : null}
     </div>
   );
 }
 
-function statusMessage(state: AskState): string {
+/**
+ * An error in the labels' words. The endpoint's own messages (rate limits, the daily budget, a
+ * failed answer) show as it sends them, unless a label for them was given.
+ */
+export function errorText(error: AskError | null, labels: ResolvedLabels): string {
+  if (!error) return labels.errorUnknown;
+  if (error.kind === 'network') return labels.errorNetwork;
+  if (error.kind === 'rate-limited') {
+    return (
+      (error.code === 'budget_exceeded' ? labels.budgetExceeded : labels.rateLimited) ??
+      error.message
+    );
+  }
+  switch (error.reason) {
+    case 'unavailable':
+      return labels.errorUnavailable;
+    case 'no-body':
+      return labels.errorNoBody;
+    case 'interrupted':
+      return labels.errorInterrupted;
+    case 'cut-off':
+      return labels.errorCutOff;
+    case 'server':
+      return labels.answerFailed ?? error.message;
+    case undefined:
+      break;
+  }
+  if (error.kind === 'http' && labels.serverError !== undefined) {
+    return fill(labels.serverError, { status: error.status ?? '' });
+  }
+  return error.message || labels.errorUnknown;
+}
+
+function statusMessage(state: AskState, labels: ResolvedLabels): string {
   switch (state.status) {
     case 'loading':
-      return 'Searching the site…';
+      return labels.searching;
     case 'streaming':
-      return 'Writing an answer…';
+      return labels.writing;
     case 'done':
-      if (state.refused) return 'No answer found on this site.';
-      if (state.truncated) return 'Answer ready, but cut short at its length limit.';
-      return `Answer ready, citing ${String(state.sources.length)} ${state.sources.length === 1 ? 'source' : 'sources'}.`;
+      if (state.refused) return labels.noAnswerFound;
+      if (state.truncated) return labels.answerTruncated;
+      return state.sources.length === 1
+        ? labels.answerReadyOne
+        : fill(labels.answerReadyMany, { count: state.sources.length });
     case 'error':
-      return state.error?.message ?? 'Something went wrong.';
+      return errorText(state.error, labels);
     case 'idle':
       return '';
   }
@@ -179,8 +221,9 @@ function statusMessage(state: AskState): string {
 export function DialogPanel({
   open,
   onOpenChange: setOpen,
-  title = 'Ask this site',
-  placeholder = 'Ask a question…',
+  labels: given,
+  title: titleProp,
+  placeholder: placeholderProp,
   suggestions = [],
   onNavigate,
   theme = 'system',
@@ -189,6 +232,9 @@ export function DialogPanel({
   links = 'all',
   ...askOptions
 }: DialogPanelProps): ReactNode {
+  const labels = resolveLabels(given);
+  const title = titleProp ?? labels.title;
+  const placeholder = placeholderProp ?? labels.placeholder;
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState('');
@@ -266,8 +312,7 @@ export function DialogPanel({
         >
           <Dialog.Title className="ask-sr-only">{title}</Dialog.Title>
           <Dialog.Description id={descriptionId} className="ask-sr-only">
-            Type a question and press Enter. Answers are generated from this site’s pages and cite
-            them.
+            {labels.description}
           </Dialog.Description>
 
           <Command label={title} shouldFilter={false} loop className="ask-command">
@@ -283,16 +328,20 @@ export function DialogPanel({
               />
               {busy ? (
                 <button type="button" className="ask-stop" onClick={state.stop}>
-                  Stop
+                  {labels.stop}
                 </button>
               ) : (
-                <kbd className="ask-kbd">esc</kbd>
+                <kbd className="ask-kbd">{labels.escapeKey}</kbd>
               )}
             </div>
 
             {/* Always mounted, as the input's aria-controls points at it. While the answer shows,
                 it is hidden and empty, so Enter selects nothing. */}
-            <Command.List className={cx('ask-list', classNames.list)} hidden={!showList}>
+            <Command.List
+              label={labels.list}
+              className={cx('ask-list', classNames.list)}
+              hidden={!showList}
+            >
               {showList ? (
                 <>
                   {trimmedQuery ? (
@@ -303,13 +352,15 @@ export function DialogPanel({
                       }}
                       className={cx('ask-item', 'ask-item-primary', classNames.item)}
                     >
-                      <span className="ask-item-label">{followingUp ? 'Follow up' : 'Ask'}</span>
+                      <span className="ask-item-label">
+                        {followingUp ? labels.followUp : labels.ask}
+                      </span>
                       <span className="ask-item-text">{trimmedQuery}</span>
                       <kbd className="ask-kbd">↵</kbd>
                     </Command.Item>
                   ) : null}
                   {matchingSuggestions.length > 0 ? (
-                    <Command.Group heading="Suggested" className="ask-group">
+                    <Command.Group heading={labels.suggested} className="ask-group">
                       {matchingSuggestions.map((suggestion) => (
                         <Command.Item
                           key={suggestion}
@@ -330,6 +381,7 @@ export function DialogPanel({
             {answering ? (
               <AnswerPanel
                 state={state}
+                labels={labels}
                 onNavigate={navigate}
                 onNewQuestion={newQuestion}
                 classNames={classNames}
@@ -339,13 +391,14 @@ export function DialogPanel({
           </Command>
 
           <p role="status" className="ask-sr-only">
-            {statusMessage(state)}
+            {statusMessage(state, labels)}
           </p>
           {footer ?? (
             <div className={cx('ask-footer', classNames.footer)}>
-              <span>Answers come from this site and can be wrong. Check the sources.</span>
+              <span>{labels.footer}</span>
               <span className="ask-footer-keys" aria-hidden="true">
-                <kbd className="ask-kbd">↵</kbd> ask <kbd className="ask-kbd">esc</kbd> close
+                <kbd className="ask-kbd">↵</kbd> {labels.footerAsk}{' '}
+                <kbd className="ask-kbd">{labels.escapeKey}</kbd> {labels.footerClose}
               </span>
             </div>
           )}
@@ -357,12 +410,14 @@ export function DialogPanel({
 
 function AnswerPanel({
   state,
+  labels,
   onNavigate,
   onNewQuestion,
   classNames,
   links,
 }: {
   state: ReturnType<typeof useAsk>;
+  labels: ResolvedLabels;
   onNavigate: (url: string, event: MouseEvent<HTMLAnchorElement>) => void;
   onNewQuestion: () => void;
   classNames: Partial<Record<AskDialogSlot, string>>;
@@ -381,10 +436,11 @@ function AnswerPanel({
           <p className="ask-turn-question">{turn.question}</p>
           <div className="ask-answer" data-refused={turn.refused || undefined}>
             <AskAnswer
-              text={turn.answer}
+              text={turn.refused && labels.noAnswer !== undefined ? labels.noAnswer : turn.answer}
               sources={turn.sources}
               onNavigate={onNavigate}
               links={links}
+              citationLabel={labels.citation}
             />
           </div>
         </div>
@@ -400,41 +456,42 @@ function AnswerPanel({
         {state.status === 'loading' ? (
           <p className="ask-thinking">
             <span className="ask-spinner" aria-hidden="true" />
-            Searching the site…
+            {labels.searching}
           </p>
         ) : (
           <AskAnswer
-            text={state.answer}
+            text={state.refused && labels.noAnswer !== undefined ? labels.noAnswer : state.answer}
             sources={state.sources}
             onNavigate={onNavigate}
             links={links}
+            citationLabel={labels.citation}
           />
         )}
         {streaming ? <span className="ask-caret" aria-hidden="true" /> : null}
       </div>
 
       {state.status === 'done' && state.truncated ? (
-        <p className="ask-truncated">This answer reached its length limit and may be incomplete.</p>
+        <p className="ask-truncated">{labels.truncatedNotice}</p>
       ) : null}
 
       {state.error ? (
         <div className="ask-error" role="alert">
-          <span>{state.error.message}</span>
+          <span>{errorText(state.error, labels)}</span>
           {state.question && state.error.kind !== 'rate-limited' ? (
             <button
               type="button"
               className="ask-retry"
               onClick={() => void state.ask(state.question ?? '')}
             >
-              Retry
+              {labels.retry}
             </button>
           ) : null}
         </div>
       ) : null}
 
       {state.sources.length > 0 && !state.refused ? (
-        <nav aria-label="Sources" className={cx('ask-sources', classNames.sources)}>
-          <h2 className="ask-sources-heading">Sources</h2>
+        <nav aria-label={labels.sources} className={cx('ask-sources', classNames.sources)}>
+          <h2 className="ask-sources-heading">{labels.sources}</h2>
           <ol>
             {state.sources.map((source) => {
               const href = safeHref(source.url);
@@ -469,10 +526,10 @@ function AnswerPanel({
       {settled ? (
         <div className="ask-actions">
           {state.status === 'done' && state.feedbackEnabled ? (
-            <Feedback key={state.id ?? state.question ?? ''} state={state} />
+            <Feedback key={state.id ?? state.question ?? ''} state={state} labels={labels} />
           ) : null}
           <button type="button" className="ask-new" onClick={onNewQuestion}>
-            New question
+            {labels.newQuestion}
           </button>
         </div>
       ) : null}

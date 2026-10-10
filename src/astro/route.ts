@@ -17,6 +17,8 @@ export interface RouteSettings {
   siteUrl?: string;
   /** The index's path on the site, with `base`: `/docs/ask-index.json`. */
   indexPath: string;
+  /** Each locale's index's path, by the locale the dialog sends: `{ fr: '/docs/fr/ask-index.json' }`. */
+  localeIndexPaths?: Record<string, string>;
   /** Questions a minute per client, or `false` for no limit. */
   rateLimit: { limit: number; windowMs: number } | false;
   /** Tool calls a minute per client, or `false` for no limit. */
@@ -123,15 +125,23 @@ export function routeHandlers(module: RouteModule): (context: RouteContext) => P
     // automation bypass secret, when the project has one.
     const bypass = module.secret('VERCEL_AUTOMATION_BYPASS_SECRET');
     const fetchAsset = assetsFetcher(module, locals);
-    const index: RemoteIndex = remoteIndex(new URL(settings.indexPath, url), {
+    const fetchOptions = {
       ...(fetchAsset ? { fetch: fetchAsset } : {}),
       ...(bypass ? { headers: { 'x-vercel-protection-bypass': bypass } } : {}),
-    });
+    };
+    const index: RemoteIndex = remoteIndex(new URL(settings.indexPath, url), fetchOptions);
+    const indexes = Object.fromEntries(
+      Object.entries(settings.localeIndexPaths ?? {}).map(([locale, path]) => [
+        locale,
+        remoteIndex(new URL(path, url), fetchOptions),
+      ]),
+    );
     const loaded = await index();
     const query = await queryModel(module, loaded.embedding?.model);
     return {
       ask: createAskHandler({
         index,
+        ...(Object.keys(indexes).length > 0 ? { indexes } : {}),
         model: module.chatModel(),
         ...query,
         siteName: settings.siteName,

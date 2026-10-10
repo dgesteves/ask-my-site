@@ -56,7 +56,7 @@ Yes. The dialog sends the thread with each question, and the endpoint rewrites a
 
 ## Does it work for docs that aren't in English?
 
-Yes, through the embedding model: a multilingual model such as Cohere's `embed-multilingual-v3.0` matches questions and pages across languages. The keyword side uses English stopwords, so it is weaker in other languages. The plugins build one index per locale.
+Yes, through the embedding model: a multilingual model such as Cohere's `embed-multilingual-v3.0` matches questions and pages across languages. The keyword side uses English stopwords, so it is weaker in other languages. The plugins build one index per locale, the dialog sends the page's locale so the endpoint answers from that locale's index, and every string the dialog shows can be given in your language with `labels`. See [Labels and languages](/reference/ask-dialog/#labels-and-languages).
 
 ## How is it different from Kapa, Inkeep or Algolia Ask AI?
 
@@ -72,7 +72,7 @@ Yes. `npx ask-my-site init --host github-pages` writes a Cloudflare Worker that 
 
 ## Does it work with versioned docs and several languages?
 
-Yes. Docusaurus and Starlight sites get one index per locale. Versioned Docusaurus docs index every version; leave old ones out with `exclude: ['/docs/1.0']`. See [Docusaurus](/integrations/docusaurus/#locales-and-versions).
+Yes. Docusaurus and Starlight sites get one index per locale, and the dialog on a locale's pages is answered from it. Versioned Docusaurus docs index every version; leave old ones out with `exclude: ['/docs/1.0']`. See [Docusaurus](/integrations/docusaurus/#locales-and-versions).
 
 ## How is the ask-my-site website built?
 

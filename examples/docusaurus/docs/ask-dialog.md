@@ -8,22 +8,24 @@ description: 'AskDialog props, the launcher button, shortcuts, theming, accessib
 
 ## AskDialog props
 
-| Prop                                  | Default                         | Notes                                                                                                 |
-| ------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `endpoint`                            | `/api/ask`                      | Where questions are posted. Also `headers` and a custom `fetch`.                                      |
-| `open`, `defaultOpen`, `onOpenChange` | uncontrolled                    | Controlled or uncontrolled.                                                                           |
-| `shortcut`                            | `"k"`                           | Opens the dialog with ⌘ or Ctrl; `false` disables it.                                                 |
-| `trigger`                             | none                            | An element that opens the dialog, such as a search button.                                            |
-| `launcher`                            | `false`                         | `true` or a label: a floating "Ask AI" button with the shortcut on it.                                |
-| `suggestions`                         | `[]`                            | Questions offered before typing, filtered as you type.                                                |
-| `onNavigate`                          | browser navigation              | `(url, event)` for citations and sources; call `preventDefault()` to route yourself.                  |
-| `theme`                               | `"system"`                      | `"light"` or `"dark"` to pin it.                                                                      |
-| `classNames`                          | none                            | Extra classes per part: `overlay`, `content`, `input`, `list`, `item`, `answer`, `sources`, `footer`. |
-| `title`                               | "Ask this site"                 | The dialog's accessible name.                                                                         |
-| `placeholder`                         | "Ask a question…"               | The input's placeholder.                                                                              |
-| `footer`                              | a disclaimer and keyboard hints | Replaces the footer.                                                                                  |
-| `links`                               | `"all"`                         | `"sources"` keeps only the answer's links to its source pages; citations always link.                 |
-| `followUps`                           | `true`                          | Send the thread with each question, so the endpoint can answer follow-ups; `false` asks each alone.   |
+| Prop                                  | Default                         | Notes                                                                                                       |
+| ------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `endpoint`                            | `/api/ask`                      | Where questions are posted. Also `headers` and a custom `fetch`.                                            |
+| `open`, `defaultOpen`, `onOpenChange` | uncontrolled                    | Controlled or uncontrolled.                                                                                 |
+| `shortcut`                            | `"k"`                           | Opens the dialog with ⌘ or Ctrl; `false` disables it.                                                       |
+| `trigger`                             | none                            | An element that opens the dialog, such as a search button.                                                  |
+| `launcher`                            | `false`                         | `true` or a label: a floating "Ask AI" button with the shortcut on it.                                      |
+| `suggestions`                         | `[]`                            | Questions offered before typing, filtered as you type.                                                      |
+| `onNavigate`                          | browser navigation              | `(url, event)` for citations and sources; call `preventDefault()` to route yourself.                        |
+| `theme`                               | `"system"`                      | `"light"` or `"dark"` to pin it.                                                                            |
+| `classNames`                          | none                            | Extra classes per part: `overlay`, `content`, `input`, `list`, `item`, `answer`, `sources`, `footer`.       |
+| `title`                               | "Ask this site"                 | The dialog's accessible name.                                                                               |
+| `placeholder`                         | "Ask a question…"               | The input's placeholder.                                                                                    |
+| `footer`                              | a disclaimer and keyboard hints | Replaces the footer.                                                                                        |
+| `links`                               | `"all"`                         | `"sources"` keeps only the answer's links to its source pages; citations always link.                       |
+| `labels`                              | English                         | Every string the dialog and its button show or announce; see [Labels and languages](#labels-and-languages). |
+| `locale`                              | none                            | The page's locale, sent with each question, for an endpoint with an index per locale.                       |
+| `followUps`                           | `true`                          | Send the thread with each question, so the endpoint can answer follow-ups; `false` asks each alone.         |
 
 ## Opening the dialog
 
@@ -52,6 +54,73 @@ The dialog keeps the thread. Once an answer is on screen, typing another questio
 ## Rating answers
 
 When the endpoint takes feedback (its `onFeedback`), the dialog asks "Was this helpful?" under each answer, with thumbs up and down. After a rating it thanks the reader and offers "Add a comment", a one-line field that Enter sends. Both go to the endpoint, with the answer's id, and nowhere else. `useAsk` has the same as `rate(rating, comment?)`, with `feedbackEnabled` and `rating` in its state. See [Measure and improve answers](./quality.md#feedback-from-readers).
+
+## Labels and languages
+
+Every string the dialog and its button show or announce, visible or for screen readers, is a label: pass any of them as `labels`, and the rest stay in English. A `{name}` in a label is filled in: `{count}` and `{n}` with numbers, `{title}` with a page's title, `{status}` with an HTTP status. `title`, `placeholder` and `launcher` win over their labels.
+
+```tsx
+<AskDialog
+  launcher
+  locale="fr"
+  labels={{
+    launcher: 'Demander',
+    placeholder: 'Posez une question…',
+    newQuestion: 'Nouvelle question',
+  }}
+/>
+```
+
+The endpoint's own words, its "I don't know" answer, its rate limit and budget messages, its other errors and the message for an answer the model failed to write, show as it sends them, so set them there (`noAnswerMessage`, `budget.message`), or replace them in the dialog with `noAnswer`, `rateLimited`, `budgetExceeded`, `serverError` and `answerFailed`. The plugins take labels per locale; see [Docusaurus](./docusaurus.md#locales-and-versions) and [Astro and Starlight](./astro.md#locales-in-starlight).
+
+| Label                | Default                                                                                      |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| `launcher`           | Ask AI                                                                                       |
+| `controlKey`         | Ctrl                                                                                         |
+| `title`              | Ask this site                                                                                |
+| `description`        | Type a question and press Enter. Answers are generated from this site’s pages and cite them. |
+| `placeholder`        | Ask a question…                                                                              |
+| `ask`                | Ask                                                                                          |
+| `followUp`           | Follow up                                                                                    |
+| `suggested`          | Suggested                                                                                    |
+| `list`               | Suggestions                                                                                  |
+| `stop`               | Stop                                                                                         |
+| `escapeKey`          | esc                                                                                          |
+| `footer`             | Answers come from this site and can be wrong. Check the sources.                             |
+| `footerAsk`          | ask                                                                                          |
+| `footerClose`        | close                                                                                        |
+| `searching`          | Searching the site…                                                                          |
+| `writing`            | Writing an answer…                                                                           |
+| `noAnswerFound`      | No answer found on this site.                                                                |
+| `answerReadyOne`     | Answer ready, citing 1 source.                                                               |
+| `answerReadyMany`    | Answer ready, citing {count} sources.                                                        |
+| `answerTruncated`    | Answer ready, but cut short at its length limit.                                             |
+| `truncatedNotice`    | This answer reached its length limit and may be incomplete.                                  |
+| `retry`              | Retry                                                                                        |
+| `sources`            | Sources                                                                                      |
+| `citation`           | Source {n}: {title}                                                                          |
+| `newQuestion`        | New question                                                                                 |
+| `helpfulQuestion`    | Was this helpful?                                                                            |
+| `helpful`            | Yes, it helped                                                                               |
+| `notHelpful`         | No, it did not help                                                                          |
+| `thanks`             | Thanks for the feedback.                                                                     |
+| `addComment`         | Add a comment                                                                                |
+| `comment`            | Comment                                                                                      |
+| `commentPlaceholder` | What was missing or wrong?                                                                   |
+| `send`               | Send                                                                                         |
+| `thanksComment`      | Thanks for the comment.                                                                      |
+| `feedbackFailed`     | The feedback could not be sent.                                                              |
+| `errorNetwork`       | Could not reach the server. Check your connection.                                           |
+| `errorUnavailable`   | Answers aren’t available here right now.                                                     |
+| `errorNoBody`        | The response had no body.                                                                    |
+| `errorInterrupted`   | The answer was interrupted. Please try again.                                                |
+| `errorCutOff`        | The answer was cut off. Please try again.                                                    |
+| `errorUnknown`       | Something went wrong.                                                                        |
+| `noAnswer`           | the endpoint's own words                                                                     |
+| `rateLimited`        | the endpoint's own words                                                                     |
+| `budgetExceeded`     | the endpoint's own words                                                                     |
+| `serverError`        | the endpoint's own words                                                                     |
+| `answerFailed`       | the endpoint's own words                                                                     |
 
 ## Theming the dialog
 

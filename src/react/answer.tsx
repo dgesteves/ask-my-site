@@ -17,6 +17,11 @@ export interface AskAnswerProps {
    * other link shows as its text. Citations (`[1]`) link to their source either way.
    */
   links?: AnswerLinks;
+  /**
+   * A citation's accessible name, with `{n}` its number and `{title}` its page. Default
+   * `"Source {n}: {title}"`.
+   */
+  citationLabel?: string;
 }
 
 export type AnswerLinks = 'all' | 'sources';
@@ -87,6 +92,7 @@ export function AskAnswer({
   onNavigate,
   className,
   links = 'all',
+  citationLabel = 'Source {n}: {title}',
 }: AskAnswerProps): ReactNode {
   const byId = new Map(sources.map((source) => [source.id, source]));
   const blocks: ReactNode[] = [];
@@ -101,7 +107,7 @@ export function AskAnswer({
         </pre>,
       );
     } else {
-      blocks.push(...prose(segment.text, byId, onNavigate, links, () => key++));
+      blocks.push(...prose(segment.text, byId, onNavigate, links, citationLabel, () => key++));
     }
   }
   return <div className={className ?? 'ask-markdown'}>{blocks}</div>;
@@ -122,9 +128,11 @@ function prose(
   sources: Map<number, AskSource>,
   onNavigate: AskAnswerProps['onNavigate'],
   links: AnswerLinks,
+  citationLabel: string,
   nextKey: () => number,
 ): ReactNode[] {
-  const inline = (line: string): ReactNode[] => renderInline(line, sources, onNavigate, links);
+  const inline = (line: string): ReactNode[] =>
+    renderInline(line, sources, onNavigate, links, citationLabel);
   const out: ReactNode[] = [];
   for (const block of text.split(/\n{2,}/)) {
     const runs: { kind: LineKind; lines: string[] }[] = [];
@@ -156,6 +164,7 @@ function renderInline(
   sources: Map<number, AskSource>,
   onNavigate: AskAnswerProps['onNavigate'],
   links: AnswerLinks,
+  citationLabel: string,
 ): ReactNode[] {
   const out: ReactNode[] = [];
   let last = 0;
@@ -201,7 +210,9 @@ function renderInline(
               className="ask-citation"
               href={href}
               title={source.heading ? `${source.title} › ${source.heading}` : source.title}
-              aria-label={`Source ${String(id)}: ${source.title}`}
+              aria-label={citationLabel
+                .replace(/\{n\}/g, String(id))
+                .replace(/\{title\}/g, () => source.title)}
               onClick={(event) => onNavigate?.(href, event)}
             >
               {id}

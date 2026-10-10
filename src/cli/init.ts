@@ -141,6 +141,45 @@ function flatConfigString(source: string | null, key: string): string | undefine
   return value || undefined;
 }
 
+/**
+ * The locales of a site other than its default, from its config: Docusaurus's and Astro's
+ * `i18n: { defaultLocale, locales: [...] }`, or Starlight's `locales: { root, fr, ... }` (every key
+ * but `root`). Read from the source, so a config that builds them in code is not seen.
+ */
+export function configLocales(source: string | null, starlight: boolean): string[] {
+  if (!source) return [];
+  const quoted = (text: string) =>
+    [...text.matchAll(/['"`]([a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*)['"`]/g)].map((m) => m[1] ?? '');
+  if (starlight) {
+    const start = /\blocales\s*:\s*\{/.exec(source);
+    if (!start) return [];
+    // The object's own keys: scan to its closing brace, at depth one.
+    let depth = 0;
+    const keys: string[] = [];
+    for (let i = start.index + start[0].length - 1; i < source.length; i += 1) {
+      const char = source[i];
+      if (char === '{') depth += 1;
+      else if (char === '}') {
+        depth -= 1;
+        if (depth === 0) break;
+      } else if (depth === 1) {
+        const rest = source.slice(i);
+        const match = /^['"]?([a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*|root)['"]?\s*:/.exec(rest);
+        if (match && /[\s,{]/.test(source[i - 1] ?? ' ')) {
+          const key = match[1] ?? '';
+          if (key && key !== 'root') keys.push(key);
+          i += match[0].length - 1;
+        }
+      }
+    }
+    return keys;
+  }
+  const list = /\blocales\s*:\s*\[([^\]]*)\]/.exec(source)?.[1];
+  if (!list) return [];
+  const defaultLocale = /\bdefaultLocale\s*:\s*['"`]([^'"`]+)['"`]/.exec(source)?.[1];
+  return quoted(list).filter((locale) => locale !== defaultLocale);
+}
+
 /** A URL and a base path joined: `https://acme.github.io` and `/docs/` give `https://acme.github.io/docs`. */
 function joinUrl(url: string | undefined, base: string | undefined): string | undefined {
   if (!url || !/^https?:\/\//.test(url)) return undefined;
@@ -176,6 +215,7 @@ function detectSite(p: Project, flags: { out?: string; name?: string; siteUrl?: 
         name: named(configString(source, 'title')),
         indexFile: 'build/ask-index.json',
         indexPath: '/ask-index.json',
+        ...localesOf(configLocales(source, false)),
       },
       url(joinUrl(configString(source, 'url'), configString(source, 'baseUrl'))),
     );
@@ -198,6 +238,7 @@ function detectSite(p: Project, flags: { out?: string; name?: string; siteUrl?: 
         indexFile: `${outDir}/ask-index.json`,
         indexPath: '/ask-index.json',
         ...(adapter ? { adapter } : {}),
+        ...localesOf(configLocales(source, starlight)),
       },
       url(joinUrl(configString(source, 'site'), configString(source, 'base'))),
     );
@@ -254,6 +295,9 @@ function detectSite(p: Project, flags: { out?: string; name?: string; siteUrl?: 
 }
 
 const withUrl = (site: Site, url: string | undefined): Site => (url ? { ...site, url } : site);
+
+const localesOf = (locales: string[]): { locales?: string[] } =>
+  locales.length > 0 ? { locales } : {};
 
 /** The wrangler config file, if any. */
 const WRANGLER = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml'];
@@ -572,7 +616,7 @@ function planFor(
     files.push(...vercelFiles(site, mcp));
     edit(
       'vercel.json',
-      `bundles ${site.indexFile} with the function${mcp ? 's' : ''}`,
+      `bundles ${site.locales?.length ? 'the index of each locale' : site.indexFile} with the function${mcp ? 's' : ''}`,
       vercelConfig(p.read('vercel.json'), site, mcp),
     );
     env.push({
@@ -588,7 +632,7 @@ function planFor(
     files.push(...netlifyFiles(site, mcp));
     edit(
       'netlify.toml',
-      `bundles ${site.indexFile} with the function${mcp ? 's' : ''}`,
+      `bundles ${site.locales?.length ? 'the index of each locale' : site.indexFile} with the function${mcp ? 's' : ''}`,
       netlifyConfig(p.read('netlify.toml'), site, mcp),
     );
     env.push({
@@ -788,6 +832,11 @@ async function apply(
   const where =
     host === 'github-pages' ? 'GitHub Pages, answered by a Cloudflare Worker' : HOST_LABELS[host];
   io.stdout(`${flags.dryRun ? 'Dry run: ' : ''}a ${site.label} site on ${where}.`);
+  if (site.locales?.length && site.kind !== 'next') {
+    io.stdout(
+      `Its other locales, ${site.locales.join(', ')}, are answered from their own indexes, as the dialog asks.`,
+    );
+  }
   io.stdout('');
 
   const written: Change[] = [];

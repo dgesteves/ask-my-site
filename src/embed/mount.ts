@@ -6,6 +6,8 @@ import type { AskMySiteDialogOptions, AskMySiteTheme } from './options';
 export interface MountAskDialogOptions extends AskMySiteDialogOptions {
   /** URL the dialog posts questions to. Default `/api/ask`. */
   endpoint?: string;
+  /** The page's locale, sent with each question, for an endpoint with an index per locale. */
+  locale?: string;
   /** Default `auto`: the page's `data-theme` on `<html>` if it has one, else the system's. */
   theme?: AskMySiteTheme;
   /** Extra request headers, e.g. an auth token. */
@@ -72,7 +74,7 @@ export function mountWithLoader(
   const {
     container: given,
     shortcut = 'i',
-    buttonLabel = 'Ask AI',
+    buttonLabel = options.labels?.launcher ?? 'Ask AI',
     theme = 'auto',
     ...dialogOptions
   } = options;
@@ -108,7 +110,7 @@ export function mountWithLoader(
     if (key) {
       const kbd = document.createElement('kbd');
       kbd.setAttribute('aria-hidden', 'true');
-      kbd.textContent = `${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl '}${key}`;
+      kbd.textContent = `${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : `${options.labels?.controlKey ?? 'Ctrl'} `}${key}`;
       button.append(kbd);
     }
     container.append(button);

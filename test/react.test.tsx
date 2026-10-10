@@ -154,6 +154,7 @@ describe('useAsk', () => {
       kind: 'http',
       status: 404,
       message: 'Answers aren’t available here right now.',
+      reason: 'unavailable',
     });
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining(`POST ${new URL('/api/ask', location.href).href} returned 404`),
