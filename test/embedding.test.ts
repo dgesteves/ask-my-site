@@ -226,9 +226,10 @@ describe('the plugins’ embedding options', () => {
 
     await askMySite(s.context, { embedding: 'mock:32' }).postBuild(s);
     expect((await readIndex()).embedding).toEqual({ model: 'mock-hash-32', dimensions: 32 });
-    // An explicit keyword-only index, with the key set and no warning.
+    // An explicit keyword-only index, with the key set and no warning. (The builds share a
+    // folder, as real ones do not, so the llms files the first one wrote are left out.)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    await askMySite(s.context, { embedding: 'none' }).postBuild(s);
+    await askMySite(s.context, { embedding: 'none', llmsTxt: false }).postBuild(s);
     expect((await readIndex()).embedding).toBeNull();
     expect(warn).not.toHaveBeenCalled();
   });

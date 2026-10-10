@@ -10,6 +10,9 @@ out
 .vercel
 bench/results/*.json
 examples/nextjs/ask-index.json
+# Written by the example's `pnpm index` (--llms-txt public).
+examples/nextjs/public/llms-full.txt
+examples/nextjs/public/docs
 examples/nextjs/next-env.d.ts
 .astro
 

@@ -78,6 +78,11 @@ export interface LoadDirectoryOptions {
    * The frameworks' rules always drop it.
    */
   cleanUrls?: boolean;
+  /**
+   * Keep each page's content as Markdown to read (links, images, tables and quotes), for its
+   * `.md` copy and `llms-full.txt`, rather than the text an index holds.
+   */
+  markdown?: boolean;
 }
 
 /**
@@ -253,8 +258,12 @@ export async function loadDirectory(
     try {
       document =
         ext === '.html' || ext === '.htm'
-          ? fromHtml(source, meta)
-          : fromMarkdown(source, { ...meta, mdx: ext === '.mdx' });
+          ? fromHtml(source, { ...meta, markdown: options.markdown ?? false })
+          : fromMarkdown(source, {
+              ...meta,
+              mdx: ext === '.mdx',
+              markdown: options.markdown ?? false,
+            });
     } catch (error) {
       // Invalid frontmatter YAML, most often: say which file.
       throw new Error(`${path}: ${error instanceof Error ? error.message : String(error)}`, {
@@ -302,6 +311,21 @@ export interface AskConfig {
   cleanUrls?: boolean;
   /** Documents from elsewhere (a CMS, an API), indexed alongside the directory. */
   documents?: SourceDocument[] | (() => SourceDocument[] | Promise<SourceDocument[]>);
+  /**
+   * What `ask-my-site index --llms-txt <dir>` writes and how it names the site: `title` and
+   * `description` head `llms.txt`, `siteUrl` makes its links absolute, `mcp` points agents at the
+   * MCP endpoint, and `index`, `full` and `markdown` set to `false` leave out `llms.txt`,
+   * `llms-full.txt` or the pages' `.md` copies. The flags of the same names win.
+   */
+  llmsTxt?: {
+    title?: string;
+    description?: string;
+    siteUrl?: string;
+    mcp?: string;
+    index?: boolean;
+    full?: boolean;
+    markdown?: boolean;
+  };
 }
 
 /** Identity function that types a config module. */

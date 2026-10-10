@@ -81,6 +81,7 @@ Then point the dialog at `http://localhost:8787/api/ask`: start a site that uses
 - **Accessible ⌘K dialog.** Radix Dialog and cmdk; focus management, `aria-live` answer, reduced motion, light and dark themes, unstyled-friendly.
 - **Plugins and a script tag.** [Docusaurus](#docusaurus), [Astro and Starlight](#astro-and-starlight) plugins index the built site at the URLs it serves and add the dialog; [one `<script>` tag](#any-static-site-script-embed) adds it to Hugo, Jekyll, Eleventy, MkDocs or plain HTML.
 - **Production hygiene.** zod-validated input, body-size cap, pluggable rate limiting (in-memory or Upstash) keyed on the one client IP header your platform controls, a daily budget of questions and model tokens, an answer cache for repeated questions, masked model errors, keyword fallback when the embedding provider is down.
+- **llms.txt and Markdown pages.** The plugins also write `llms.txt`, `llms-full.txt` and a `.md` copy of each page, from the same pages ([below](#llmstxt-and-a-markdown-copy-of-every-page)).
 - **An MCP server for agents.** The same index as `search`, `fetch` and `list_pages` tools over MCP, with no model call on your side ([below](#for-agents-an-mcp-server-from-the-same-index)).
 - **Offline mock mode.** A deterministic embedder and a scripted extractive model run the whole pipeline with no key, for demos and tests.
 
@@ -189,7 +190,7 @@ The dialog posts to `/api/ask` on your site. Set `endpoint` for another path or 
 plugins: [['ask-my-site/docusaurus', { embedding: 'openai:text-embedding-3-small', dimensions: 512 }]],
 ```
 
-Options: `endpoint`, `embedding`, `dimensions`, `embeddingModel`, `embeddingProviderOptions`, `chunking`, `indexFile` (default `ask-index.json`), `exclude` (path prefixes relative to `baseUrl` and the locale, e.g. `['/changelog']`), and `dialog` (`title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`, `links`).
+Options: `endpoint`, `embedding`, `dimensions`, `embeddingModel`, `embeddingProviderOptions`, `chunking`, `indexFile` (default `ask-index.json`), `exclude` (path prefixes relative to `baseUrl` and the locale, e.g. `['/changelog']`), `dialog` (`title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`, `links`), `mcp` (the [MCP endpoint](#for-agents-an-mcp-server-from-the-same-index), for `<AskMySiteMcp />`) and `llmsTxt` ([below](#llmstxt-and-a-markdown-copy-of-every-page)).
 
 **Locales.** Docusaurus builds each locale on its own, and each gets its own `ask-index.json` under its locale path: `build/fr/ask-index.json`, served at `/fr/ask-index.json`. The recipes below serve one index, the default locale's.
 
@@ -333,7 +334,7 @@ Without Starlight, add `askMySite()` from `ask-my-site/astro` to `integrations` 
 - **In the browser** it adds a floating "Ask AI" button and <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>I</kbd> to every page (⌘K stays with Starlight's search, and text fields keep ⌘I). In Starlight the button sits in the corner of the table of contents column, in Starlight's colors, and the dialog follows its light or dark theme; elsewhere the dialog follows `data-theme` on `<html>`, or the system setting. Vite bundles the dialog with your pages, so it shares React with your own islands. With `<ClientRouter />`, the dialog stays across navigations and citations navigate through the router.
 - **Embeddings** default to OpenAI's `text-embedding-3-small` at 512 dimensions when `OPENAI_API_KEY` is set at build time, or the same model through AI Gateway with `AI_GATEWAY_API_KEY`, as in the Docusaurus plugin; without either, a keyword-only index, with a warning. Choose the model with `embedding` and `dimensions` as there, e.g. `askMySite({ embedding: 'openai:text-embedding-3-small', dimensions: 512 })`.
 
-Options: `endpoint`, `embedding`, `dimensions`, `embeddingModel`, `embeddingProviderOptions`, `chunking`, `indexFile` (default `ask-index.json`), `exclude` (path prefixes relative to `base` and the locale, e.g. `['/changelog']`), and `dialog` (`title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`, `theme`, `links`); `content` and `ignore` for the Astro integration. It works with Astro 5, 6 and 7, and Starlight 0.32 and later.
+Options: `endpoint`, `embedding`, `dimensions`, `embeddingModel`, `embeddingProviderOptions`, `chunking`, `indexFile` (default `ask-index.json`), `exclude` (path prefixes relative to `base` and the locale, e.g. `['/changelog']`), `dialog` (`title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`, `theme`, `links`), `mcp` (for `McpInstall.astro`) and `llmsTxt`; `content` and `ignore` for the Astro integration. It works with Astro 5, 6 and 7, and Starlight 0.32 and later.
 
 **Locales.** Starlight builds every locale at once, so the plugin writes one index per locale: `dist/ask-index.json` for the root locale and `dist/fr/ask-index.json` for French, served at `/fr/ask-index.json`. A page not yet translated is indexed in its locale with the fallback content Starlight shows there, as Starlight's search does. When every locale has its own path (no `root` locale), the default locale's index is under its path too, e.g. `dist/en/ask-index.json`. The Astro integration splits the index the same way along Astro's `i18n` locales. Every page's dialog posts to the same endpoint, and the recipes serve one index.
 
@@ -379,6 +380,10 @@ claude mcp add --transport http acme-docs https://docs.acme.dev/api/mcp
 ```
 
 It speaks MCP 2026-07-28 (stateless, `server/discover`) and, for clients that start with `initialize`, 2025-11-25 back to 2024-11-05, without sessions. It is rate-limited to 60 tool calls a minute per client IP by default and takes a `budget` of tool calls a day. On docusaurus.io's own docs, keyword search puts the right page in the top three for 22 of 22 agent-style queries, checked in CI. The plugins' `mcp` option feeds an "Add to Cursor / VS Code / Claude" block for your docs (`<AskMySiteMcp />` in Docusaurus, `McpInstall.astro` in Astro and Starlight). `npx ask-my-site dev` serves it locally at `/api/mcp`. See the [MCP server docs](https://ask-my-site-demo.vercel.app/docs/mcp).
+
+## llms.txt and a Markdown copy of every page
+
+From the pages it indexes, the Docusaurus, Astro and Starlight plugins also write `llms.txt` (as [llmstxt.org](https://llmstxt.org) describes it, linking each page's Markdown copy), `llms-full.txt` (every page in one file) and a `.md` copy of each page at its URL plus `.md` (`/docs/intro.md`), into the build output. The copies keep links, code languages, lists and tables; the index is unchanged. They never replace a file the build already has, and leave what `docusaurus-plugin-llms`, `docusaurus-plugin-llms-txt`, `starlight-llms-txt`, `starlight-page-actions` or `starlight-llm-actions` writes to them. `llmsTxt: false` turns them off, or `{ index, full, markdown }` one at a time. With the CLI, `--llms-txt <dir>` writes them into the folder your site serves. See [llms.txt and Markdown pages](https://ask-my-site-demo.vercel.app/docs/llms-txt).
 
 ## Example site
 
@@ -426,6 +431,13 @@ ask-my-site index [dir] [options]
       --ignore <glob>          Skip matching files; repeatable
       --framework <name>       docusaurus | starlight | next | none (default: detected)
       --clean-urls             Drop .html from HTML files' URLs (default: keep it)
+      --llms-txt <dir>         Also write llms.txt, llms-full.txt and a .md copy of each page into <dir>
+      --no-llms-index, --no-llms-full, --no-llms-markdown
+                               Leave out llms.txt, llms-full.txt or the .md copies
+      --llms-title <text>      The site's name, the H1 of llms.txt
+      --llms-description <text>  The summary under it
+      --site-url <url>         The site's origin, to link pages absolutely in llms.txt
+      --mcp-url <url>          The site's MCP endpoint, for llms.txt to point agents at
   -c, --config <file>          Module whose default export is an AskConfig
   -q, --quiet                  Only print errors
   -h, --help                   Show this help

@@ -68,6 +68,82 @@ describe('ask-my-site index', () => {
     );
   });
 
+  it('--llms-txt writes llms.txt, llms-full.txt and a .md per page, keeping links', async () => {
+    await writeFile(
+      join(cwd, 'content/guides/links.md'),
+      '---\ndescription: Where to go.\n---\n\n# Links\n\nSee [deploying](/docs/guides/deploy).\n',
+    );
+    const result = await run(
+      'index',
+      'content',
+      '-e',
+      'none',
+      '--base-url',
+      '/docs',
+      '--llms-txt',
+      'public',
+      '--llms-title',
+      'Acme',
+      '--llms-description',
+      'Docs for Acme.',
+      '--site-url',
+      'https://acme.dev',
+      '--mcp-url',
+      'https://acme.dev/api/mcp',
+    );
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('✓ Wrote llms.txt, llms-full.txt, 4 .md pages → public');
+    const llms = await readFile(join(cwd, 'public/llms.txt'), 'utf8');
+    expect(llms).toContain('# Acme\n\n> Docs for Acme.');
+    expect(llms).toContain('- [Links](https://acme.dev/docs/guides/links.md): Where to go.');
+    expect(llms).toContain('https://acme.dev/api/mcp');
+    expect(await readFile(join(cwd, 'public/docs/guides/links.md'), 'utf8')).toContain(
+      'See [deploying](/docs/guides/deploy).',
+    );
+    // The index is as it would be without --llms-txt: link labels only.
+    const index = await readIndex();
+    expect(index.chunks.find((chunk) => chunk.id === 'guides/links.md#0')?.text).toBe(
+      'See deploying.',
+    );
+    // Written again, it replaces what it wrote.
+    expect(
+      (await run('index', 'content', '-e', 'none', '--llms-txt', 'public', '--no-llms-full', '-q'))
+        .code,
+    ).toBe(0);
+    expect(await readFile(join(cwd, 'public/llms.txt'), 'utf8')).toMatch(/^# /);
+  });
+
+  it('--llms-txt takes --no-llms-index, --no-llms-full and --no-llms-markdown, and needs a dir for them', async () => {
+    const result = await run(
+      'index',
+      'content',
+      '-e',
+      'none',
+      '--llms-txt',
+      'out',
+      '--no-llms-index',
+      '--no-llms-markdown',
+    );
+    expect(result.code).toBe(0);
+    expect((await readFile(join(cwd, 'out/llms-full.txt'), 'utf8')).length).toBeGreaterThan(0);
+    await expect(readFile(join(cwd, 'out/llms.txt'), 'utf8')).rejects.toThrow();
+    await expect(readFile(join(cwd, 'out/guides/deploy.md'), 'utf8')).rejects.toThrow();
+    const orphan = await run('index', 'content', '-e', 'none', '--no-llms-full');
+    expect([orphan.code, orphan.stderr]).toEqual([2, '--llms-full goes with --llms-txt <dir>.']);
+    const bad = await run(
+      'index',
+      'content',
+      '-e',
+      'none',
+      '--llms-txt',
+      'out',
+      '--site-url',
+      'acme.dev',
+    );
+    expect(bad.code).toBe(2);
+    expect(bad.stderr).toMatch(/--site-url must be an absolute/);
+  });
+
   it('--check passes on fresh output and fails, listing changes, when content moves on', async () => {
     expect((await run('index', 'content', '-e', 'mock', '-o', 'out/index.json')).code).toBe(0);
 

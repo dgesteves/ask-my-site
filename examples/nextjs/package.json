@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "index": "ask-my-site index content/docs --config ask-my-site.config.mjs",
+    "index": "ask-my-site index content/docs --config ask-my-site.config.mjs --llms-txt public --no-llms-index",
     "index:check": "ask-my-site index content/docs --config ask-my-site.config.mjs --check",
     "predev": "pnpm index",
     "dev": "next dev",

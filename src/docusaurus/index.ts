@@ -25,6 +25,13 @@ import {
   type IndexOptions,
   type McpOption,
 } from '../integrations/build';
+import {
+  llmsOutputs,
+  writeLlmsFiles,
+  type LlmsOutput,
+  type LlmsTxtOption,
+} from '../integrations/llms';
+import type { LlmsPage } from '../llms';
 import { attribute, fromHtml } from '../loaders/html';
 import type { SourceDocument } from '../types';
 
@@ -61,6 +68,14 @@ export type AskMySiteOptions = IndexOptions & {
    * to Cursor, VS Code, Claude and ChatGPT.
    */
   mcp?: McpOption;
+  /**
+   * After the build, also write `llms.txt`, `llms-full.txt` and a Markdown copy of each indexed
+   * page at its URL plus `.md` (`/docs/intro.md`), into the build output. On by default; `false`
+   * turns all three off, and `{ index: false }`, `{ full: false }` or `{ markdown: false }` one
+   * of them. A file the build already has (from `static/` or another plugin) is left as it is,
+   * and what docusaurus-plugin-llms or docusaurus-plugin-llms-txt writes is left to them.
+   */
+  llmsTxt?: LlmsTxtOption;
 };
 
 /** What the theme reads with `useAllPluginInstancesData('ask-my-site')`. */
@@ -73,7 +88,7 @@ export interface AskMySiteGlobalData {
 
 interface LoadContext {
   siteDir: string;
-  siteConfig: { title: string; titleDelimiter?: string; url?: string };
+  siteConfig: { title: string; titleDelimiter?: string; url?: string; tagline?: string };
   /** The base URL with the locale's path, e.g. `/docs/fr/`. */
   baseUrl: string;
   i18n: { currentLocale: string };
@@ -82,6 +97,8 @@ interface LoadContext {
 interface PostBuildProps {
   outDir: string;
   routesPaths: string[];
+  /** Every plugin of the site, with its options. */
+  plugins?: readonly { name: string; options?: unknown }[];
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -119,11 +136,14 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
       }
     },
 
-    async postBuild({ outDir, routesPaths }: PostBuildProps) {
+    async postBuild({ outDir, routesPaths, plugins }: PostBuildProps) {
       const log = consoleLogger();
-      const documents = await loadBuiltPages(outDir, routesPaths, context.baseUrl, {
+      const outputs = llmsOutputs(options.llmsTxt);
+      const llms = outputs.index || outputs.full || outputs.markdown;
+      const { documents, pages } = await loadBuiltPages(outDir, routesPaths, context.baseUrl, {
         exclude: options.exclude ?? [],
         titleSuffix: ` ${titleDelimiter} ${siteTitle}`,
+        markdown: llms,
       });
       const embedding = await buildEmbedding(options, log);
       await writeSiteIndex({
@@ -144,8 +164,79 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
         name: indexFile,
         log,
       });
+      if (llms) {
+        const named = typeof options.llmsTxt === 'object' ? options.llmsTxt : {};
+        const description = named.description ?? context.siteConfig.tagline;
+        await writeLlmsFiles({
+          pages,
+          site: {
+            title: named.title ?? siteTitle,
+            ...(description ? { description } : {}),
+            ...(context.siteConfig.url ? { url: context.siteConfig.url } : {}),
+            base: context.baseUrl,
+            ...(mcp ? { mcp: mcp.url } : {}),
+          },
+          outputs,
+          owners: llmsOwners(plugins ?? []),
+          dir: outDir,
+          label: 'the build',
+          log,
+        });
+      }
     },
   };
+}
+
+/** A plugin option, read without trusting its type. */
+function option(options: unknown, ...path: string[]): unknown {
+  let value = options;
+  for (const key of path) {
+    value =
+      typeof value === 'object' && value !== null
+        ? (value as Record<string, unknown>)[key]
+        : undefined;
+  }
+  return value;
+}
+
+/**
+ * The llms outputs another plugin of the site writes, by its name, as its options configure it:
+ * docusaurus-plugin-llms (llms.txt and llms-full.txt, and .md copies with
+ * `generateMarkdownFiles`), docusaurus-plugin-llms-txt, @signalwire's or the unscoped one
+ * (llms.txt, .md copies unless turned off, and llms-full.txt when turned on), and
+ * docusaurus-plugin-copy-page-button (.md copies with `generateMarkdownRoutes`).
+ */
+export function llmsOwners(
+  plugins: readonly { name: string; options?: unknown }[],
+): Map<LlmsOutput, string> {
+  const owners = new Map<LlmsOutput, string>();
+  const claim = (output: LlmsOutput, name: string): void => {
+    if (!owners.has(output)) owners.set(output, name);
+  };
+  for (const { name, options } of plugins) {
+    if (name === 'docusaurus-plugin-llms') {
+      if (option(options, 'generateLLMsTxt') !== false) claim('index', name);
+      if (option(options, 'generateLLMsFullTxt') !== false) claim('full', name);
+      if (option(options, 'generateMarkdownFiles') === true) claim('markdown', name);
+    } else if (name === 'docusaurus-plugin-llms-txt') {
+      claim('index', name);
+      if (
+        option(options, 'content', 'enableMarkdownFiles') !== false &&
+        option(options, 'markdown', 'enableFiles') !== false
+      ) {
+        claim('markdown', name);
+      }
+      if (
+        option(options, 'content', 'enableLlmsFullTxt') === true ||
+        option(options, 'llmsTxt', 'enableLlmsFullTxt') === true
+      ) {
+        claim('full', name);
+      }
+    } else if (name === 'copy-page-button-plugin') {
+      if (option(options, 'generateMarkdownRoutes') === true) claim('markdown', name);
+    }
+  }
+  return owners;
 }
 
 /**
@@ -194,10 +285,15 @@ async function loadBuiltPages(
   outDir: string,
   routesPaths: readonly string[],
   baseUrl: string,
-  { exclude, titleSuffix }: { exclude: readonly string[]; titleSuffix: string },
-): Promise<SourceDocument[]> {
+  {
+    exclude,
+    titleSuffix,
+    markdown,
+  }: { exclude: readonly string[]; titleSuffix: string; markdown: boolean },
+): Promise<{ documents: SourceDocument[]; pages: LlmsPage[] }> {
   const excluded = excluder(exclude);
   const documents: SourceDocument[] = [];
+  const pages: LlmsPage[] = [];
   for (const route of [...new Set(routesPaths)].sort()) {
     const path = sitePath(route, baseUrl);
     if (route.endsWith('404.html') || excluded(path)) continue;
@@ -207,13 +303,22 @@ async function loadBuiltPages(
     if (!document?.content.trim()) continue;
     // A title read from <title> ends with the site's: "Setup | Acme Docs".
     const { title } = document;
-    documents.push(
+    const page =
       title.endsWith(titleSuffix) && title.length > titleSuffix.length
         ? { ...document, title: title.slice(0, -titleSuffix.length) }
-        : document,
-    );
+        : document;
+    documents.push(page);
+    if (markdown) {
+      const copy = fromHtml(html, { id: route, url: route, root: 'article', markdown: true });
+      pages.push({
+        url: route,
+        title: page.title,
+        ...(page.description ? { description: page.description } : {}),
+        content: copy?.content ?? page.content,
+      });
+    }
   }
-  return documents;
+  return { documents, pages };
 }
 
 /** `/intro` is `intro/index.html`, or `intro.html` with `trailingSlash: false`. */

@@ -10,6 +10,8 @@ import { buildIndex, checkIndex, embeddingModelId, type EmbeddingProviderOptions
 import { DEFAULT_CHUNKING } from '../chunk';
 import type { AskIndexFile } from '../index-file';
 import { embeddingFromSpec, EmbeddingSpecError } from '../node/embedding';
+import { llmsOutputs, writeLlmsFiles } from '../integrations/llms';
+import type { LlmsPage } from '../llms';
 import { dev } from './dev';
 import {
   detectFramework,
@@ -53,6 +55,14 @@ Options:
                                (default: detected from the framework config above <dir>)
       --clean-urls             Drop .html from HTML files' URLs, for hosts that serve
                                page.html at /page (default: keep it)
+      --llms-txt <dir>         Also write llms.txt, llms-full.txt and a .md copy of each page
+                               into <dir>, the folder your site serves at its root
+      --no-llms-index, --no-llms-full, --no-llms-markdown
+                               Leave out llms.txt, llms-full.txt or the .md copies
+      --llms-title <text>      The site's name, the H1 of llms.txt (default: package.json's name)
+      --llms-description <text>  The summary under it
+      --site-url <url>         The site's origin, to link pages absolutely in llms.txt
+      --mcp-url <url>          The site's MCP endpoint, for llms.txt to point agents at
   -c, --config <file>          Module whose default export is an AskConfig
   -q, --quiet                  Only print errors
   -h, --help                   Show this help
@@ -77,6 +87,16 @@ const FRAMEWORK_NAMES: Record<Exclude<Framework, 'none'>, string> = {
 };
 
 interface Flags {
+  llms?: {
+    dir: string;
+    index?: boolean;
+    full?: boolean;
+    markdown?: boolean;
+    title?: string;
+    description?: string;
+    siteUrl?: string;
+    mcp?: string;
+  };
   out: string;
   check: boolean;
   baseUrl?: string;
@@ -214,6 +234,7 @@ function parseFlags(args: string[]): {
     parsed = parseArgs({
       args,
       allowPositionals: true,
+      allowNegative: true,
       strict: true,
       options: {
         out: { type: 'string', short: 'o' },
@@ -226,6 +247,14 @@ function parseFlags(args: string[]): {
         ignore: { type: 'string', multiple: true },
         framework: { type: 'string' },
         'clean-urls': { type: 'boolean' },
+        'llms-txt': { type: 'string' },
+        'llms-index': { type: 'boolean' },
+        'llms-full': { type: 'boolean' },
+        'llms-markdown': { type: 'boolean' },
+        'llms-title': { type: 'string' },
+        'llms-description': { type: 'string' },
+        'site-url': { type: 'string' },
+        'mcp-url': { type: 'string' },
         config: { type: 'string', short: 'c' },
         quiet: { type: 'boolean', short: 'q' },
         help: { type: 'boolean', short: 'h' },
@@ -244,6 +273,26 @@ function parseFlags(args: string[]): {
   const framework = values.framework;
   if (framework !== undefined && !FRAMEWORKS.includes(framework as Framework | 'auto')) {
     throw new UsageError(`--framework must be one of ${FRAMEWORKS.join(', ')}.`);
+  }
+  for (const name of ['site-url', 'mcp-url'] as const) {
+    const value = values[name];
+    if (value !== undefined && !/^https?:\/\/[^/]/.test(value)) {
+      throw new UsageError(`--${name} must be an absolute http(s) URL (got ${value}).`);
+    }
+  }
+  const llmsOnly = (
+    [
+      'llms-index',
+      'llms-full',
+      'llms-markdown',
+      'llms-title',
+      'llms-description',
+      'site-url',
+      'mcp-url',
+    ] as const
+  ).find((name) => values[name] !== undefined);
+  if (llmsOnly && values['llms-txt'] === undefined) {
+    throw new UsageError(`--${llmsOnly} goes with --llms-txt <dir>.`);
   }
   return {
     ...(positionals[0] ? { command: positionals[0] } : {}),
@@ -265,8 +314,86 @@ function parseFlags(args: string[]): {
       cleanUrls: values['clean-urls'] ?? false,
       ...(values.config ? { config: values.config } : {}),
       quiet: values.quiet ?? false,
+      ...(values['llms-txt'] === undefined
+        ? {}
+        : {
+            llms: {
+              dir: values['llms-txt'],
+              ...(values['llms-index'] === undefined ? {} : { index: values['llms-index'] }),
+              ...(values['llms-full'] === undefined ? {} : { full: values['llms-full'] }),
+              ...(values['llms-markdown'] === undefined
+                ? {}
+                : { markdown: values['llms-markdown'] }),
+              ...(values['llms-title'] ? { title: values['llms-title'] } : {}),
+              ...(values['llms-description'] ? { description: values['llms-description'] } : {}),
+              ...(values['site-url'] ? { siteUrl: values['site-url'] } : {}),
+              ...(values['mcp-url'] ? { mcp: values['mcp-url'] } : {}),
+            },
+          }),
     },
   };
+}
+
+/**
+ * `--llms-txt <dir>`: the pages again, read as Markdown to keep their links, and written as
+ * `llms.txt`, `llms-full.txt` and a `.md` per page into `dir`, replacing what is there.
+ */
+async function writeLlms(
+  llms: NonNullable<Flags['llms']>,
+  config: AskConfig,
+  directory: { root: string; options: Parameters<typeof loadDirectory>[1] } | undefined,
+  indexed: readonly SourceDocument[],
+  io: CliIO,
+  log: (line: string) => void,
+): Promise<void> {
+  const settings = { ...config.llmsTxt, ...llms };
+  const fromDirectory = directory
+    ? await loadDirectory(directory.root, { ...directory.options, markdown: true })
+    : [];
+  const ids = new Set(fromDirectory.map((document) => document.id));
+  // Documents from the config module are written as they were given.
+  const documents = [...fromDirectory, ...indexed.filter((document) => !ids.has(document.id))];
+  const pages: LlmsPage[] = documents.map((document) => ({
+    url: document.url,
+    title: document.title,
+    ...(document.description ? { description: document.description } : {}),
+    content: document.content,
+  }));
+  const dir = resolve(io.cwd, llms.dir);
+  const label = relative(io.cwd, dir) || '.';
+  await writeLlmsFiles({
+    pages,
+    site: {
+      title: settings.title ?? packageName(io.cwd) ?? 'Docs',
+      ...(settings.description ? { description: settings.description } : {}),
+      ...(settings.siteUrl ? { url: settings.siteUrl } : {}),
+      ...(settings.mcp ? { mcp: settings.mcp } : {}),
+    },
+    outputs: llmsOutputs(settings),
+    dir,
+    label,
+    log: {
+      info: (line) => {
+        log(`✓ ${line}`);
+      },
+      warn: (line) => {
+        log(`! ${line}`);
+      },
+    },
+    overwrite: true,
+  });
+}
+
+/** The `name` in `package.json` in `cwd`, for a site title when none is given. */
+function packageName(cwd: string): string | undefined {
+  try {
+    const name: unknown = (
+      JSON.parse(readFileSync(resolve(cwd, 'package.json'), 'utf8')) as { name?: unknown }
+    ).name;
+    return typeof name === 'string' && name ? name : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Runs the CLI. Returns the exit code: 0 success, 1 failure or stale index, 2 usage error. */
@@ -294,6 +421,7 @@ export async function main(args: string[], io: CliIO): Promise<number> {
     };
 
     const documents: SourceDocument[] = [];
+    let directory: { root: string; options: Parameters<typeof loadDirectory>[1] } | undefined;
     if (dir) {
       const root = resolve(io.cwd, dir);
       if (!existsSync(root) || !statSync(root).isDirectory()) {
@@ -315,14 +443,16 @@ export async function main(args: string[], io: CliIO): Promise<number> {
           'Docusaurus serves docs under /docs unless routeBasePath says otherwise: pass --base-url /docs',
         );
       }
-      documents.push(
-        ...(await loadDirectory(root, {
+      directory = {
+        root,
+        options: {
           ...(baseUrl ? { baseUrl } : {}),
           framework,
           cleanUrls: flags.cleanUrls || (config.cleanUrls ?? false),
           ignore: [...(config.ignore ?? []), ...flags.ignore],
-        })),
-      );
+        },
+      };
+      documents.push(...(await loadDirectory(root, directory.options)));
     }
     if (config.documents) {
       const extra =
@@ -403,6 +533,9 @@ export async function main(args: string[], io: CliIO): Promise<number> {
     log(
       `✓ ${String(stats.chunks)} chunks${reuse} → ${outLabel} (${formatBytes(statSync(out).size)}, ${seconds}s)`,
     );
+    if (flags.llms) {
+      await writeLlms(flags.llms, config, directory, documents, io, log);
+    }
     return 0;
   } catch (error) {
     if (error instanceof UsageError) {

@@ -27,6 +27,12 @@ export interface HtmlMeta {
   root?: string;
   /** Elements to leave out, as a selector like `root`'s, e.g. `[data-pagefind-ignore]`. */
   ignore?: string;
+  /**
+   * Write the content as Markdown to read, rather than text to index: links (relative ones as
+   * root-relative URLs), emphasis, images, numbered and nested lists, tables with a header row
+   * and quotes are kept, and headings lose their `{#id}`. What a page's `.md` copy holds.
+   */
+  markdown?: boolean;
 }
 
 /** Elements whose content is never prose. */
@@ -544,11 +550,40 @@ export function fromHtml(original: string, meta: HtmlMeta): SourceDocument | nul
     meta.fallbackTitle ||
     meta.id;
 
-  const content = htmlToText(
-    (meta.root === 'article' ? docusaurusMarkdown(html) : undefined) ?? html,
-  );
+  const body = (meta.root === 'article' ? docusaurusMarkdown(html) : undefined) ?? html;
+  const content = meta.markdown ? htmlToText(body, { url: meta.url }) : htmlToText(body);
+  const description = metaDescription(original);
   // Headings link only to the ids the page has: one without an id has no anchor to land on.
-  return { id: meta.id, url: meta.url, title, content, anchors: 'explicit' };
+  return {
+    id: meta.id,
+    url: meta.url,
+    title,
+    ...(description ? { description } : {}),
+    content,
+    anchors: 'explicit',
+  };
+}
+
+/** The page's `<meta name="description">` (or `og:description`), decoded, or `undefined`. */
+function metaDescription(html: string): string | undefined {
+  const head = innerOf(html, 'head') ?? '';
+  let og: string | undefined;
+  for (
+    let start = head.toLowerCase().indexOf('<meta');
+    start !== -1;
+    start = head.toLowerCase().indexOf('<meta', start + 5)
+  ) {
+    const end = head.indexOf('>', start);
+    if (end === -1) break;
+    const tag = head.slice(start, end + 1);
+    const content = attribute(tag, 'content');
+    if (!content?.trim()) continue;
+    const name = (attribute(tag, 'name') ?? attribute(tag, 'property'))?.toLowerCase();
+    const text = decodeEntities(content).replace(/\s+/g, ' ').trim();
+    if (name === 'description') return text;
+    if (name === 'og:description') og ??= text;
+  }
+  return og;
 }
 
 /** A fence longer than any backtick run inside the code, so the code can never close it. */
@@ -566,25 +601,51 @@ function fenceFor(code: string): string {
 const PERMALINK =
   /<a(?=[\s>])[^<>]*>\s*(?:(?:[#¶§\u200B-\u200D\u2060\uFEFF]|&[A-Za-z]+;|&#x?[\da-fA-F]+;)\s*)?<\/a>/gi;
 
-function htmlToText(html: string): string {
-  // Code blocks are swapped out first so whitespace normalization never touches them.
+/**
+ * The text of a page's HTML, Markdown-shaped. With `markdown` (the page's URL, to resolve its
+ * relative links against), it is Markdown to read: links, emphasis, images, numbered and nested
+ * lists, tables and quotes are kept, and headings have no `{#id}`. Without it, the text an index
+ * holds, which those would only add noise to.
+ */
+function htmlToText(html: string, markdown?: { url: string }): string {
+  // Code blocks (and, for Markdown, tables and quotes) are swapped out first so whitespace
+  // normalization never touches them.
   const blocks: string[] = [];
-  const withoutCode = replaceElements(
+  const keep = (block: string): string => {
+    blocks.push(block);
+    return `\n\n\uE000${String(blocks.length - 1)}\uE000\n\n`;
+  };
+  let withoutCode = replaceElements(
     html,
     /<pre(?=[\s>])[^<>]*>/gi,
     () => '</pre>',
-    ({ inner }) => {
+    ({ open, inner }) => {
       // A line is a `<br>`, or a `<div>` (Expressive Code, which Starlight uses, writes each line
       // as one with no newline between them). A line's own newline, kept in the markup next to
       // or inside its `<div>`, does not count twice.
-      const body = stripTags(inner.replace(/<br\s*\/?>/gi, '\n').replace(/<\/div>/gi, ''))
-        .replace(/\n?+\n?/g, '\n')
+      const body = stripTags(inner.replace(/<br\s*\/?>/gi, '\n').replace(/<\/div>/gi, '\uE001'))
+        .replace(/\n?\uE001+\n?/g, '\n')
         .replace(/^\n+|\s+$/g, '');
       const fence = fenceFor(body);
-      blocks.push(`${fence}\n${body}\n${fence}`);
-      return `\n\n\uE000${String(blocks.length - 1)}\uE000\n\n`;
+      // Markdown keeps the language, as highlighters record it on <pre> or its <code>.
+      const language = markdown ? codeLanguage(open[0], inner) : '';
+      return keep(`${fence}${language}\n${body}\n${fence}`);
     },
   );
+  if (markdown) {
+    withoutCode = replaceEach(withoutCode, outermost(withoutCode, 'table'), ({ inner }) =>
+      keep(markdownTable(inner, markdown.url)),
+    );
+    withoutCode = replaceEach(withoutCode, outermost(withoutCode, 'blockquote'), ({ inner }) =>
+      keep(
+        htmlToText(inner, markdown)
+          .split('\n')
+          .map((line) => (line ? `> ${line}` : '>'))
+          .join('\n'),
+      ),
+    );
+    withoutCode = markdownLists(withoutCode).replace(/<hr(?=[\s/>])[^<>]*>/gi, '\n\n---\n\n');
+  }
   const withHeadings = replaceElements(
     withoutCode,
     /<h([1-6])(?=[\s>])([^<>]*)>/gi,
@@ -598,13 +659,12 @@ function htmlToText(html: string): string {
         .trim()
         .replace(/^[#¶§] | [#¶§]$/g, '');
       if (!heading) return '\n\n';
-      const id = attribute(` ${open[2] ?? ''}`, 'id');
+      const id = markdown ? undefined : attribute(` ${open[2] ?? ''}`, 'id');
       return `\n\n${'#'.repeat(Number(open[1]))} ${heading}${id ? ` {#${id}}` : ''}\n\n`;
     },
   );
-  const text = replaceElements(
-    withHeadings
-      .replace(/<li(?=[\s>])[^<>]*>/gi, '\n- ')
+  let text = replaceElements(
+    (markdown ? withHeadings : withHeadings.replace(/<li(?=[\s>])[^<>]*>/gi, '\n- '))
       .replace(
         /<\/(?:p|div|section|article|header|ul|ol|table|blockquote|dl|figure|details|summary)>/gi,
         '\n\n',
@@ -616,6 +676,7 @@ function htmlToText(html: string): string {
     () => '</code>',
     ({ inner }) => `\`${inner.replace(/<[^<>]*>/g, '')}\``,
   );
+  if (markdown) text = markdownInline(text, markdown.url);
 
   return decodeEntities(text.replace(/<[^<>]*>/g, ''))
     .split('\n')
@@ -623,5 +684,152 @@ function htmlToText(html: string): string {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+    .replace(/\uE002(\d+)\uE002/g, (_, depth: string) => '  '.repeat(Number(depth)))
     .replace(/\uE000(\d+)\uE000/g, (_, index: string) => blocks[Number(index)] ?? '');
+}
+
+/**
+ * A code block's language, from `data-language` (Expressive Code) or a `language-*` class on the
+ * `<pre>` or its first `<code>` (Prism, Shiki, highlight.js); empty when it names none.
+ */
+function codeLanguage(pre: string, inner: string): string {
+  const code = /^\s*<code(?=[\s>])[^<>]*>/i.exec(inner)?.[0] ?? '';
+  for (const tag of [pre, code]) {
+    const named = attribute(tag, 'data-language');
+    if (named && /^[\w+#.-]{1,30}$/.test(named) && named !== 'plaintext') return named;
+    const language = /(?:^|\s)(?:language|lang)-([\w+#.-]{1,30})(?=\s|$)/.exec(
+      attribute(tag, 'class') ?? '',
+    )?.[1];
+    if (language) return language;
+  }
+  return '';
+}
+
+/**
+ * `href` as a Markdown link target: absolute URLs and fragments as they are, anything else
+ * resolved against the page's URL into a root-relative one. `null` for a scheme a reader should
+ * not follow, such as `javascript:`.
+ */
+function linkTarget(href: string, page: string): string | null {
+  const value = decodeEntities(href).trim();
+  if (!value || value.startsWith('#')) return value || null;
+  const scheme = /^([a-z][a-z\d+.-]*):/i.exec(value)?.[1]?.toLowerCase();
+  if (scheme) return ['http', 'https', 'mailto'].includes(scheme) ? value : null;
+  const base = 'https://ask-my-site.invalid';
+  try {
+    const resolved = new URL(value, new URL(page, `${base}/`));
+    return resolved.origin === base
+      ? `${resolved.pathname}${resolved.search}${resolved.hash}`
+      : resolved.href;
+  } catch {
+    return null;
+  }
+}
+
+/** Links, images and emphasis as Markdown; the tags they were are dropped later. */
+function markdownInline(html: string, page: string): string {
+  // A page links to the same few places over and over: resolve each once.
+  const targets = new Map<string, string | null>();
+  const target = (href: string): string | null => {
+    let resolved = targets.get(href);
+    if (resolved === undefined && !targets.has(href)) {
+      resolved = linkTarget(href, page);
+      targets.set(href, resolved);
+    }
+    return resolved ?? null;
+  };
+  const withImages = html.replace(/<img(?=[\s/>])[^<>]*>/gi, (tag) => {
+    const alt = decodeEntities(attribute(tag, 'alt') ?? '')
+      .replace(/[[\]]/g, '')
+      .trim();
+    const src = target(attribute(tag, 'src') ?? '');
+    return alt && src ? `![${alt}](${src})` : alt;
+  });
+  const withLinks = replaceElements(
+    withImages,
+    /<a(?=[\s>])([^<>]*)>/gi,
+    () => '</a>',
+    ({ open, inner }) => {
+      const label = inner
+        .replace(/<[^<>]*>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const href = target(attribute(` ${open[1] ?? ''}`, 'href') ?? '');
+      if (!label) return '';
+      return href
+        ? `[${label.replace(/[[\]]/g, '\\$&')}](${href.replace(/[()\s]/g, encodeURIComponent)})`
+        : label;
+    },
+  );
+  return withLinks
+    .replace(/<\/?(?:strong|b)(?=[\s>])[^<>]*>/gi, '**')
+    .replace(/<\/?(?:em|i)(?=[\s>])[^<>]*>/gi, '*');
+}
+
+/**
+ * Lists as Markdown: each `<li>` starts a line with `- `, or `1. ` in an `<ol>`, indented two
+ * spaces per level of nesting (written as a marker that survives the trimming of lines). One scan
+ * over the list tags, with a stack of the lists open.
+ */
+function markdownLists(html: string): string {
+  const open: ('ul' | 'ol')[] = [];
+  // The whitespace before a list tag goes with it, so items are not a blank line apart.
+  return html.replace(
+    /\s*<(\/?)(ul|ol|li)(?=[\s/>])[^<>]*>/gi,
+    (_, close: string, name: string) => {
+      const tag = name.toLowerCase();
+      if (tag === 'li') {
+        if (close) return '';
+        const depth = Math.max(0, open.length - 1);
+        return `\n\uE002${String(depth)}\uE002${open.at(-1) === 'ol' ? '1.' : '-'} `;
+      }
+      // A list nested in an item continues it; one at the top stands apart.
+      if (close) open.pop();
+      else open.push(tag as 'ul' | 'ol');
+      return open.length > (close ? 0 : 1) ? '' : '\n\n';
+    },
+  );
+}
+
+/**
+ * A table's rows as a Markdown table: the first row is the header, and cells keep their links.
+ * Rows and cells run from one opening tag to the next, as minified HTML omits the optional
+ * `</tr>`, `</th>` and `</td>`.
+ */
+function markdownTable(html: string, page: string): string {
+  const cell = (inner: string): string =>
+    decodeEntities(
+      markdownInline(
+        replaceElements(
+          inner.replace(/<\/t[hd]>[\s\S]*$/i, ''),
+          /<code(?=[\s>])[^<>]*>/gi,
+          () => '</code>',
+          ({ inner: code }) => `\`${code.replace(/<[^<>]*>/g, '')}\``,
+        ),
+        page,
+      ).replace(/<[^<>]*>/g, ' '),
+    )
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\|/g, '\\|');
+  const rows = html
+    .split(/<tr(?=[\s>])[^<>]*>/i)
+    .slice(1)
+    .map((row) =>
+      row
+        .split(/<t[hd](?=[\s>])[^<>]*>/i)
+        .slice(1)
+        .map(cell),
+    )
+    .filter((cells) => cells.length > 0);
+  const [header, ...body] = rows;
+  if (!header) return '';
+  const width = Math.max(...rows.map((cells) => cells.length));
+  const line = (cells: string[]): string =>
+    `| ${Array.from({ length: width }, (_, i) => cells[i] ?? '').join(' | ')} |`;
+  return [
+    line(header),
+    `| ${Array.from({ length: width }, () => '---').join(' | ')} |`,
+    ...body.map(line),
+  ].join('\n');
 }

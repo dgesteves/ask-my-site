@@ -19,6 +19,11 @@ export interface MarkdownMeta {
   fallbackTitle?: string;
   /** Treat the source as MDX: drop `import`/`export` lines and unwrap JSX elements. */
   mdx?: boolean;
+  /**
+   * Keep the content as Markdown to read, rather than text to index: links, images and link
+   * definitions stay. What a page's `.md` copy holds.
+   */
+  markdown?: boolean;
 }
 
 export interface Frontmatter {
@@ -54,14 +59,19 @@ export function fromMarkdown(source: string, meta: MarkdownMeta): SourceDocument
 
   const segments = splitFenced(body.replace(/\r\n?/g, '\n'));
   const content = segments
-    .map((segment) => (segment.code ? segment.text : cleanProse(segment.text, meta.mdx ?? false)))
+    .map((segment) =>
+      segment.code
+        ? segment.text
+        : cleanProse(segment.text, meta.mdx ?? false, meta.markdown ?? false),
+    )
     .join('\n')
     .trim();
   const title =
     stringField(data.title) ?? firstH1(splitFenced(content)) ?? meta.fallbackTitle ?? meta.id;
   const url = stringField(data.url) ?? stringField(data.permalink) ?? meta.url;
+  const description = stringField(data.description);
 
-  return { id: meta.id, url, title, content };
+  return { id: meta.id, url, title, ...(description ? { description } : {}), content };
 }
 
 function stringField(value: unknown): string | undefined {
@@ -80,10 +90,10 @@ function firstH1(segments: ReturnType<typeof splitFenced>): string | undefined {
   return undefined;
 }
 
-function cleanProse(prose: string, mdx: boolean): string {
+function cleanProse(prose: string, mdx: boolean, markdown: boolean): string {
   const text = mdx ? keepHeadingIds(prose) : prose;
   return mapOutsideCodeSpans(removeDelimited(text, '<!--', '-->'), (part) =>
-    cleanText(part, mdx),
+    cleanText(part, mdx, markdown),
   ).replace(/\n{3,}/g, '\n\n');
 }
 
@@ -101,7 +111,7 @@ function keepHeadingIds(prose: string): string {
     .join('\n');
 }
 
-function cleanText(input: string, mdx: boolean): string {
+function cleanText(input: string, mdx: boolean, markdown = false): string {
   let text = input;
   if (mdx) {
     text = removeDelimited(
@@ -110,9 +120,9 @@ function cleanText(input: string, mdx: boolean): string {
       '*/}',
     ).replace(/<\/?[A-Z][\w.]*(?:\s(?:[^<>{}]|\{[^{}]*\})*)?\/?>/g, '');
   }
-  return removeDefinitions(
-    referenceLinks(inlineLinks(images(text.replace(/<\/?[a-z][\w-]*(?:\s[^<>]*)?\/?>/g, '')))),
-  );
+  const withoutTags = text.replace(/<\/?[a-z][\w-]*(?:\s[^<>]*)?\/?>/g, '');
+  if (markdown) return withoutTags;
+  return removeDefinitions(referenceLinks(inlineLinks(images(withoutTags))));
 }
 
 /*

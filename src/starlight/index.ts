@@ -48,6 +48,9 @@ export default function askMySite(options: AskMySiteStarlightOptions = {}): Star
             stylesheets: ['ask-my-site/starlight/launcher.css'],
             title: `Ask ${siteTitle(config)}`,
             siteTitle: siteTitle(config),
+            ...(siteDescription(config) ? { siteDescription: siteDescription(config) } : {}),
+            // Starlight plugins that write llms files, which the integration leaves them to.
+            plugins: (config.plugins ?? []).map((plugin) => plugin.name),
             // Starlight serves each locale but the root one under its key: /fr/, /pt-br/.
             ...(config.locales
               ? { locales: Object.keys(config.locales).filter((key) => key !== 'root') }
@@ -64,4 +67,13 @@ function siteTitle({ title, locales, defaultLocale }: StarlightUserConfig): stri
   if (typeof title === 'string') return title;
   const lang = (locales?.root ?? (defaultLocale ? locales?.[defaultLocale] : undefined))?.lang;
   return (lang ? title[lang] : undefined) ?? Object.values(title)[0] ?? 'this site';
+}
+
+/** The site description, in the default locale's language when it is translated. */
+function siteDescription({ description }: StarlightUserConfig): string | undefined {
+  const value: unknown = description;
+  if (typeof value === 'string') return value;
+  if (typeof value !== 'object' || value === null) return undefined;
+  const first: unknown = Object.values(value)[0];
+  return typeof first === 'string' ? first : undefined;
 }

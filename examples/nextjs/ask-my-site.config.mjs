@@ -8,18 +8,26 @@ import { mockEmbeddingModel } from 'ask-my-site/mock';
  *
  * With OPENAI_API_KEY set (the CLI reads .env.local), it embeds with OpenAI at 512 dimensions.
  * Without it, it uses the deterministic mock model, so the example runs with no key at all.
- *
- * @type {import('ask-my-site/node').AskConfig}
  */
+const shared = {
+  baseUrl: '/docs',
+  // `pnpm index` passes --llms-txt public: a Markdown copy of each page at /docs/<slug>.md and
+  // every page in /llms-full.txt. The site curates /llms.txt itself (app/llms.txt/route.ts), in
+  // its sidebar's order, so --no-llms-index leaves that one out.
+  llmsTxt: {
+    title: 'ask-my-site',
+    siteUrl: 'https://ask-my-site-demo.vercel.app',
+    mcp: 'https://ask-my-site-demo.vercel.app/api/mcp',
+  },
+};
+
+/** @type {import('ask-my-site/node').AskConfig} */
 const config = process.env.OPENAI_API_KEY
   ? {
-      baseUrl: '/docs',
+      ...shared,
       embeddingModel: createOpenAI().embedding('text-embedding-3-small'),
       embeddingProviderOptions: { openai: { dimensions: 512 } },
     }
-  : {
-      baseUrl: '/docs',
-      embeddingModel: mockEmbeddingModel(),
-    };
+  : { ...shared, embeddingModel: mockEmbeddingModel() };
 
 export default config;

@@ -11,20 +11,24 @@ The `ask-my-site` command has two subcommands: `index` builds or checks the inde
 
 `ask-my-site index [dir] [options]` builds `ask-index.json` from the Markdown, MDX and HTML files in `dir`.
 
-| Flag                      | Default                  | What it does                                                                           |
-| ------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| `-o, --out <file>`        | `ask-index.json`         | Where to write the index.                                                              |
-| `--check`                 | off                      | Exit 1 if the index is stale. Never calls a model.                                     |
-| `--base-url <url>`        | `/`                      | URL prefix for pages, such as `/docs` or a full origin.                                |
-| `-e, --embedding <spec>`  | OpenAI when a key is set | `openai:<model>`, `<provider>/<model>`, `mock[:<dims>]` or `none`.                     |
-| `--dimensions <n>`        | the model's              | Vector size, for models that support it. With `--check`, the size the index must have. |
-| `--chunk-size <chars>`    | `1200`                   | Maximum characters per chunk.                                                          |
-| `--chunk-overlap <chars>` | `150`                    | Characters shared by consecutive chunks of a section.                                  |
-| `--ignore <glob>`         | none                     | Skip matching files. Repeatable.                                                       |
-| `--framework <name>`      | detected                 | `docusaurus`, `starlight`, `next` or `none`: how file paths become URLs.               |
-| `--clean-urls`            | off                      | Drop `.html` from HTML files' URLs.                                                    |
-| `-c, --config <file>`     | none                     | A module whose default export is an `AskConfig`.                                       |
-| `-q, --quiet`             | off                      | Only print errors.                                                                     |
+| Flag                                                      | Default                  | What it does                                                                           |
+| --------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| `-o, --out <file>`                                        | `ask-index.json`         | Where to write the index.                                                              |
+| `--check`                                                 | off                      | Exit 1 if the index is stale. Never calls a model.                                     |
+| `--base-url <url>`                                        | `/`                      | URL prefix for pages, such as `/docs` or a full origin.                                |
+| `-e, --embedding <spec>`                                  | OpenAI when a key is set | `openai:<model>`, `<provider>/<model>`, `mock[:<dims>]` or `none`.                     |
+| `--dimensions <n>`                                        | the model's              | Vector size, for models that support it. With `--check`, the size the index must have. |
+| `--chunk-size <chars>`                                    | `1200`                   | Maximum characters per chunk.                                                          |
+| `--chunk-overlap <chars>`                                 | `150`                    | Characters shared by consecutive chunks of a section.                                  |
+| `--ignore <glob>`                                         | none                     | Skip matching files. Repeatable.                                                       |
+| `--framework <name>`                                      | detected                 | `docusaurus`, `starlight`, `next` or `none`: how file paths become URLs.               |
+| `--clean-urls`                                            | off                      | Drop `.html` from HTML files' URLs.                                                    |
+| `--llms-txt <dir>`                                        | off                      | Also write [llms.txt, llms-full.txt and a .md per page](/docs/llms-txt) into `dir`.    |
+| `--no-llms-index`, `--no-llms-full`, `--no-llms-markdown` |                          | Leave out one of those.                                                                |
+| `--llms-title`, `--llms-description`                      | `package.json` name      | The site's name and summary, at the top of `llms.txt`.                                 |
+| `--site-url`, `--mcp-url`                                 | none                     | The site's origin, for absolute links, and its MCP endpoint, for `llms.txt`.           |
+| `-c, --config <file>`                                     | none                     | A module whose default export is an `AskConfig`.                                       |
+| `-q, --quiet`                                             | off                      | Only print errors.                                                                     |
 
 ## Choosing the embedding model
 

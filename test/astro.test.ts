@@ -60,6 +60,8 @@ type TrailingSlash = 'always' | 'never' | 'ignore';
 
 interface SiteOptions {
   site?: string;
+  /** Other integrations' names, as Astro lists them. */
+  integrations?: string[];
   format?: Format;
   trailingSlash?: TrailingSlash;
   base?: string;
@@ -74,7 +76,14 @@ interface SiteOptions {
 async function build(
   integration: AstroIntegration,
   pages: Record<string, string>,
-  { site, format = 'directory', trailingSlash = 'ignore', base = '/', i18n }: SiteOptions = {},
+  {
+    site,
+    integrations = [],
+    format = 'directory',
+    trailingSlash = 'ignore',
+    base = '/',
+    i18n,
+  }: SiteOptions = {},
 ) {
   const outDir = join(root, 'dist');
   const reported: { pathname: string }[] = [];
@@ -105,6 +114,8 @@ async function build(
   await hooks['astro:config:done']?.({
     config: {
       root: pathToFileURL(`${root}/`),
+      ...(site ? { site } : {}),
+      integrations: [{ name: 'ask-my-site' }, ...integrations.map((name) => ({ name }))],
       base,
       trailingSlash,
       build: { format },
@@ -248,7 +259,10 @@ describe('ask-my-site/starlight', () => {
     expect((await read('pt-br/ask-index.json')).documents.map((d) => d.url)).toEqual([
       '/docs/pt-br/guides/setup/',
     ]);
-    expect(logger.info.mock.calls.map(([message]) => String(message).split(' → ')[1])).toEqual([
+    const indexed = logger.info.mock.calls.filter(([message]) =>
+      String(message).startsWith('Indexed'),
+    );
+    expect(indexed.map(([message]) => String(message).split(' → ')[1])).toEqual([
       // Where each file is, from the project root.
       expect.stringMatching(/^dist\/ask-index\.json /) as string,
       expect.stringMatching(/^dist\/fr\/ask-index\.json /) as string,
@@ -327,6 +341,44 @@ describe('ask-my-site/starlight', () => {
         optimizeDeps: { include: ['ask-my-site/embed'] },
       },
     });
+  });
+
+  it('writes llms.txt, llms-full.txt and .md copies per locale, as it does the index', async () => {
+    const { outDir, logger } = await build(
+      starlightIntegration({}, { description: 'Docs for Acme.' }),
+      STARLIGHT_PAGES,
+      { site: 'https://acme.dev' },
+    );
+    const llms = await readFile(join(outDir, 'llms.txt'), 'utf8');
+    expect(llms.split('\n').slice(0, 3)).toEqual(['# Acme Docs', '', '> Docs for Acme.']);
+    expect(llms).toContain('- [Setup](https://acme.dev/guides/setup.md)');
+    expect(llms).not.toContain('Changelog');
+    const setup = await readFile(join(outDir, 'guides/setup.md'), 'utf8');
+    expect(setup).toContain(
+      '# Setup\n\nInstall it first.\n\n## Install\n\n```sh\nnpm install acme',
+    );
+    expect(existsSync(join(outDir, 'index.md'))).toBe(true);
+    expect(existsSync(join(outDir, 'changelog.md'))).toBe(false);
+    expect(logger.info).toHaveBeenCalledWith('Wrote llms.txt, llms-full.txt, 3 .md pages → dist');
+  });
+
+  it('leaves llms files to starlight-llms-txt and starlight-page-actions, and keeps public/ files', async () => {
+    const plugin = (name: string) => ({ name, hooks: {} });
+    const { outDir, logger } = await build(
+      starlightIntegration({}, { plugins: [plugin('starlight-llms-txt')] as never }),
+      { ...STARLIGHT_PAGES, 'llms-small.txt': 'not a page' },
+    );
+    expect(existsSync(join(outDir, 'llms.txt'))).toBe(false);
+    expect(existsSync(join(outDir, 'guides/setup.md'))).toBe(true);
+    expect(logger.info).toHaveBeenCalledWith(
+      'starlight-llms-txt writes llms.txt, so ask-my-site does not.',
+    );
+    await rm(outDir, { recursive: true });
+    const second = await build(starlightIntegration(), STARLIGHT_PAGES, {
+      integrations: ['starlight-page-actions-integration'],
+    });
+    expect(existsSync(join(second.outDir, 'guides/setup.md'))).toBe(false);
+    expect(existsSync(join(second.outDir, 'llms.txt'))).toBe(true);
   });
 
   it('gives McpInstall.astro the MCP endpoint, resolved against site', async () => {
