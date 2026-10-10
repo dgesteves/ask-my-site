@@ -247,9 +247,10 @@ describe('ask-my-site/starlight', () => {
       '/docs/pt-br/guides/setup/',
     ]);
     expect(logger.info.mock.calls.map(([message]) => String(message).split(' → ')[1])).toEqual([
-      expect.stringMatching(/^ask-index\.json /) as string,
-      expect.stringMatching(/^fr\/ask-index\.json /) as string,
-      expect.stringMatching(/^pt-br\/ask-index\.json /) as string,
+      // Where each file is, from the project root.
+      expect.stringMatching(/^dist\/ask-index\.json /) as string,
+      expect.stringMatching(/^dist\/fr\/ask-index\.json /) as string,
+      expect.stringMatching(/^dist\/pt-br\/ask-index\.json /) as string,
     ]);
 
     // Every locale under its own path: there is no root index.

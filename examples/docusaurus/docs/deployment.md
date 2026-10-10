@@ -15,7 +15,7 @@ The handler uses Web APIs only, so it runs on Node.js, Bun, Deno, Cloudflare Wor
 There are three ways for the endpoint to read the index:
 
 - **Import it.** `import index from './ask-index.json'` bundles the index with the function. This is the simplest, and what a Next.js app does.
-- **Read it from the build output.** A static site's function reads `build/ask-index.json` (Docusaurus) or `dist/ask-index.json` (Astro) with `readFile`, and the host bundles the file with the function.
+- **Read it from the build output.** A static site's function reads `build/ask-index.json` (Docusaurus) or `dist/ask-index.json` (Astro; `dist/client/ask-index.json` with an adapter) with `readFile`, and the host bundles the file with the function.
 - **Fetch it.** For large indexes on platforms that limit function size, serve the file as a static asset and pass a loader: `index: () => fetch(url).then((r) => r.text())`.
 
 A loader runs once per server instance, on the first question, and a failed load is retried on the next request.
@@ -41,7 +41,7 @@ export const POST = createAskHandler({
 });
 ```
 
-Then include the index in the function's bundle with `vercel.json`: `{ "functions": { "api/ask.ts": { "includeFiles": "build/ask-index.json" } } }`. Use `dist/ask-index.json` for Astro. On Vercel, rate limits need no extra setting, because Vercel overwrites `X-Forwarded-For` with the client's IP.
+Then include the index in the function's bundle with `vercel.json`: `{ "functions": { "api/ask.ts": { "includeFiles": "build/ask-index.json" } } }`. Use `dist/ask-index.json` for Astro, or `dist/client/ask-index.json` with an adapter. On Vercel, rate limits need no extra setting, because Vercel overwrites `X-Forwarded-For` with the client's IP.
 
 ## Deploy to Netlify
 

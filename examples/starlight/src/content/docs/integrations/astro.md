@@ -45,7 +45,7 @@ export default defineConfig({ integrations: [askMySite({ endpoint: '/api/ask' })
 
 ## What Astro and Starlight index
 
-After `astro build`, the index is written to `dist/ask-index.json`, at the URLs Astro serves: with your `base`, and with or without a trailing slash as `trailingSlash` and `build.format` have it.
+After `astro build`, the index is written to `dist/ask-index.json`, or to `dist/client/ask-index.json` on a site with an adapter, where Astro puts the static files it serves. It is at the URLs Astro serves: with your `base`, and with or without a trailing slash as `trailingSlash` and `build.format` have it.
 
 The Starlight plugin reads what Starlight's own search reads: the part of each page marked `data-pagefind-body`, which is the title and the Markdown, notes and tips included, without the header, sidebar, table of contents, edit link or pagination. Pages Starlight's search leaves out are left out too, such as the 404 page and pages with `pagefind: false`. Mark anything else with `data-pagefind-ignore`.
 
@@ -59,13 +59,13 @@ Pick another key with `dialog: { shortcut: 'j' }`, turn the shortcut off with `s
 
 ## Embeddings in Astro
 
-Embeddings work as in the Docusaurus plugin. OpenAI's `text-embedding-3-small` is the default when `OPENAI_API_KEY` is set at build time, or the same model through AI Gateway with `AI_GATEWAY_API_KEY`; without either key, the index is keyword-only and the build prints a warning. Choose the model with `embedding` and `dimensions`, for example `askMySite({ embedding: 'openai:text-embedding-3-small', dimensions: 512 })`, or `embedding: 'mock'` to build without a key.
+Embeddings work as in the Docusaurus plugin. OpenAI's `text-embedding-3-small` at 512 dimensions is the default when `OPENAI_API_KEY` is set at build time, or the same model through AI Gateway with `AI_GATEWAY_API_KEY`; without either key, the index is keyword-only and the build prints a warning. Choose the model with `embedding` and `dimensions`, for example `askMySite({ embedding: 'openai:text-embedding-3-small', dimensions: 512 })`, or `embedding: 'mock'` to build without a key.
 
 ## Deploy the endpoint for Astro
 
-The endpoint is the same as for Docusaurus, reading `dist/ask-index.json` instead of `build/ask-index.json`: see the Vercel, Netlify and Cloudflare Pages recipes in [Deploying](/guides/deployment/). Astro writes `base` into URLs, not folders, so with `base: '/docs'` the file is still `dist/ask-index.json` and is served at `/docs/ask-index.json`.
+The endpoint is the same as for Docusaurus, reading `dist/ask-index.json` (or `dist/client/ask-index.json` with an adapter) instead of `build/ask-index.json`: see the Vercel, Netlify and Cloudflare Pages recipes in [Deploying](/guides/deployment/). Astro writes `base` into URLs, not folders, so with `base: '/docs'` the file is still `dist/ask-index.json` and is served at `/docs/ask-index.json`.
 
-To try it locally, build the site once, run `npx ask-my-site dev`, which answers from `dist/ask-index.json`, and start `astro dev` with `ASK_ENDPOINT=http://localhost:8787/api/ask`.
+To try it locally, build the site once, run `npx ask-my-site dev`, which answers from `dist/ask-index.json` or `dist/client/ask-index.json`, and start `astro dev` with `ASK_ENDPOINT=http://localhost:8787/api/ask`.
 
 ## Astro and Starlight options
 

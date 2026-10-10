@@ -122,7 +122,7 @@ The CLI and the plugins name the embedding model with a spec string, so a config
 | `mock` or `mock:<dims>` | The offline mock embedder                            | nothing              |
 | `none`                  | No vectors: a keyword-only index                     | nothing              |
 
-`--dimensions 512` (or `dimensions: 512` in a plugin) shrinks vectors for models that support it, and the handler must pass the same size in `embeddingProviderOptions`. For a provider package the specs don't cover, export the model from a [config file](./cli.md#the-config-file):
+`--dimensions 512` (or `dimensions: 512` in a plugin, its default) shrinks vectors for models that support it. For OpenAI's `text-embedding-3` models the handler reads the size from the index; for another provider's size option, pass the same value in `embeddingProviderOptions`. For a provider package the specs don't cover, export the model from a [config file](./cli.md#the-config-file):
 
 ```js
 // ask-my-site.config.mjs
