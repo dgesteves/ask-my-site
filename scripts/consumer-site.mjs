@@ -3,15 +3,27 @@
 // index came out embedded. OPENAI_BASE_URL points at a local stub (./openai-stub.mjs), the only
 // thing the index build calls; the API key is fake, so a request to the real API would fail.
 //
-//   npm pack && node scripts/consumer-site.mjs <next|docusaurus|starlight> ask-my-site-x.y.z.tgz [dir]
+//   npm pack && node scripts/consumer-site.mjs <site> ask-my-site-x.y.z.tgz [dir]
+//
+// The sites are next, docusaurus and starlight, and docusaurus-plugin-ask-my-site and
+// starlight-ask-my-site, which install the plugin under its own package's name (packages/).
 //
 // The workspace examples link the package from source, so they cannot catch what only an
 // installed package meets: how Docusaurus loads plugins, the published files, peer resolution.
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { startOpenAIStub } from './openai-stub.mjs';
 
@@ -20,7 +32,8 @@ const PEERS = ['ai', '@ai-sdk/openai', '@radix-ui/react-dialog', 'cmdk'];
 
 /**
  * Per site: how to create it, what to add, what to install and run, where the index lands and
- * the vector size it must have. Scaffolders are pinned to a major version, so a new major is a
+ * the vector size it must have, and the package under packages/ it installs ask-my-site through,
+ * if any (packed here, and installed with the tarball, so it resolves to that and not to npm). Scaffolders are pinned to a major version, so a new major is a
  * deliberate upgrade here rather than a surprise in an unrelated pull request.
  *
  * @type {Record<string, {
@@ -31,6 +44,7 @@ const PEERS = ['ai', '@ai-sdk/openai', '@radix-ui/react-dialog', 'cmdk'];
  *   index: string,
  *   llms: string,
  *   dimensions: number,
+ *   package?: string,
  * }>}
  */
 const SITES = {
@@ -121,7 +135,24 @@ export function Ask() {
     dimensions: 512,
   },
   // The plugin with no options: the default model, from OPENAI_API_KEY, loaded under jiti.
-  docusaurus: {
+  docusaurus: docusaurus("['ask-my-site/docusaurus', {}]"),
+  // The same plugin under its own package's name, the one Docusaurus users search for.
+  'docusaurus-plugin-ask-my-site': {
+    ...docusaurus("'docusaurus-plugin-ask-my-site'"),
+    package: 'docusaurus-plugin-ask-my-site',
+  },
+  // The plugin with the model named as a string, as the CLI's --embedding names it.
+  starlight: starlight('ask-my-site/starlight'),
+  // The same plugin under its own package's name, the one Starlight users search for.
+  'starlight-ask-my-site': {
+    ...starlight('starlight-ask-my-site'),
+    package: 'starlight-ask-my-site',
+  },
+};
+
+/** A Docusaurus site with `plugin` in its plugins. */
+function docusaurus(plugin) {
+  return {
     create: (dir) => [
       'npx',
       ['-y', 'create-docusaurus@3', basename(dir), 'classic', '--typescript', '--skip-install'],
@@ -129,10 +160,7 @@ export function Ask() {
     ],
     configure: (dir) => {
       edit(dir, 'docusaurus.config.ts', (config) =>
-        config.replace(
-          '  presets: [',
-          "  plugins: [['ask-my-site/docusaurus', {}]],\n\n  presets: [",
-        ),
+        config.replace('  presets: [', `  plugins: [${plugin}],\n\n  presets: [`),
       );
     },
     install: PEERS,
@@ -141,9 +169,12 @@ export function Ask() {
     llms: 'build',
     // The plugin's default model, at its default size.
     dimensions: 512,
-  },
-  // The plugin with the model named as a string, as the CLI's --embedding names it.
-  starlight: {
+  };
+}
+
+/** A Starlight site with the plugin imported from `entry`. */
+function starlight(entry) {
+  return {
     create: (dir) => [
       'npx',
       ['-y', 'create-astro@4', dir, '--template', 'starlight', '--no-install', '--no-git', '--yes'],
@@ -153,7 +184,7 @@ export function Ask() {
         config
           .replace(
             "import starlight from '@astrojs/starlight';",
-            "import starlight from '@astrojs/starlight';\nimport askMySite from 'ask-my-site/starlight';",
+            `import starlight from '@astrojs/starlight';\nimport askMySite from '${entry}';`,
           )
           .replace(
             'starlight({',
@@ -166,8 +197,8 @@ export function Ask() {
     index: 'dist/ask-index.json',
     llms: 'dist',
     dimensions: 512,
-  },
-};
+  };
+}
 
 function write(dir, file, content) {
   mkdirSync(dirname(join(dir, file)), { recursive: true });
@@ -202,13 +233,30 @@ if (!site || !tarball) {
 }
 const dir = resolve(target ?? join(tmpdir(), `ask-my-site-consumer-${name}`));
 rmSync(dir, { recursive: true, force: true });
+mkdirSync(dirname(dir), { recursive: true });
 
 const [command, args, cwd] = site.create(dir);
 await run(command, args, { cwd: cwd ?? dirname(dir) });
 site.configure(dir);
-await run('npm', ['install', '--no-audit', '--no-fund', resolve(tarball), ...site.install], {
+const tarballs = [resolve(tarball)];
+if (site.package) {
+  const packed = join(dirname(dir), `${name}-pack`);
+  rmSync(packed, { recursive: true, force: true });
+  // pnpm pack writes ask-my-site's version where the manifest says workspace:*.
+  await run('pnpm', ['pack', '--pack-destination', packed], {
+    cwd: fileURLToPath(new URL(`../packages/${site.package}`, import.meta.url)),
+  });
+  tarballs.push(join(packed, readdirSync(packed)[0] ?? ''));
+}
+await run('npm', ['install', '--no-audit', '--no-fund', ...tarballs, ...site.install], {
   cwd: dir,
 });
+if (
+  site.package &&
+  existsSync(join(dir, 'node_modules', site.package, 'node_modules/ask-my-site'))
+) {
+  throw new Error(`${site.package} installed its own ask-my-site rather than the packed one.`);
+}
 
 const stub = await startOpenAIStub();
 try {

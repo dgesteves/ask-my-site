@@ -18,6 +18,8 @@ src/                  the package: build and search (root), cli/, node/, server/
                       docusaurus/, astro/, starlight/, loaders/, mock/
 test/                 Vitest: unit, robustness (linear-time parsing), plugins, dialog with axe
 examples/             nextjs (the live demo), docusaurus and starlight, built in CI
+packages/             docusaurus-plugin-ask-my-site and starlight-ask-my-site, which re-export
+                      ask-my-site/docusaurus and ask-my-site/starlight under the names people search for
 scripts/              consumer-site.mjs (fresh sites from the packed package), openai-stub.mjs, assets
 bench/                retrieval and load benchmarks
 ```
@@ -30,7 +32,7 @@ bench/                retrieval and load benchmarks
 pnpm validate   # lint, format, typecheck, test, build, publint and attw, and the three example builds
 ```
 
-The `consumers` CI job packs the package, scaffolds fresh Next.js, Docusaurus and Starlight sites, installs the tarball and builds each against a local OpenAI stub. To run one locally:
+The `consumers` CI job packs the package, scaffolds fresh Next.js, Docusaurus and Starlight sites, installs the tarball and builds each against a local OpenAI stub. Two more sites install the plugin through `packages/`, packed alongside it. To run one locally:
 
 ```bash
 pnpm build && npm pack --pack-destination /tmp
@@ -48,5 +50,7 @@ Parsers must stay linear on hostile input: if you touch `src/loaders` or `src/ch
 ## Changesets
 
 A change to the published package needs a changeset: run `pnpm changeset`, choose patch for a fix or minor for a feature, and write a line or two for the changelog from a user's point of view. Docs, the examples and CI need none. Merging to `main` opens a release pull request, and merging that publishes to npm.
+
+The packages in `packages/` are in a fixed group with `ask-my-site`, so each release gives all three the same version, and a changeset for `ask-my-site` is enough. Each re-exports one entry, so a change to it needs nothing there unless the entry needs a new peer dependency; `test/plugin-packages.test.ts` keeps their ranges equal to `ask-my-site`'s.
 
 By contributing, you agree that your work is released under the [MIT license](./LICENSE) and that you follow the [code of conduct](./CODE_OF_CONDUCT.md).

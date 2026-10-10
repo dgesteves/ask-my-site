@@ -51,7 +51,8 @@ export default defineConfig(
     },
   },
   {
-    files: ['**/*.{js,mjs}'],
+    // packages/ only re-exports entries of the package, whose types exist once it is built.
+    files: ['**/*.{js,mjs}', 'packages/*/index.d.ts'],
     extends: [tseslint.configs.disableTypeChecked],
   },
   {
