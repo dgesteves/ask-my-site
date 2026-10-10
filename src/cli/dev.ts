@@ -13,6 +13,7 @@ import type { AskIndexFile } from '../index-file';
 import { MOCK_MIN_SIMILARITY, mockEmbeddingModel, mockLanguageModel } from '../mock';
 import { readIndexFile } from '../node';
 import { importOptional } from '../node/optional';
+import { workersAiEmbedding } from '../node/workers-ai';
 import type { RetrievalOptions } from '../search/retrieve';
 import { createAskHandler, createMcpHandler, memoryRateLimit } from '../server';
 import type { CliIO } from './main';
@@ -20,9 +21,11 @@ import type { CliIO } from './main';
 export const DEV_USAGE = `Usage: ask-my-site dev [options]
 
 Serves POST /api/ask on this machine, answering from an index, for the dialog on a site's dev
-server, and the same index as an MCP server at /api/mcp, for your editor's agent. Questions are embedded as the index was: with the mock model, with OpenAI or AI Gateway
-when the index was (set OPENAI_API_KEY or AI_GATEWAY_API_KEY), or not at all for a keyword-only
-index. Answers come from OpenAI when OPENAI_API_KEY is set, else from the mock model.
+server, and the same index as an MCP server at /api/mcp, for your editor's agent. Questions are
+embedded as the index was: with the mock model, with OpenAI or AI Gateway (set OPENAI_API_KEY or
+AI_GATEWAY_API_KEY), with Workers AI (set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN), or not
+at all for a keyword-only index. Answers come from OpenAI when OPENAI_API_KEY is set, else from
+the mock model.
 
 Options:
       --index <file>           Index file (default: ask-index.json, then build/ask-index.json,
@@ -108,6 +111,27 @@ export async function devModels(
     };
   }
 
+  // Workers AI's, through Cloudflare's REST API with your account's token.
+  if (embedding.model.startsWith('@cf/')) {
+    const { CLOUDFLARE_ACCOUNT_ID: accountId, CLOUDFLARE_API_TOKEN: apiToken } = env;
+    if (!accountId || !apiToken) {
+      throw new DevError(
+        `The index was embedded with ${embedding.model}, so questions must be too: set ` +
+          'CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN (a token allowed to run Workers AI). ' +
+          'To try it without them, rebuild the index with --embedding mock.',
+      );
+    }
+    return {
+      model,
+      embeddingModel: workersAiEmbedding(embedding.model, {
+        accountId,
+        apiToken,
+        ...(env.CLOUDFLARE_API_BASE_URL ? { baseUrl: env.CLOUDFLARE_API_BASE_URL } : {}),
+      }),
+      description: `${embedding.model} embeddings from Workers AI, ${answers}`,
+    };
+  }
+
   // OpenAI's own ids are bare (`text-embedding-3-small`); AI Gateway's name the provider.
   const gateway = embedding.model.includes('/');
   const bare = embedding.model.replace(/^openai\//, '');
@@ -142,7 +166,7 @@ export async function devModels(
           `${fromOpenAI ? 'OPENAI_API_KEY or ' : ''}AI_GATEWAY_API_KEY. To try it without a key, ` +
           'rebuild the index with --embedding mock.'
       : `The index was embedded with ${embedding.model}, which ask-my-site dev cannot load: it ` +
-          'embeds with OpenAI, AI Gateway or the mock model. Serve this index with your own ' +
+          'embeds with OpenAI, AI Gateway, Workers AI or the mock model. Serve this index with your own ' +
           'createAskHandler, or rebuild it with --embedding mock to try it.',
   );
 }

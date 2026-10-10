@@ -6,6 +6,16 @@ export default defineConfig({
   resolve: {
     // Docusaurus's client modules only exist in a Docusaurus build; the theme's tests stand in.
     alias: [
+      // The Cloudflare Worker template imports the package by name; its tests here run it from
+      // the source, which is all there is before a build.
+      {
+        find: /^ask-my-site\/(server|mock)$/,
+        replacement: `${fileURLToPath(new URL('src', import.meta.url))}/$1/index.ts`,
+      },
+      {
+        find: /^ask-my-site$/,
+        replacement: fileURLToPath(new URL('src/index.ts', import.meta.url)),
+      },
       {
         find: /^@docusaurus\/(BrowserOnly|router|useGlobalData)$/,
         replacement: fileURLToPath(new URL('test/docusaurus-client.tsx', import.meta.url)),

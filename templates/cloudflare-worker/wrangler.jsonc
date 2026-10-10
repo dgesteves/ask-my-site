@@ -1,0 +1,16 @@
+// The Worker that answers questions for your docs. Written by `npx ask-my-site init`.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "your-docs-ask",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  // Workers AI embeds the questions and writes the answers: no API key to set.
+  "ai": { "binding": "AI" },
+  "vars": {
+    // The site the Worker answers for: it reads the index at https://docs.example.com/ask-index.json.
+    "SITE_URL": "https://docs.example.com",
+    // The Workers AI model that writes the answers. About 100 questions a day fit in Workers AI's
+    // free allowance with this one; ask-my-site's Workers AI guide compares others.
+    "CHAT_MODEL": "@cf/meta/llama-4-scout-17b-16e-instruct"
+  }
+}

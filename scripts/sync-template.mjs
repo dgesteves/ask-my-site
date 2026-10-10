@@ -1,0 +1,86 @@
+// Writes templates/cloudflare-worker from what `ask-my-site init --host github-pages` writes, so the
+// template that `npm create cloudflare` copies and the Worker init writes are the same code. The
+// template's README, its tests and their config are its own, and left alone.
+//
+//   pnpm build && node scripts/sync-template.mjs           # write it
+//   pnpm build && node scripts/sync-template.mjs --check   # exit 1 if it is out of date
+//
+// The files are kept as init writes them, byte for byte (.prettierignore leaves them alone). The
+// template's package.json adds what its tests need, and its ask-my-site version is left as it is:
+// init writes the version it is, which a release changes.
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = fileURLToPath(new URL('..', import.meta.url));
+const TEMPLATE = join(root, 'templates/cloudflare-worker');
+const GENERATED = ['package.json', 'tsconfig.json', 'wrangler.jsonc', 'src/index.ts'];
+const check = process.argv.includes('--check');
+
+const site = mkdtempSync(join(tmpdir(), 'ask-my-site-template-'));
+try {
+  writeFileSync(join(site, 'docusaurus.config.ts'), "export default { title: 'your docs' };\n");
+  execFileSync(
+    process.execPath,
+    [
+      join(root, 'dist/cli.js'),
+      'init',
+      '--host',
+      'github-pages',
+      '--site-url',
+      'https://docs.example.com',
+      '--yes',
+    ],
+    { cwd: site, stdio: 'ignore' },
+  );
+  const changed = [];
+  for (const file of GENERATED) {
+    let text = readFileSync(join(site, 'ask-my-site-worker', file), 'utf8');
+    const target = join(TEMPLATE, file);
+    let current = null;
+    try {
+      current = readFileSync(target, 'utf8');
+    } catch {
+      // Not written yet.
+    }
+    if (file === 'package.json') {
+      const pkg = JSON.parse(text);
+      const own = current ? JSON.parse(current) : {};
+      pkg.scripts = { ...pkg.scripts, test: 'vitest run' };
+      pkg.devDependencies = {
+        ...pkg.devDependencies,
+        '@cloudflare/vitest-plugin': '^1.4.0',
+        vitest: '^5.0.0',
+      };
+      const version = own.dependencies?.['ask-my-site'];
+      if (version) pkg.dependencies['ask-my-site'] = version;
+      text = `${JSON.stringify(pkg, null, 2)}\n`;
+    }
+    if (current !== text) changed.push([file, text]);
+  }
+  const show = (file) => `templates/cloudflare-worker/${file}`;
+  if (check) {
+    if (changed.length === 0) {
+      console.log('✓ templates/cloudflare-worker matches what ask-my-site init writes.');
+    } else {
+      console.error(
+        [
+          '✗ templates/cloudflare-worker is out of date with what ask-my-site init writes:',
+          ...changed.map(([file]) => `  changed: ${show(file)}`),
+          'Run `pnpm build && node scripts/sync-template.mjs` and commit the result.',
+        ].join('\n'),
+      );
+      process.exitCode = 1;
+    }
+  } else {
+    for (const [file, text] of changed) {
+      mkdirSync(dirname(join(TEMPLATE, file)), { recursive: true });
+      writeFileSync(join(TEMPLATE, file), text);
+    }
+    console.log(`✓ Wrote ${String(changed.length)} files of templates/cloudflare-worker.`);
+  }
+} finally {
+  rmSync(site, { recursive: true, force: true });
+}

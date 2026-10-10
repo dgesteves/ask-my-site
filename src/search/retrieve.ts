@@ -47,7 +47,8 @@ export interface RetrievalOptions {
   rrfK?: number;
   /**
    * Minimum cosine similarity for a chunk to count as relevant on meaning alone. Default 0.25,
-   * calibrated for OpenAI `text-embedding-3-small`; other models need their own value.
+   * calibrated for OpenAI `text-embedding-3-small`, and 0.65 for an index embedded with Workers
+   * AI's `@cf/baai/bge-small-en-v1.5`; other models need their own value.
    */
   minSimilarity?: number;
   /**
@@ -97,6 +98,25 @@ export const DEFAULT_RETRIEVAL = {
 
 /** The model id `mockEmbeddingModel` records in an index. */
 const MOCK_EMBEDDING = /^mock-hash-\d+$/;
+
+/**
+ * `minSimilarity` for embedding models whose similarity scale differs from OpenAI's, as measured:
+ * on docusaurus.io's docs and the 22 in-scope and 6 off-topic questions of the 2026-10-10 audit,
+ * the lowest value at which no off-topic question passes the gate. BGE-small (with Workers AI's
+ * default mean pooling) scored the off-topic questions 0.46 to 0.63 against their closest chunk,
+ * so the 0.25 set for OpenAI's models would let every question through. Other models get it.
+ */
+const MODEL_MIN_SIMILARITY: Readonly<Record<string, number>> = {
+  '@cf/baai/bge-small-en-v1.5': 0.65,
+};
+
+/** The `minSimilarity` an index's embedding model gets when the options set none. */
+export function defaultMinSimilarity(model: string | undefined): number {
+  return (
+    (model === undefined ? undefined : MODEL_MIN_SIMILARITY[model]) ??
+    DEFAULT_RETRIEVAL.minSimilarity
+  );
+}
 
 /**
  * Builds the in-memory search structures from an index file, its JSON text, or the parsed JSON
@@ -166,7 +186,11 @@ export function retrieve(
   query: { text: string; vector?: ArrayLike<number> | null },
   options: RetrievalOptions = {},
 ): RetrievalResult {
-  const opts = { ...DEFAULT_RETRIEVAL, ...stripUndefined(options) };
+  const opts = {
+    ...DEFAULT_RETRIEVAL,
+    minSimilarity: defaultMinSimilarity(index.embedding?.model),
+    ...stripUndefined(options),
+  };
   const keyword = index.bm25.search(tokenize(query.text));
   const similarities =
     index.vectors && query.vector ? index.vectors.similarities(query.vector) : null;

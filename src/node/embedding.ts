@@ -5,17 +5,25 @@ import type { EmbeddingModel } from 'ai';
 import type { EmbeddingProviderOptions } from '../build';
 import { mockEmbeddingModel } from '../mock';
 import { importOptional } from './optional';
+import { workersAiEmbedding } from './workers-ai';
 
 /**
  * An embedding model as a string: `openai:<model>` (@ai-sdk/openai, needs `OPENAI_API_KEY`),
- * `<provider>/<model>` (AI Gateway, needs `AI_GATEWAY_API_KEY`), `mock[:<dims>]` (deterministic,
- * offline) or `none` (a keyword-only index).
+ * `workers-ai:@cf/<model>` (Cloudflare's REST API, needs `CLOUDFLARE_ACCOUNT_ID` and
+ * `CLOUDFLARE_API_TOKEN`), `<provider>/<model>` (AI Gateway, needs `AI_GATEWAY_API_KEY`),
+ * `mock[:<dims>]` (deterministic, offline) or `none` (a keyword-only index).
  */
 export type EmbeddingSpec =
-  'none' | 'mock' | `mock:${number}` | `openai:${string}` | `${string}/${string}`;
+  | 'none'
+  | 'mock'
+  | `mock:${number}`
+  | `openai:${string}`
+  | `workers-ai:@cf/${string}`
+  | `${string}/${string}`;
 
 /** The specs, for messages. */
-const SPECS = 'openai:<model>, <provider>/<model> (AI Gateway), mock[:<dims>] or none';
+const SPECS =
+  'openai:<model>, workers-ai:@cf/<model>, <provider>/<model> (AI Gateway), mock[:<dims>] or none';
 
 /** A spec that cannot be used as given: unknown, or without its API key or provider package. */
 export class EmbeddingSpecError extends Error {}
@@ -31,7 +39,10 @@ export interface EmbeddingChoice {
 export interface EmbeddingSpecOptions {
   /** Vector size, for models that support it (e.g. 512). `mock:<dims>` sets its own. */
   dimensions?: number;
-  /** Where `OPENAI_API_KEY` and `OPENAI_BASE_URL` are read. Default `process.env`. */
+  /**
+   * Where `OPENAI_API_KEY` and `OPENAI_BASE_URL`, and `CLOUDFLARE_ACCOUNT_ID` and
+   * `CLOUDFLARE_API_TOKEN`, are read. Default `process.env`.
+   */
   env?: Record<string, string | undefined>;
   /**
    * `check` only names the model, to compare with an index: an `openai:` spec then needs
@@ -44,7 +55,7 @@ export interface EmbeddingSpecOptions {
 
 /** Throws an {@link EmbeddingSpecError} unless `spec` is a form {@link EmbeddingSpec} lists. */
 export function checkEmbeddingSpec(spec: string, name = `embedding "${spec}"`): void {
-  if (!/^(?:none|mock(?::\d+)?|openai:.+|[\w-]+\/.+)$/.test(spec)) {
+  if (!/^(?:none|mock(?::\d+)?|openai:.+|workers-ai:@cf\/.+|[\w-]+\/.+)$/.test(spec)) {
     throw new EmbeddingSpecError(`Unknown ${name}. Use ${SPECS}.`);
   }
 }
@@ -97,6 +108,30 @@ export async function embeddingFromSpec(
       ...(env.OPENAI_BASE_URL ? { baseURL: env.OPENAI_BASE_URL } : {}),
     });
     return { model: client.embedding(modelId), ...choice };
+  }
+
+  const workersAi = /^workers-ai:(@cf\/.+)$/.exec(spec);
+  if (workersAi?.[1]) {
+    const modelId = workersAi[1];
+    if (dims) {
+      throw new EmbeddingSpecError(
+        `${name} has a fixed vector size, so --dimensions does not apply to it.`,
+      );
+    }
+    if (mode === 'check') return { model: modelId };
+    const { CLOUDFLARE_ACCOUNT_ID: accountId, CLOUDFLARE_API_TOKEN: apiToken } = env;
+    if (!accountId || !apiToken) {
+      throw new EmbeddingSpecError(
+        `${name} needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN (a token allowed to run Workers AI).`,
+      );
+    }
+    return {
+      model: workersAiEmbedding(modelId, {
+        accountId,
+        apiToken,
+        ...(env.CLOUDFLARE_API_BASE_URL ? { baseUrl: env.CLOUDFLARE_API_BASE_URL } : {}),
+      }),
+    };
   }
 
   // A gateway model id, `<provider>/<model>`: the dimensions go to that provider.

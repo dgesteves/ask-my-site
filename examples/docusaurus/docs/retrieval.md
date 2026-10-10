@@ -32,7 +32,7 @@ If the embedding provider fails while embedding a question, that request falls b
 
 ## Tuning
 
-The defaults are `{ topK: 6, candidates: 40, rrfK: 60, minSimilarity: 0.25, minKeywordCoverage: 0.5 }`, passed to the handler as `retrieval`. The similarity threshold is calibrated for OpenAI's `text-embedding-3-small`; other embedding models produce other ranges, so check the `best` scores that `retrieve()` returns on real questions and set `minSimilarity` to match.
+The defaults are `{ topK: 6, candidates: 40, rrfK: 60, minSimilarity: 0.25, minKeywordCoverage: 0.5 }`, passed to the handler as `retrieval`. The similarity threshold is calibrated for OpenAI's `text-embedding-3-small`. An index embedded with Workers AI's `@cf/baai/bge-small-en-v1.5` gets 0.65 instead, measured on docusaurus.io's docs (see [Workers AI](./workers-ai.md#keywords-or-meaning-too)). Other embedding models produce other ranges, so check the `best` scores that `retrieve()` returns on real questions and set `minSimilarity` to match.
 
 The keyword side is conservative: IDF comes from your pages, so a question word that appears on none of them carries the most weight. A question that adds one such word, like a product or company name, can fall below 0.5 on keywords alone even when the rest of it matches a page exactly. With embeddings, the similarity side catches such questions; for a keyword-only index, lower `minKeywordCoverage`.
 

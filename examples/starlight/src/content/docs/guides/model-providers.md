@@ -105,6 +105,23 @@ export const POST = createAskHandler({
 
 Or build a keyword-only index with `-e none` and leave `embeddingModel` out, so the only key you need is xAI's. Through AI Gateway the model is a string, under the name AI Gateway lists xAI's models with: `model: 'spacexai/grok-4.20-non-reasoning'`.
 
+## Workers AI
+
+Cloudflare's Workers AI runs in a Cloudflare Worker through an `AI` binding, with no API key, and the `workers-ai-provider` package makes its models AI SDK models. The [Workers AI guide](/guides/workers-ai/) has a Worker that answers any static site with it, from the template or from `npx ask-my-site init --host github-pages`:
+
+```ts
+import { createWorkersAI } from 'workers-ai-provider';
+
+const workersai = createWorkersAI({ binding: env.AI });
+createAskHandler({
+  index,
+  model: workersai('@cf/meta/llama-4-scout-17b-16e-instruct'),
+  embeddingModel: workersai.textEmbedding('@cf/baai/bge-small-en-v1.5'),
+});
+```
+
+Build the index with the same embedding model, outside Cloudflare, over its REST API: `-e workers-ai:@cf/baai/bge-small-en-v1.5` for the CLI, or `embedding: 'workers-ai:@cf/baai/bge-small-en-v1.5'` in the plugins, with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (a token with Workers AI Read and Edit permissions) set as the index builds.
+
 ## AI Gateway
 
 With Vercel's AI Gateway, one `AI_GATEWAY_API_KEY` reaches every provider, and models are plain strings such as `model: 'openai/gpt-5.4-mini'` and `embeddingModel: 'openai/text-embedding-3-small'`. The CLI and the plugins take gateway ids as embedding specs, as in `-e cohere/embed-v4.0`, and use AI Gateway on their own when only `AI_GATEWAY_API_KEY` is set.
@@ -144,4 +161,4 @@ An index built with `-e none` has no vectors, and retrieval is BM25 alone. It co
 
 ## Tuning for another embedding model
 
-The relevance gate's similarity threshold, 0.25, is calibrated for OpenAI's `text-embedding-3-small`. Other embedding models produce other similarity ranges, so check the `best` scores that `retrieve()` reports on real questions and pass `retrieval: { minSimilarity }` to the handler. [How retrieval works](/guides/retrieval/#tuning) explains the gate.
+The relevance gate's similarity threshold, 0.25, is calibrated for OpenAI's `text-embedding-3-small`, and an index embedded with Workers AI's `@cf/baai/bge-small-en-v1.5` gets the 0.65 measured for it. Other embedding models produce other similarity ranges, so check the `best` scores that `retrieve()` reports on real questions and pass `retrieval: { minSimilarity }` to the handler. [How retrieval works](/guides/retrieval/#tuning) explains the gate.

@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 async function setupTabs(): Promise<SetupTab[]> {
   const DEPLOY_STEP = {
     title: 'Write the endpoint',
-    text: 'One function on your host answers from the index, with your model key, rate-limited and on a daily budget. init writes it for Vercel, Netlify, Cloudflare or GitHub Pages, and deploys nothing.',
+    text: 'One function on your host answers from the index, with your model key, rate-limited and on a daily budget. init writes it for Vercel, Netlify, Cloudflare, or GitHub Pages with Workers AI and no API key, and deploys nothing.',
     link: { href: '/docs/deployment', label: 'What it writes for each host' },
     code: await codeBlock('npx ask-my-site init', 'sh'),
   };

@@ -40,6 +40,8 @@ jobs:
         run: node -e "for(const[f,kb]of[['dist/embed.global.js',4],['dist/embed-dialog.global.js',110]]){const s=require('zlib').gzipSync(require('fs').readFileSync(f)).length;console.log(f+':',(s/1024).toFixed(1),'KB gzipped, budget',kb);if(s>kb*1024)throw new Error(f+' is over its '+kb+' KB budget')}"
       - name: The Docusaurus and Starlight docs match the website's
         run: pnpm examples:check
+      - name: The Cloudflare Worker template is what ask-my-site init writes
+        run: pnpm template:check
       - name: CLI smoke test, including --check and --llms-txt
         run: |
           node dist/cli.js index examples/nextjs/content/docs --base-url /docs -e mock -o "$RUNNER_TEMP/ask-index.json" --llms-txt "$RUNNER_TEMP/llms"
@@ -108,7 +110,8 @@ jobs:
   # What `ask-my-site init` writes for each host, built with that host's own tooling (vercel build,
   # netlify build --offline and serve, wrangler --dry-run and local dev), signed in to nothing, then
   # asked questions against a local OpenAI stub. The astro-* recipes have no route file: the
-  # integration serves the endpoints through the adapter.
+  # integration serves the endpoints through the adapter. workers-ai runs the Cloudflare Worker
+  # template's own tests in workerd, with stand-ins for the site and the AI binding.
   recipes:
     name: Deploy recipe, ${{ matrix.recipe }}
     runs-on: ubuntu-latest
@@ -121,6 +124,7 @@ jobs:
           - cloudflare-pages
           - cloudflare-workers
           - github-pages
+          - workers-ai
           - astro-node
           - astro-vercel
           - astro-cloudflare

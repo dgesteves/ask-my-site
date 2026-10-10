@@ -18,7 +18,10 @@ import {
   vercelConfig,
   vercelFiles,
   WORKER_MODULE,
+  WORKERS_AI_EMBEDDING,
   workerName,
+  type WorkerProvider,
+  type WorkerVersions,
   type CloudflareMode,
   type GeneratedFile,
   type Host,
@@ -40,6 +43,7 @@ Options:
       --host <name>        vercel | netlify | cloudflare | github-pages (default: detected, else
                            asked). github-pages also suits any other static host: the endpoint is
                            a Cloudflare Worker of its own.
+      --provider <name>    For github-pages: workers-ai (the default; no API key) or openai
       --site-url <url>     The site's public URL with its base path, for github-pages
                            (default: from the site's config)
       --name <text>        The site's name, for the model's instructions (default: its title)
@@ -405,11 +409,14 @@ const WITHOUT_KEY =
   ' (it embeds with OPENAI_API_KEY; -e none builds a keyword-only index without it)';
 
 /** The dependency ranges init writes into a standalone Worker's package.json. */
-const WORKER_VERSIONS = {
+const WORKER_VERSIONS: WorkerVersions = {
   askMySite: `^${version}`,
   ai: '^7.0.0',
   openai: '^4.0.0',
+  workersAi: '^4.0.0',
   wrangler: '^4.0.0',
+  typescript: '^6.0.0',
+  workersTypes: '^5.20261001.0',
 };
 
 function install(p: Project, packages: string[], dev = false): string | null {
@@ -426,7 +433,7 @@ function install(p: Project, packages: string[], dev = false): string | null {
 }
 
 /** The packages the site needs for the dialog and the endpoint it was given. */
-function sitePackages(site: Site): string[] {
+function sitePackages(site: Site, openai = true): string[] {
   const dialog =
     site.kind === 'starlight' || site.kind === 'astro'
       ? ['react', 'react-dom', '@radix-ui/react-dialog', 'cmdk']
@@ -435,22 +442,32 @@ function sitePackages(site: Site): string[] {
         : ['@radix-ui/react-dialog', 'cmdk'];
   // The plugins embed the pages with OpenAI when OPENAI_API_KEY is set as the site builds; a
   // static site is indexed with npx, and the standalone Worker has a package.json of its own.
-  const models = site.kind === 'static' ? [] : ['ai', '@ai-sdk/openai'];
+  const models = site.kind === 'static' ? [] : openai ? ['ai', '@ai-sdk/openai'] : ['ai'];
   return ['ask-my-site', ...models, ...dialog];
 }
 
-/** How to add the dialog, for the site's framework, pointed at `endpoint` when it is not /api/ask. */
-function dialogStep(site: Site, endpoint: string | null): string {
-  const option = endpoint ? `{ endpoint: '${endpoint}' }` : '';
+/**
+ * How to add the dialog, for the site's framework, pointed at `endpoint` when it is not /api/ask,
+ * and embedding the pages with `embedding` when given.
+ */
+function dialogStep(site: Site, endpoint: string | null, embedding?: string): string {
+  const fields = [
+    ...(endpoint ? [`endpoint: '${endpoint}'`] : []),
+    ...(embedding ? [`embedding: '${embedding}'`] : []),
+  ];
+  const option = fields.length > 0 ? `{ ${fields.join(', ')} }` : '';
+  const withEmbedding = embedding
+    ? ` (the embedding needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN as the site builds; leave it out for a keyword-only index)`
+    : '';
   switch (site.kind) {
     case 'docusaurus':
-      return endpoint
-        ? `Add the plugin to docusaurus.config: plugins: [['ask-my-site/docusaurus', ${option}]]`
+      return option
+        ? `Add the plugin to docusaurus.config: plugins: [['ask-my-site/docusaurus', ${option}]]${withEmbedding}`
         : "Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']";
     case 'starlight':
-      return `Add the plugin to Starlight in astro.config: plugins: [askMySite(${option})], from 'ask-my-site/starlight'`;
+      return `Add the plugin to Starlight in astro.config: plugins: [askMySite(${option})], from 'ask-my-site/starlight'${withEmbedding}`;
     case 'astro':
-      return `Add the integration to astro.config: integrations: [askMySite(${option})], from 'ask-my-site/astro'`;
+      return `Add the integration to astro.config: integrations: [askMySite(${option})], from 'ask-my-site/astro'${withEmbedding}`;
     case 'next':
       return `Render <AskDialog launcher${endpoint ? ` endpoint="${endpoint}"` : ''} /> from 'ask-my-site/react' in your layout, with 'ask-my-site/react/styles.css' and 'ask-my-site/embed/launcher.css'`;
     case 'static':
@@ -464,6 +481,7 @@ function planFor(
   site: Site,
   host: Host,
   mcp: boolean,
+  provider: WorkerProvider,
 ): Omit<Plan, 'changes'> & {
   files: GeneratedFile[];
 } {
@@ -474,11 +492,13 @@ function planFor(
   const key = 'OPENAI_API_KEY';
   // Where the pages are embedded: by the plugin as the site builds, or by `ask-my-site index`.
   const build =
-    site.kind === 'next' || site.kind === 'static'
-      ? 'where the index is built'
-      : 'the site\u2019s build';
+    site.kind === 'next' || site.kind === 'static' ? 'the index build' : 'the site\u2019s build';
   const keyless = 'without it there, the index is keyword-only, which works too';
-  const packages = install(p, sitePackages(site));
+  // A site whose Worker answers with Workers AI embeds with it too, or not at all.
+  const packages = install(
+    p,
+    sitePackages(site, !(host === 'github-pages' && provider === 'workers-ai')),
+  );
   if (packages) next.push(packages);
 
   const edit = (
@@ -508,27 +528,45 @@ function planFor(
       );
     }
     const indexed = site.kind === 'next' ? { ...site, indexFile: 'public/ask-index.json' } : site;
-    files.push(...standaloneWorkerFiles({ ...indexed, url: site.url }, mcp, WORKER_VERSIONS));
-    env.push({
-      name: key,
-      when: 'for the Worker',
-      how: `cd ${STANDALONE_DIR} && npx wrangler secret put ${key}`,
-    });
-    env.push({
-      name: key,
-      when: `for ${build}`,
-      how: `a repository secret, for a GitHub Actions build; ${keyless}`,
-    });
+    files.push(
+      ...standaloneWorkerFiles({ ...indexed, url: site.url }, mcp, WORKER_VERSIONS, provider),
+    );
+    const workersAi = provider === 'workers-ai';
+    if (workersAi) {
+      env.push({
+        name: 'CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN',
+        when: `for ${build}, optional`,
+        how: `repository secrets, to embed the pages with ${WORKERS_AI_EMBEDDING} for semantic search (a token allowed to run Workers AI); without them, nothing is embedded and questions are matched on keywords`,
+      });
+    } else {
+      env.push({
+        name: key,
+        when: 'for the Worker',
+        how: `cd ${STANDALONE_DIR} && npx wrangler secret put ${key}`,
+      });
+      env.push({
+        name: key,
+        when: `for ${build}`,
+        how: `a repository secret, for a GitHub Actions build; ${keyless}`,
+      });
+    }
+    const spec = workersAi ? ` -e workers-ai:${WORKERS_AI_EMBEDDING}` : '';
     if (site.indexCommand) {
       next.push(
-        `Build the index with the site: ${site.kind === 'next' ? `${site.indexCommand} -o public/ask-index.json` : site.indexCommand}${WITHOUT_KEY}`,
+        `Build the index with the site: ${site.kind === 'next' ? `${site.indexCommand} -o public/ask-index.json` : site.indexCommand}${spec}${workersAi ? ' (with the two Cloudflare variables set; -e none builds a keyword-only index without them)' : WITHOUT_KEY}`,
       );
     }
     next.push(
-      `cd ${STANDALONE_DIR} && npm install && npx wrangler deploy (it prints the Worker's URL, https://${standaloneName(site)}.<your-subdomain>.workers.dev)`,
+      `cd ${STANDALONE_DIR} && npm install && npx wrangler deploy${workersAi ? '' : ` (after wrangler secret put ${key})`}: it prints the Worker's URL, https://${standaloneName(site)}.<your-subdomain>.workers.dev`,
     );
     next.push(
-      dialogStep(site, `https://${standaloneName(site)}.<your-subdomain>.workers.dev/api/ask`),
+      dialogStep(
+        site,
+        `https://${standaloneName(site)}.<your-subdomain>.workers.dev/api/ask`,
+        workersAi && site.kind !== 'next' && site.kind !== 'static'
+          ? `workers-ai:${WORKERS_AI_EMBEDDING}`
+          : undefined,
+      ),
     );
   } else if (host === 'vercel') {
     files.push(...vercelFiles(site, mcp));
@@ -604,6 +642,7 @@ function parseInitFlags(args: string[]) {
       strict: true,
       options: {
         host: { type: 'string' },
+        provider: { type: 'string' },
         'site-url': { type: 'string' },
         name: { type: 'string' },
         out: { type: 'string' },
@@ -617,12 +656,18 @@ function parseInitFlags(args: string[]) {
     if (host !== undefined && !HOSTS.includes(host as Host)) {
       throw new InitError(`--host must be one of ${HOSTS.join(', ')}.`);
     }
+    const given = values.provider;
+    if (given !== undefined && given !== 'workers-ai' && given !== 'openai') {
+      throw new InitError('--provider must be workers-ai or openai.');
+    }
+    const provider: WorkerProvider | undefined = given;
     const siteUrl = values['site-url'];
     if (siteUrl !== undefined && !/^https?:\/\/[^/]/.test(siteUrl)) {
       throw new InitError(`--site-url must be an absolute http(s) URL (got ${siteUrl}).`);
     }
     return {
       ...(host ? { host: host as Host } : {}),
+      ...(provider ? { provider: provider } : {}),
       ...(siteUrl ? { siteUrl: siteUrl.replace(/\/+$/, '') } : {}),
       ...(values.name ? { name: values.name } : {}),
       ...(values.out ? { out: values.out } : {}),
@@ -711,7 +756,12 @@ export async function init(args: string[], io: CliIO): Promise<number> {
       ).trim();
       if (/^https?:\/\/[^/]/.test(answer)) resolved = { ...site, url: answer.replace(/\/+$/, '') };
     }
-    const planned = planFor(p, resolved, host, flags.mcp);
+    if (flags.provider === 'workers-ai' && host !== 'github-pages') {
+      throw new InitError(
+        '--provider workers-ai is for --host github-pages, whose endpoint is a Cloudflare Worker of its own with a Workers AI binding.',
+      );
+    }
+    const planned = planFor(p, resolved, host, flags.mcp, flags.provider ?? 'workers-ai');
     const changes: Change[] = planned.files.map((file) => {
       const existing = p.read(file.path);
       const status = existing === null ? 'create' : existing === file.content ? 'same' : 'update';

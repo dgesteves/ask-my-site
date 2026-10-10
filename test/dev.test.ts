@@ -218,7 +218,7 @@ describe('the models dev answers with', () => {
     const cohere = { ...mock, embedding: { model: 'embed-multilingual-v3.0', dimensions: 1024 } };
     await expect(devModels(cohere, { OPENAI_API_KEY: 'sk-test' })).rejects.toBeInstanceOf(DevError);
     await expect(devModels(cohere, { OPENAI_API_KEY: 'sk-test' })).rejects.toThrow(
-      'cannot load: it embeds with OpenAI, AI Gateway or the mock model',
+      'cannot load: it embeds with OpenAI, AI Gateway, Workers AI or the mock model',
     );
   });
 

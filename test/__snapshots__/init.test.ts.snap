@@ -102,70 +102,97 @@ exports[`ask-my-site init: what it writes per host > Docusaurus on GitHub Pages 
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.0",
     "ai": "^7.0.0",
-    "ask-my-site": "^<version>"
+    "ask-my-site": "^<version>",
+    "workers-ai-provider": "^4.0.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261001.0",
+    "typescript": "^6.0.0",
     "wrangler": "^4.0.0"
   }
 }
 ",
-  "ask-my-site-worker/src/index.ts": "// The Worker that answers questions for Acme Docs. Written by \`npx ask-my-site init\`: edit it as
+  "ask-my-site-worker/src/index.ts": "// The Worker that answers questions for Acme Docs, with Workers AI: no API key to set, and within
+// Workers AI's free daily allowance for a small site. Written by \`npx ask-my-site init\`: edit it as
 // you like, and init asks before it overwrites it.
 //
 // It fetches the index from the live site, SITE_URL/ask-index.json, and checks it again every five
 // minutes, so it follows the site's deploys. The site's pages call it across origins, so it sends
 // CORS headers for SITE_URL's origin, and only for it.
 //
-// Set the key with \`npx wrangler secret put OPENAI_API_KEY\`, and deploy with \`npx wrangler deploy\`.
-import { createOpenAI } from '@ai-sdk/openai';
+// Questions are embedded with the Workers AI model the index records, as with \`ask-my-site index -e
+// workers-ai:@cf/baai/bge-small-en-v1.5\`, and matched on keywords for an index built without one.
+// CHAT_MODEL, in wrangler.jsonc, writes the answers.
+//
+// Deploy with \`npx wrangler deploy\`.
 import {
   createAskHandler,
   createMcpHandler,
   memoryRateLimit,
   remoteIndex,
 } from 'ask-my-site/server';
+import { createWorkersAI } from 'workers-ai-provider';
 
 interface Env {
+  /** The site's URL, with its base path. */
   SITE_URL: string;
-  OPENAI_API_KEY: string;
+  /** The Workers AI model that writes the answers. */
+  CHAT_MODEL: string;
+  AI: Ai;
 }
 
 type Handler = (request: Request) => Promise<Response>;
-let handlers: { ask: Handler; mcp: Handler } | undefined;
+let handlers: Promise<{ ask: Handler; mcp: Handler }> | undefined;
 
-function create(env: Env) {
-  const site = new URL(\`\${env.SITE_URL.replace(/\\/+$/, '')}/\`);
-  const index = remoteIndex(new URL('ask-index.json', site));
-  const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+/** The site's URL, with a trailing slash, as a base for its files' URLs. */
+const siteOf = (env: Env): URL => new URL(\`\${env.SITE_URL.replace(/\\/+$/, '')}/\`);
+
+/** CORS for the site's origin, and only for it. */
+const corsFor = (env: Env): Record<string, string> => ({
+  'access-control-allow-origin': siteOf(env).origin,
+  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-headers': 'content-type',
+  'access-control-max-age': '86400',
+  vary: 'origin',
+});
+
+/** The endpoints, made on the first request, once the index has been fetched. */
+async function create(env: Env) {
+  const index = remoteIndex(new URL('ask-index.json', siteOf(env)));
+  const workersai = createWorkersAI({ binding: env.AI });
+  // Questions are embedded as the index was: with its Workers AI model. An index embedded with
+  // another provider's model is searched by keywords instead.
+  const { embedding } = await index();
+  const embeddingModel = embedding?.model.startsWith('@cf/')
+    ? workersai.textEmbedding(embedding.model)
+    : undefined;
+  if (embedding && !embeddingModel) {
+    console.warn(
+      \`[ask-my-site] The index was embedded with \${embedding.model}, which Workers AI does not run, so questions are matched on keywords. Build it with -e workers-ai:@cf/baai/bge-small-en-v1.5, or -e none.\`,
+    );
+  }
+  const cors = corsFor(env);
   return {
     ask: createAskHandler({
       index,
-      model: openai('gpt-5.4-mini'),
-      // The model the plugins and the CLI embed pages with when OPENAI_API_KEY is set as the site
-      // builds. The index records its model, and a different one here fails loudly. An index built
-      // without a key has no vectors: it is searched by keywords, and this model is never called.
-      embeddingModel: openai.embedding('text-embedding-3-small'),
+      model: workersai(env.CHAT_MODEL),
+      ...(embeddingModel ? { embeddingModel } : {}),
       siteName: 'Acme Docs',
       // 10 questions a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
       rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
-      // A daily cap for the endpoint, counted per instance: about 500 answers. Set a spend limit
-      // with your model provider as well; it is the only hard cap.
-      budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+      // A daily cap, counted per instance: about Workers AI's free allowance of 10,000 neurons with
+      // Llama 4 Scout, at some 3,000 tokens a question. On the Workers Free plan nothing is charged
+      // past the allowance; on Workers Paid, raise these to what you will spend.
+      budget: { requestsPerDay: 100, tokensPerDay: 300_000 },
       // A question asked again is answered from memory, without a model call.
       answerCache: true,
       // The site's pages post here from their own origin.
-      headers: {
-        'access-control-allow-origin': site.origin,
-        'access-control-allow-methods': 'POST, OPTIONS',
-        'access-control-allow-headers': 'content-type',
-        'access-control-max-age': '86400',
-        vary: 'origin',
-      },
+      headers: cors,
     }),
     mcp: createMcpHandler({
       index,
@@ -173,20 +200,55 @@ function create(env: Env) {
       // 60 tool calls a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
       rateLimit: memoryRateLimit({ limit: 60, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
       // Results link to the pages on the site, not on this Worker.
-      siteUrl: site.origin,
+      siteUrl: siteOf(env).origin,
     }),
   };
 }
 
 export default {
-  fetch(request: Request, env: Env): Promise<Response> {
-    handlers ??= create(env);
+  async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url);
-    if (pathname === '/api/ask') return handlers.ask(request);
-    if (pathname === '/api/mcp') return handlers.mcp(request);
-    return Promise.resolve(new Response('Not found', { status: 404 }));
+    if (pathname !== '/api/ask' && pathname !== '/api/mcp') {
+      return new Response('Not found', { status: 404 });
+    }
+    handlers ??= create(env).catch((error: unknown) => {
+      handlers = undefined;
+      throw error;
+    });
+    let ready: Awaited<typeof handlers>;
+    try {
+      ready = await handlers;
+    } catch (error) {
+      // The index could not be fetched or used; the next request tries again.
+      console.error('[ask-my-site]', error);
+      return Response.json(
+        { error: { code: 'internal_error', message: 'The ask endpoint is misconfigured.' } },
+        { status: 500, headers: corsFor(env) },
+      );
+    }
+    return pathname === '/api/ask' ? ready.ask(request) : ready.mcp(request);
   },
 };
+",
+  "ask-my-site-worker/tsconfig.json": "{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "ES2022"
+    ],
+    "types": [
+      "@cloudflare/workers-types"
+    ],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": [
+    "src"
+  ]
+}
 ",
   "ask-my-site-worker/wrangler.jsonc": "// The Worker that answers questions for Acme Docs. Written by \`npx ask-my-site init\`.
 {
@@ -194,9 +256,14 @@ export default {
   "name": "acme-docs-ask",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
+  // Workers AI embeds the questions and writes the answers: no API key to set.
+  "ai": { "binding": "AI" },
   "vars": {
     // The site the Worker answers for: it reads the index at https://acme.github.io/docs/ask-index.json.
-    "SITE_URL": "https://acme.github.io/docs"
+    "SITE_URL": "https://acme.github.io/docs",
+    // The Workers AI model that writes the answers. About 100 questions a day fit in Workers AI's
+    // free allowance with this one; ask-my-site's Workers AI guide compares others.
+    "CHAT_MODEL": "@cf/meta/llama-4-scout-17b-16e-instruct"
   }
 }
 ",
@@ -207,17 +274,17 @@ exports[`ask-my-site init: what it writes per host > Docusaurus on GitHub Pages 
 "a Docusaurus site on GitHub Pages, answered by a Cloudflare Worker.
 
   created    ask-my-site-worker/package.json    the Worker’s dependencies and scripts
+  created    ask-my-site-worker/tsconfig.json   TypeScript for the Worker, with the Workers runtime types
   created    ask-my-site-worker/wrangler.jsonc  the Worker’s configuration, with the site’s URL
   created    ask-my-site-worker/src/index.ts    the Worker: POST /api/ask and /api/mcp, from the live site’s index
 
 Set (init reads none of these):
-  OPENAI_API_KEY, for the Worker: cd ask-my-site-worker && npx wrangler secret put OPENAI_API_KEY
-  OPENAI_API_KEY, for the site’s build: a repository secret, for a GitHub Actions build; without it there, the index is keyword-only, which works too
+  CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, for the site’s build, optional: repository secrets, to embed the pages with @cf/baai/bge-small-en-v1.5 for semantic search (a token allowed to run Workers AI); without them, nothing is embedded and questions are matched on keywords
 
 Next:
-  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
-  2. cd ask-my-site-worker && npm install && npx wrangler deploy (it prints the Worker's URL, https://acme-docs-ask.<your-subdomain>.workers.dev)
-  3. Add the plugin to docusaurus.config: plugins: [['ask-my-site/docusaurus', { endpoint: 'https://acme-docs-ask.<your-subdomain>.workers.dev/api/ask' }]]
+  1. npm i ask-my-site ai @radix-ui/react-dialog cmdk
+  2. cd ask-my-site-worker && npm install && npx wrangler deploy: it prints the Worker's URL, https://acme-docs-ask.<your-subdomain>.workers.dev
+  3. Add the plugin to docusaurus.config: plugins: [['ask-my-site/docusaurus', { endpoint: 'https://acme-docs-ask.<your-subdomain>.workers.dev/api/ask', embedding: 'workers-ai:@cf/baai/bge-small-en-v1.5' }]] (the embedding needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN as the site builds; leave it out for a keyword-only index)
   4. Deploy as you do now. init has deployed nothing."
 `;
 
@@ -502,70 +569,97 @@ exports[`ask-my-site init: what it writes per host > Hugo on a GitHub Pages work
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.0",
     "ai": "^7.0.0",
-    "ask-my-site": "^<version>"
+    "ask-my-site": "^<version>",
+    "workers-ai-provider": "^4.0.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261001.0",
+    "typescript": "^6.0.0",
     "wrangler": "^4.0.0"
   }
 }
 ",
-  "ask-my-site-worker/src/index.ts": "// The Worker that answers questions for Acme. Written by \`npx ask-my-site init\`: edit it as you
-// like, and init asks before it overwrites it.
+  "ask-my-site-worker/src/index.ts": "// The Worker that answers questions for Acme, with Workers AI: no API key to set, and within
+// Workers AI's free daily allowance for a small site. Written by \`npx ask-my-site init\`: edit it as
+// you like, and init asks before it overwrites it.
 //
 // It fetches the index from the live site, SITE_URL/ask-index.json, and checks it again every five
 // minutes, so it follows the site's deploys. The site's pages call it across origins, so it sends
 // CORS headers for SITE_URL's origin, and only for it.
 //
-// Set the key with \`npx wrangler secret put OPENAI_API_KEY\`, and deploy with \`npx wrangler deploy\`.
-import { createOpenAI } from '@ai-sdk/openai';
+// Questions are embedded with the Workers AI model the index records, as with \`ask-my-site index -e
+// workers-ai:@cf/baai/bge-small-en-v1.5\`, and matched on keywords for an index built without one.
+// CHAT_MODEL, in wrangler.jsonc, writes the answers.
+//
+// Deploy with \`npx wrangler deploy\`.
 import {
   createAskHandler,
   createMcpHandler,
   memoryRateLimit,
   remoteIndex,
 } from 'ask-my-site/server';
+import { createWorkersAI } from 'workers-ai-provider';
 
 interface Env {
+  /** The site's URL, with its base path. */
   SITE_URL: string;
-  OPENAI_API_KEY: string;
+  /** The Workers AI model that writes the answers. */
+  CHAT_MODEL: string;
+  AI: Ai;
 }
 
 type Handler = (request: Request) => Promise<Response>;
-let handlers: { ask: Handler; mcp: Handler } | undefined;
+let handlers: Promise<{ ask: Handler; mcp: Handler }> | undefined;
 
-function create(env: Env) {
-  const site = new URL(\`\${env.SITE_URL.replace(/\\/+$/, '')}/\`);
-  const index = remoteIndex(new URL('ask-index.json', site));
-  const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+/** The site's URL, with a trailing slash, as a base for its files' URLs. */
+const siteOf = (env: Env): URL => new URL(\`\${env.SITE_URL.replace(/\\/+$/, '')}/\`);
+
+/** CORS for the site's origin, and only for it. */
+const corsFor = (env: Env): Record<string, string> => ({
+  'access-control-allow-origin': siteOf(env).origin,
+  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-headers': 'content-type',
+  'access-control-max-age': '86400',
+  vary: 'origin',
+});
+
+/** The endpoints, made on the first request, once the index has been fetched. */
+async function create(env: Env) {
+  const index = remoteIndex(new URL('ask-index.json', siteOf(env)));
+  const workersai = createWorkersAI({ binding: env.AI });
+  // Questions are embedded as the index was: with its Workers AI model. An index embedded with
+  // another provider's model is searched by keywords instead.
+  const { embedding } = await index();
+  const embeddingModel = embedding?.model.startsWith('@cf/')
+    ? workersai.textEmbedding(embedding.model)
+    : undefined;
+  if (embedding && !embeddingModel) {
+    console.warn(
+      \`[ask-my-site] The index was embedded with \${embedding.model}, which Workers AI does not run, so questions are matched on keywords. Build it with -e workers-ai:@cf/baai/bge-small-en-v1.5, or -e none.\`,
+    );
+  }
+  const cors = corsFor(env);
   return {
     ask: createAskHandler({
       index,
-      model: openai('gpt-5.4-mini'),
-      // The model the plugins and the CLI embed pages with when OPENAI_API_KEY is set as the site
-      // builds. The index records its model, and a different one here fails loudly. An index built
-      // without a key has no vectors: it is searched by keywords, and this model is never called.
-      embeddingModel: openai.embedding('text-embedding-3-small'),
+      model: workersai(env.CHAT_MODEL),
+      ...(embeddingModel ? { embeddingModel } : {}),
       siteName: 'Acme',
       // 10 questions a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
       rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
-      // A daily cap for the endpoint, counted per instance: about 500 answers. Set a spend limit
-      // with your model provider as well; it is the only hard cap.
-      budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+      // A daily cap, counted per instance: about Workers AI's free allowance of 10,000 neurons with
+      // Llama 4 Scout, at some 3,000 tokens a question. On the Workers Free plan nothing is charged
+      // past the allowance; on Workers Paid, raise these to what you will spend.
+      budget: { requestsPerDay: 100, tokensPerDay: 300_000 },
       // A question asked again is answered from memory, without a model call.
       answerCache: true,
       // The site's pages post here from their own origin.
-      headers: {
-        'access-control-allow-origin': site.origin,
-        'access-control-allow-methods': 'POST, OPTIONS',
-        'access-control-allow-headers': 'content-type',
-        'access-control-max-age': '86400',
-        vary: 'origin',
-      },
+      headers: cors,
     }),
     mcp: createMcpHandler({
       index,
@@ -573,20 +667,55 @@ function create(env: Env) {
       // 60 tool calls a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
       rateLimit: memoryRateLimit({ limit: 60, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
       // Results link to the pages on the site, not on this Worker.
-      siteUrl: site.origin,
+      siteUrl: siteOf(env).origin,
     }),
   };
 }
 
 export default {
-  fetch(request: Request, env: Env): Promise<Response> {
-    handlers ??= create(env);
+  async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url);
-    if (pathname === '/api/ask') return handlers.ask(request);
-    if (pathname === '/api/mcp') return handlers.mcp(request);
-    return Promise.resolve(new Response('Not found', { status: 404 }));
+    if (pathname !== '/api/ask' && pathname !== '/api/mcp') {
+      return new Response('Not found', { status: 404 });
+    }
+    handlers ??= create(env).catch((error: unknown) => {
+      handlers = undefined;
+      throw error;
+    });
+    let ready: Awaited<typeof handlers>;
+    try {
+      ready = await handlers;
+    } catch (error) {
+      // The index could not be fetched or used; the next request tries again.
+      console.error('[ask-my-site]', error);
+      return Response.json(
+        { error: { code: 'internal_error', message: 'The ask endpoint is misconfigured.' } },
+        { status: 500, headers: corsFor(env) },
+      );
+    }
+    return pathname === '/api/ask' ? ready.ask(request) : ready.mcp(request);
   },
 };
+",
+  "ask-my-site-worker/tsconfig.json": "{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "ES2022"
+    ],
+    "types": [
+      "@cloudflare/workers-types"
+    ],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": [
+    "src"
+  ]
+}
 ",
   "ask-my-site-worker/wrangler.jsonc": "// The Worker that answers questions for Acme. Written by \`npx ask-my-site init\`.
 {
@@ -594,9 +723,14 @@ export default {
   "name": "acme-ask",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
+  // Workers AI embeds the questions and writes the answers: no API key to set.
+  "ai": { "binding": "AI" },
   "vars": {
     // The site the Worker answers for: it reads the index at https://acme.github.io/site/ask-index.json.
-    "SITE_URL": "https://acme.github.io/site"
+    "SITE_URL": "https://acme.github.io/site",
+    // The Workers AI model that writes the answers. About 100 questions a day fit in Workers AI's
+    // free allowance with this one; ask-my-site's Workers AI guide compares others.
+    "CHAT_MODEL": "@cf/meta/llama-4-scout-17b-16e-instruct"
   }
 }
 ",
@@ -607,16 +741,16 @@ exports[`ask-my-site init: what it writes per host > Hugo on a GitHub Pages work
 "a Hugo site on GitHub Pages, answered by a Cloudflare Worker.
 
   created    ask-my-site-worker/package.json    the Worker’s dependencies and scripts
+  created    ask-my-site-worker/tsconfig.json   TypeScript for the Worker, with the Workers runtime types
   created    ask-my-site-worker/wrangler.jsonc  the Worker’s configuration, with the site’s URL
   created    ask-my-site-worker/src/index.ts    the Worker: POST /api/ask and /api/mcp, from the live site’s index
 
 Set (init reads none of these):
-  OPENAI_API_KEY, for the Worker: cd ask-my-site-worker && npx wrangler secret put OPENAI_API_KEY
-  OPENAI_API_KEY, for where the index is built: a repository secret, for a GitHub Actions build; without it there, the index is keyword-only, which works too
+  CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, for the index build, optional: repository secrets, to embed the pages with @cf/baai/bge-small-en-v1.5 for semantic search (a token allowed to run Workers AI); without them, nothing is embedded and questions are matched on keywords
 
 Next:
-  1. Build the index with the site: npx ask-my-site index public -o public/ask-index.json (it embeds with OPENAI_API_KEY; -e none builds a keyword-only index without it)
-  2. cd ask-my-site-worker && npm install && npx wrangler deploy (it prints the Worker's URL, https://acme-ask.<your-subdomain>.workers.dev)
+  1. Build the index with the site: npx ask-my-site index public -o public/ask-index.json -e workers-ai:@cf/baai/bge-small-en-v1.5 (with the two Cloudflare variables set; -e none builds a keyword-only index without them)
+  2. cd ask-my-site-worker && npm install && npx wrangler deploy: it prints the Worker's URL, https://acme-ask.<your-subdomain>.workers.dev
   3. Add to your base template: <script src="https://cdn.jsdelivr.net/npm/ask-my-site@<minor>/dist/embed.global.js" data-endpoint="https://acme-ask.<your-subdomain>.workers.dev/api/ask" defer></script>
   4. Deploy as you do now. init has deployed nothing."
 `;
@@ -681,7 +815,7 @@ exports[`ask-my-site init: what it writes per host > Next.js on Netlify 2`] = `
   created    src/app/api/mcp/route.ts  /api/mcp: the same index as an MCP server for agents, keyword-only
 
 Set (init reads none of these):
-  OPENAI_API_KEY, for the app and where the index is built: in Netlify's environment variables; without it there, the index is keyword-only, which works too
+  OPENAI_API_KEY, for the app and the index build: in Netlify's environment variables; without it there, the index is keyword-only, which works too
 
 Next:
   1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk

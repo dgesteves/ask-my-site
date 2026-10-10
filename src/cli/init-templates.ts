@@ -450,34 +450,81 @@ export function workerName(name: string): string {
   return `${slug || 'docs'}-ask`;
 }
 
+/** The models a standalone Worker answers with: Workers AI's, with no key, or OpenAI's. */
+export type WorkerProvider = 'workers-ai' | 'openai';
+
+/** The Workers AI model the template answers with, and the embedding model it suggests. */
+export const WORKERS_AI_CHAT_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
+export const WORKERS_AI_EMBEDDING = '@cf/baai/bge-small-en-v1.5';
+
+export interface WorkerVersions {
+  askMySite: string;
+  ai: string;
+  openai: string;
+  workersAi: string;
+  wrangler: string;
+  typescript: string;
+  workersTypes: string;
+}
+
 /**
  * A Cloudflare Worker of its own, for a site served by GitHub Pages or any other static host: it
  * fetches the index from the live site, follows its deploys, and answers the site's pages across
- * origins (CORS for the site's origin only).
+ * origins (CORS for the site's origin only). With `workers-ai`, Workers AI embeds the questions
+ * and writes the answers, so there is no API key; `templates/cloudflare-worker` is this Worker.
  */
 export function standaloneWorkerFiles(
   site: TemplateSite & { url: string },
   mcp: boolean,
-  versions: { askMySite: string; ai: string; openai: string; wrangler: string },
+  versions: WorkerVersions,
+  provider: WorkerProvider = 'workers-ai',
 ): GeneratedFile[] {
   const dir = STANDALONE_DIR;
   const indexUrl = new URL(site.indexPath.replace(/^\/+/, ''), `${site.url.replace(/\/+$/, '')}/`);
+  const workersAi = provider === 'workers-ai';
+  const name = workerName(site.name);
   return [
     {
       path: `${dir}/package.json`,
       description: 'the Worker’s dependencies and scripts',
       content: `${JSON.stringify(
         {
-          name: workerName(site.name),
+          name,
           private: true,
           type: 'module',
-          scripts: { dev: 'wrangler dev', deploy: 'wrangler deploy' },
+          scripts: { dev: 'wrangler dev', deploy: 'wrangler deploy', typecheck: 'tsc' },
           dependencies: {
-            '@ai-sdk/openai': versions.openai,
+            ...(workersAi ? {} : { '@ai-sdk/openai': versions.openai }),
             ai: versions.ai,
             'ask-my-site': versions.askMySite,
+            ...(workersAi ? { 'workers-ai-provider': versions.workersAi } : {}),
           },
-          devDependencies: { wrangler: versions.wrangler },
+          devDependencies: {
+            '@cloudflare/workers-types': versions.workersTypes,
+            typescript: versions.typescript,
+            wrangler: versions.wrangler,
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    },
+    {
+      path: `${dir}/tsconfig.json`,
+      description: 'TypeScript for the Worker, with the Workers runtime types',
+      content: `${JSON.stringify(
+        {
+          compilerOptions: {
+            target: 'ES2022',
+            module: 'ES2022',
+            moduleResolution: 'Bundler',
+            lib: ['ES2022'],
+            types: ['@cloudflare/workers-types'],
+            strict: true,
+            skipLibCheck: true,
+            noEmit: true,
+          },
+          include: ['src'],
         },
         null,
         2,
@@ -489,12 +536,25 @@ export function standaloneWorkerFiles(
       content: `// The Worker that answers questions for ${site.name}. Written by \`npx ask-my-site init\`.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": ${JSON.stringify(workerName(site.name))},
+  "name": ${JSON.stringify(name)},
   "main": "src/index.ts",
-  "compatibility_date": "2026-09-01",
+  "compatibility_date": "2026-09-01",${
+    workersAi
+      ? `
+  // Workers AI embeds the questions and writes the answers: no API key to set.
+  "ai": { "binding": "AI" },`
+      : ''
+  }
   "vars": {
     // The site the Worker answers for: it reads the index at ${indexUrl.href}.
-    "SITE_URL": ${JSON.stringify(site.url.replace(/\/+$/, ''))}
+    "SITE_URL": ${JSON.stringify(site.url.replace(/\/+$/, ''))}${
+      workersAi
+        ? `,
+    // The Workers AI model that writes the answers. About 100 questions a day fit in Workers AI's
+    // free allowance with this one; ask-my-site's Workers AI guide compares others.
+    "CHAT_MODEL": ${JSON.stringify(WORKERS_AI_CHAT_MODEL)}`
+        : ''
+    }
   }
 }
 `,
@@ -502,7 +562,137 @@ export function standaloneWorkerFiles(
     {
       path: `${dir}/src/index.ts`,
       description: `the Worker: POST /api/ask${mcp ? ' and /api/mcp' : ''}, from the live site’s index`,
-      content: `${HEADER(`The Worker that answers questions for ${site.name}.`, `It fetches the index from the live site, SITE_URL${site.indexPath}, and checks it again every five minutes, so it follows the site's deploys. The site's pages call it across origins, so it sends CORS headers for SITE_URL's origin, and only for it.`, `Set the key with \`npx wrangler secret put OPENAI_API_KEY\`, and deploy with \`npx wrangler deploy\`.`)}
+      content: workersAi ? workersAiWorker(site, mcp) : openaiWorker(site, mcp),
+    },
+  ];
+}
+
+const CORS = `      // The site's pages post here from their own origin.
+      headers: cors,`;
+
+/** What both Workers share: the CORS headers, and `fetch`, which answers the two paths. */
+function workerFetch(mcp: boolean): string {
+  return `export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const { pathname } = new URL(request.url);
+    if (pathname !== '/api/ask'${mcp ? " && pathname !== '/api/mcp'" : ''}) {
+      return new Response('Not found', { status: 404 });
+    }
+    handlers ??= create(env).catch((error: unknown) => {
+      handlers = undefined;
+      throw error;
+    });
+    let ready: Awaited<typeof handlers>;
+    try {
+      ready = await handlers;
+    } catch (error) {
+      // The index could not be fetched or used; the next request tries again.
+      console.error('[ask-my-site]', error);
+      return Response.json(
+        { error: { code: 'internal_error', message: 'The ask endpoint is misconfigured.' } },
+        { status: 500, headers: corsFor(env) },
+      );
+    }
+    return ${mcp ? "pathname === '/api/ask' ? ready.ask(request) : ready.mcp(request)" : 'ready.ask(request)'};
+  },
+};
+`;
+}
+
+const SITE_AND_CORS = `/** The site's URL, with a trailing slash, as a base for its files' URLs. */
+const siteOf = (env: Env): URL => new URL(\`\${env.SITE_URL.replace(/\\/+$/, '')}/\`);
+
+/** CORS for the site's origin, and only for it. */
+const corsFor = (env: Env): Record<string, string> => ({
+  'access-control-allow-origin': siteOf(env).origin,
+  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-headers': 'content-type',
+  'access-control-max-age': '86400',
+  vary: 'origin',
+});`;
+
+function mcpEntry(site: TemplateSite, mcp: boolean): string {
+  return mcp
+    ? `
+    mcp: createMcpHandler({
+      index,
+${mcpOptions(site, 'github-pages', '      ')}
+      // Results link to the pages on the site, not on this Worker.
+      siteUrl: siteOf(env).origin,
+    }),`
+    : '';
+}
+
+function workersAiWorker(site: TemplateSite & { url: string }, mcp: boolean): string {
+  return `${HEADER(
+    `The Worker that answers questions for ${site.name}, with Workers AI: no API key to set, and within Workers AI's free daily allowance for a small site.`,
+    `It fetches the index from the live site, SITE_URL${site.indexPath}, and checks it again every five minutes, so it follows the site's deploys. The site's pages call it across origins, so it sends CORS headers for SITE_URL's origin, and only for it.`,
+    `Questions are embedded with the Workers AI model the index records, as with \`ask-my-site index -e workers-ai:${WORKERS_AI_EMBEDDING}\`, and matched on keywords for an index built without one. CHAT_MODEL, in wrangler.jsonc, writes the answers.`,
+    'Deploy with `npx wrangler deploy`.',
+  )}
+import {
+  createAskHandler,${mcp ? '\n  createMcpHandler,' : ''}
+  memoryRateLimit,
+  remoteIndex,
+} from 'ask-my-site/server';
+import { createWorkersAI } from 'workers-ai-provider';
+
+interface Env {
+  /** The site's URL, with its base path. */
+  SITE_URL: string;
+  /** The Workers AI model that writes the answers. */
+  CHAT_MODEL: string;
+  AI: Ai;
+}
+
+type Handler = (request: Request) => Promise<Response>;
+let handlers: Promise<{ ask: Handler${mcp ? '; mcp: Handler' : ''} }> | undefined;
+
+${SITE_AND_CORS}
+
+/** The endpoints, made on the first request, once the index has been fetched. */
+async function create(env: Env) {
+  const index = remoteIndex(new URL(${quote(site.indexPath.replace(/^\/+/, ''))}, siteOf(env)));
+  const workersai = createWorkersAI({ binding: env.AI });
+  // Questions are embedded as the index was: with its Workers AI model. An index embedded with
+  // another provider's model is searched by keywords instead.
+  const { embedding } = await index();
+  const embeddingModel = embedding?.model.startsWith('@cf/')
+    ? workersai.textEmbedding(embedding.model)
+    : undefined;
+  if (embedding && !embeddingModel) {
+    console.warn(
+      \`[ask-my-site] The index was embedded with \${embedding.model}, which Workers AI does not run, so questions are matched on keywords. Build it with -e workers-ai:${WORKERS_AI_EMBEDDING}, or -e none.\`,
+    );
+  }
+  const cors = corsFor(env);
+  return {
+    ask: createAskHandler({
+      index,
+      model: workersai(env.CHAT_MODEL),
+      ...(embeddingModel ? { embeddingModel } : {}),
+      siteName: ${quote(site.name)},
+      ${limiterComment('github-pages', '10 questions a minute')}
+      rateLimit: ${limiter('github-pages', 10)},
+${comment("A daily cap, counted per instance: about Workers AI's free allowance of 10,000 neurons with Llama 4 Scout, at some 3,000 tokens a question. On the Workers Free plan nothing is charged past the allowance; on Workers Paid, raise these to what you will spend.", '      ')}
+      budget: { requestsPerDay: 100, tokensPerDay: 300_000 },
+      // A question asked again is answered from memory, without a model call.
+      answerCache: true,
+${CORS}
+    }),${mcpEntry(site, mcp)}
+  };
+}
+
+${workerFetch(mcp)}`;
+}
+
+function openaiWorker(site: TemplateSite & { url: string }, mcp: boolean): string {
+  return `${HEADER(
+    `The Worker that answers questions for ${site.name}, with OpenAI.`,
+    `It fetches the index from the live site, SITE_URL${site.indexPath}, and checks it again every five minutes, so it follows the site's deploys. The site's pages call it across origins, so it sends CORS headers for SITE_URL's origin, and only for it.`,
+    'Questions are embedded with the OpenAI model the index records, and matched on keywords for an index built without one.',
+    'Set the key with `npx wrangler secret put OPENAI_API_KEY`, and deploy with `npx wrangler deploy`.',
+  )}
 import { createOpenAI } from '@ai-sdk/openai';
 import {
   createAskHandler,${mcp ? '\n  createMcpHandler,' : ''}
@@ -511,59 +701,51 @@ import {
 } from 'ask-my-site/server';
 
 interface Env {
+  /** The site's URL, with its base path. */
   SITE_URL: string;
   OPENAI_API_KEY: string;
 }
 
 type Handler = (request: Request) => Promise<Response>;
-let handlers: { ask: Handler${mcp ? '; mcp: Handler' : ''} } | undefined;
+let handlers: Promise<{ ask: Handler${mcp ? '; mcp: Handler' : ''} }> | undefined;
 
-function create(env: Env) {
-  const site = new URL(\`\${env.SITE_URL.replace(/\\/+$/, '')}/\`);
-  const index = remoteIndex(new URL(${quote(site.indexPath.replace(/^\/+/, ''))}, site));
+${SITE_AND_CORS}
+
+/** The endpoints, made on the first request, once the index has been fetched. */
+async function create(env: Env) {
+  const index = remoteIndex(new URL(${quote(site.indexPath.replace(/^\/+/, ''))}, siteOf(env)));
   const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+  // Questions are embedded as the index was: with its OpenAI model. An index embedded with
+  // another provider's model is searched by keywords instead.
+  const { embedding } = await index();
+  const model = embedding?.model.replace(/^openai\\//, '');
+  const embeddingModel =
+    model?.startsWith('text-embedding-') ? openai.embedding(model) : undefined;
+  if (embedding && !embeddingModel) {
+    console.warn(
+      \`[ask-my-site] The index was embedded with \${embedding.model}, which this Worker does not run, so questions are matched on keywords.\`,
+    );
+  }
+  const cors = corsFor(env);
   return {
     ask: createAskHandler({
       index,
-${askOptions(site, 'github-pages', '      ')}
-      // The site's pages post here from their own origin.
-      headers: {
-        'access-control-allow-origin': site.origin,
-        'access-control-allow-methods': 'POST, OPTIONS',
-        'access-control-allow-headers': 'content-type',
-        'access-control-max-age': '86400',
-        vary: 'origin',
-      },
-    }),${
-      mcp
-        ? `
-    mcp: createMcpHandler({
-      index,
-${mcpOptions(site, 'github-pages', '      ')}
-      // Results link to the pages on the site, not on this Worker.
-      siteUrl: site.origin,
-    }),`
-        : ''
-    }
+      model: openai('${MODEL}'),
+      ...(embeddingModel ? { embeddingModel } : {}),
+      siteName: ${quote(site.name)},
+      ${limiterComment('github-pages', '10 questions a minute')}
+      rateLimit: ${limiter('github-pages', 10)},
+      // A daily cap for the endpoint, counted per instance: about 500 answers. Set a spend limit
+      // with OpenAI as well; it is the only hard cap.
+      budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+      // A question asked again is answered from memory, without a model call.
+      answerCache: true,
+${CORS}
+    }),${mcpEntry(site, mcp)}
   };
 }
 
-export default {
-  fetch(request: Request, env: Env): Promise<Response> {
-    handlers ??= create(env);
-    const { pathname } = new URL(request.url);
-    if (pathname === '/api/ask') return handlers.ask(request);${
-      mcp
-        ? `
-    if (pathname === '/api/mcp') return handlers.mcp(request);`
-        : ''
-    }
-    return Promise.resolve(new Response('Not found', { status: 404 }));
-  },
-};
-`,
-    },
-  ];
+${workerFetch(mcp)}`;
 }
 
 /** `app/api/ask/route.ts` and `app/api/mcp/route.ts`, for a Next.js app. */

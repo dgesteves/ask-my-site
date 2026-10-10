@@ -46,6 +46,8 @@ Options:
       --check                  Exit 1 if the index is stale. Never calls a model.
       --base-url <url>         URL prefix for pages (default: /)
   -e, --embedding <spec>       openai:<model>    @ai-sdk/openai, needs OPENAI_API_KEY
+                               workers-ai:@cf/<model>  Workers AI, needs CLOUDFLARE_ACCOUNT_ID
+                                                 and CLOUDFLARE_API_TOKEN
                                <provider>/<model> AI Gateway, needs AI_GATEWAY_API_KEY
                                mock[:<dims>]     deterministic, offline
                                none              keyword-only index

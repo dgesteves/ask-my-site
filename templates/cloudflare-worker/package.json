@@ -1,0 +1,23 @@
+{
+  "name": "your-docs-ask",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ai": "^7.0.0",
+    "ask-my-site": "^0.7.0",
+    "workers-ai-provider": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261001.0",
+    "typescript": "^6.0.0",
+    "wrangler": "^4.0.0",
+    "@cloudflare/vitest-plugin": "^1.4.0",
+    "vitest": "^5.0.0"
+  }
+}
