@@ -105,6 +105,46 @@ jobs:
       - name: Create, build and check the site
         run: node scripts/consumer-site.mjs ${{ matrix.site }} "$RUNNER_TEMP"/ask-my-site-*.tgz "$RUNNER_TEMP/site"
 
+  # What `ask-my-site init` writes for each host, built with that host's own tooling (vercel build,
+  # netlify build --offline and serve, wrangler --dry-run and local dev), signed in to nothing, then
+  # asked questions against a local OpenAI stub. The astro-* recipes have no route file: the
+  # integration serves the endpoints through the adapter.
+  recipes:
+    name: Deploy recipe, ${{ matrix.recipe }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        recipe:
+          - vercel
+          - netlify
+          - cloudflare-pages
+          - cloudflare-workers
+          - github-pages
+          - astro-node
+          - astro-vercel
+          - astro-cloudflare
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      # The host CLIs and the sites' dependencies, cached for a week at a time, as for consumers.
+      - id: week
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: recipe-${{ matrix.recipe }}-${{ steps.week.outputs.week }}
+          restore-keys: recipe-${{ matrix.recipe }}-
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Write, build and ask the endpoint
+        run: node scripts/deploy-recipes.mjs ${{ matrix.recipe }} "$RUNNER_TEMP"/ask-my-site-*.tgz "$RUNNER_TEMP/site"
+
   node-compat:
     name: Test on Node ${{ matrix.node }}
     runs-on: ubuntu-latest

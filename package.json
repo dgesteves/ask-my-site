@@ -74,6 +74,14 @@
       "types": "./dist/astro/index.d.ts",
       "default": "./dist/astro/index.js"
     },
+    "./astro/ask-route": {
+      "types": "./dist/astro/ask-route.d.ts",
+      "default": "./dist/astro/ask-route.js"
+    },
+    "./astro/mcp-route": {
+      "types": "./dist/astro/mcp-route.d.ts",
+      "default": "./dist/astro/mcp-route.js"
+    },
     "./starlight": {
       "types": "./dist/starlight/index.d.ts",
       "default": "./dist/starlight/index.js"

@@ -18,13 +18,18 @@ export const metadata: Metadata = {
   alternates: { canonical: '/', types: { 'text/plain': '/llms.txt' } },
 };
 
-const DEPLOY_STEP = {
-  title: 'Deploy the endpoint',
-  text: 'One function on your host answers from the index, with your model key.',
-  link: { href: '/docs/deployment', label: 'Recipes for Vercel, Netlify and Cloudflare' },
-};
-
 async function setupTabs(): Promise<SetupTab[]> {
+  const DEPLOY_STEP = {
+    title: 'Write the endpoint',
+    text: 'One function on your host answers from the index, with your model key, rate-limited and on a daily budget. init writes it for Vercel, Netlify, Cloudflare or GitHub Pages, and deploys nothing.',
+    link: { href: '/docs/deployment', label: 'What it writes for each host' },
+    code: await codeBlock('npx ask-my-site init', 'sh'),
+  };
+  const ASTRO_STEP = {
+    title: 'Deploy as you do now',
+    text: 'With an SSR adapter, the integration serves the ask and MCP endpoints itself: there is no file to write. A static site writes its endpoint with npx ask-my-site init.',
+    link: { href: '/docs/deployment#astro-with-an-adapter', label: 'Astro with an adapter' },
+  };
   return [
     {
       id: 'docusaurus',
@@ -71,7 +76,7 @@ async function setupTabs(): Promise<SetupTab[]> {
             'js',
           ),
         },
-        DEPLOY_STEP,
+        ASTRO_STEP,
       ],
     },
     {
@@ -108,7 +113,7 @@ async function setupTabs(): Promise<SetupTab[]> {
       id: 'script',
       label: 'Any site',
       summary:
-        'Hugo, Jekyll, Eleventy, MkDocs or plain HTML: index the HTML your generator built, deploy the endpoint, and add one script tag. The dialog loads the first time it is wanted.',
+        'Hugo, Jekyll, Eleventy, MkDocs or plain HTML: index the HTML your generator built, write the endpoint with one command, and add one script tag. The dialog loads the first time it is wanted.',
       docs: { href: '/docs/script-tag', label: 'Script tag guide' },
       steps: [
         {

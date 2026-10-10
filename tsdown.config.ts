@@ -43,10 +43,16 @@ export default defineConfig([
       'docusaurus/theme/AskMySite': 'src/docusaurus/theme/AskMySite.tsx',
       'docusaurus/theme/AskMySiteMcp': 'src/docusaurus/theme/AskMySiteMcp.tsx',
       'astro/index': 'src/astro/index.ts',
+      // The ask and MCP endpoints the integration injects on a site with an SSR adapter.
+      'astro/ask-route': 'src/astro/ask-route.ts',
+      'astro/mcp-route': 'src/astro/mcp-route.ts',
       'starlight/index': 'src/starlight/index.ts',
     },
     // Provided by the Docusaurus site at build time: its modules and theme components.
-    deps: { neverBundle: [/^@docusaurus\//, /^@theme(-init|-original)?\//] },
+    // And by the Astro site: the module the integration generates for its routes, and Astro's own.
+    deps: {
+      neverBundle: [/^@docusaurus\//, /^@theme(-init|-original)?\//, /^virtual:ask-my-site\//],
+    },
     format: 'esm',
     // `node` only governs how built-ins resolve. The core, server, react, mock and embed entries
     // never import a built-in, so their output stays runtime-neutral (edge, workers, browsers).

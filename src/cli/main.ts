@@ -13,6 +13,7 @@ import { embeddingFromSpec, EmbeddingSpecError } from '../node/embedding';
 import { llmsOutputs, writeLlmsFiles } from '../integrations/llms';
 import type { LlmsPage } from '../llms';
 import { dev } from './dev';
+import { init } from './init';
 import {
   detectFramework,
   loadDirectory,
@@ -30,9 +31,12 @@ export interface CliIO {
   env: Record<string, string | undefined>;
   /** Stops `ask-my-site dev`. Default: Ctrl+C. */
   signal?: AbortSignal;
+  /** Asks the person at the terminal, for `ask-my-site init`. Absent when stdin is not a TTY. */
+  prompt?: (question: string) => Promise<string>;
 }
 
 const USAGE = `Usage: ask-my-site index [dir] [options]
+       ask-my-site init [options]  Write the endpoint for your host (ask-my-site init --help)
        ask-my-site dev [options]   Serve the ask endpoint locally (ask-my-site dev --help)
 
 Builds a static retrieval index from the Markdown, MDX and HTML files in <dir>.
@@ -398,6 +402,8 @@ function packageName(cwd: string): string | undefined {
 
 /** Runs the CLI. Returns the exit code: 0 success, 1 failure or stale index, 2 usage error. */
 export async function main(args: string[], io: CliIO): Promise<number> {
+  // No .env files here: init reads no secrets.
+  if (args[0] === 'init') return init(args.slice(1), io);
   if (args[0] === 'dev') {
     loadEnvFiles(io);
     return dev(args.slice(1), io);

@@ -5,6 +5,7 @@ import { embed, type EmbeddingModel } from 'ai';
 import { embeddingModelId, sameEmbeddingModel, type EmbeddingProviderOptions } from '../build';
 import { loadIndex, type LoadedIndex } from '../search/retrieve';
 import { memoryRateLimit, type RateLimiter, type RateLimitResult } from './rate-limit';
+import { isLiveIndex } from './remote-index';
 
 /**
  * The index in any form `loadIndex` accepts: the parsed JSON (`import index from
@@ -94,16 +95,20 @@ function load(source: unknown): LoadedIndex {
 /**
  * The index a handler serves, loaded on first use and then kept: `source` as given, or what a
  * function returns. A failed load (a network blip fetching the file) is retried on the next call
- * instead of poisoning every later request. Throws when `embeddingModel` is not the model the
- * index was embedded with.
+ * instead of poisoning every later request. A `remoteIndex` is asked on every call instead,
+ * as it follows the site's deploys. Throws when `embeddingModel` is not the model the index was
+ * embedded with.
  */
 export function indexLoader(
   source: IndexSource | (() => IndexSource | Promise<IndexSource>),
   embeddingModel: EmbeddingModel | undefined,
 ): () => Promise<LoadedIndex> {
-  let promise: Promise<LoadedIndex> | null = null;
   const resolve = async (): Promise<LoadedIndex> => {
     const index = load(typeof source === 'function' ? await source() : source);
+    checkModel(index);
+    return index;
+  };
+  const checkModel = (index: LoadedIndex): void => {
     if (
       index.embedding &&
       embeddingModel &&
@@ -114,8 +119,16 @@ export function indexLoader(
           `"${embeddingModelId(embeddingModel)}". Rebuild the index or pass the same embeddingModel.`,
       );
     }
-    return index;
   };
+  // A remote index changes with the site, and keeps its own copy: ask it every time.
+  if (isLiveIndex(source)) {
+    return async () => {
+      const index = await source();
+      checkModel(index);
+      return index;
+    };
+  }
+  let promise: Promise<LoadedIndex> | null = null;
   return () => {
     promise ??= resolve().catch((error: unknown) => {
       promise = null;

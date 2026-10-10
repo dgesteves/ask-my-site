@@ -238,12 +238,17 @@ describe('the models dev answers with', () => {
       expect(server.description).toBe(
         'text-embedding-3-small embeddings from OpenAI, answers from gpt-5.4-mini',
       );
-      // The stub serves embeddings only, so the answer itself fails; the sources come first.
       const stream = await (await ask(server.endpoint, 'Upstash ratelimit')).text();
       expect(stream).toContain('"url":"/docs/rate-limits#upstash"');
-      // One for the index, one for the question.
-      expect(stub.requests.filter((request) => request === 'POST /v1/embeddings')).toHaveLength(2);
-      expect(logs.some((line) => line.startsWith('  ✗'))).toBe(true);
+      // The stub's answer, streamed through the OpenAI provider.
+      expect(stream).toContain('"delta":"[1]."');
+      // One for the index, one for the question, then the answer.
+      expect(stub.requests).toEqual([
+        'POST /v1/embeddings',
+        'POST /v1/embeddings',
+        'POST /v1/responses',
+      ]);
+      expect(logs.some((line) => line.startsWith('  ✗'))).toBe(false);
     } finally {
       await stub.close();
     }

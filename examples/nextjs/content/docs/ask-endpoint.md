@@ -20,27 +20,27 @@ order: 31
 
 ## Handler options
 
-| Option                     | Default                     | Notes                                                                                                            |
-| -------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `index`                    | required                    | Parsed JSON, its text, a `loadIndex` result, or a function returning one. Loaded once; a failed load is retried. |
-| `model`                    | required                    | Any AI SDK language model, or an AI Gateway model id.                                                            |
-| `embeddingModel`           | none                        | Must match the index, which is checked. Without it, retrieval is keyword-only.                                   |
-| `embeddingProviderOptions` | none                        | Must match the build, such as `{ openai: { dimensions: 512 } }`.                                                 |
-| `siteName`                 | `"this site"`               | Used in the instructions and the "I don't know" message.                                                         |
-| `instructions`             | grounded defaults           | A string, or `(defaults) => string` to extend them.                                                              |
-| `retrieval`                | tuned                       | `{ topK, candidates, rrfK, minSimilarity, minKeywordCoverage, similarityNeedsKeyword }`.                         |
-| `maxContextChars`          | `8000`                      | Characters of source text sent to the model.                                                                     |
-| `maxQuestionLength`        | `500`                       | Longer questions get a 400.                                                                                      |
-| `maxBodyBytes`             | 64 KiB                      | Counted while reading the body.                                                                                  |
-| `noAnswerMessage`          | "I don't know. I couldn't…" | Streamed when nothing is relevant.                                                                               |
-| `rateLimit`                | 10 a minute per IP          | `memoryRateLimit()`; any `(request) => { success, … }` replaces it, and `false` turns it off.                    |
-| `rateLimitFailure`         | `"closed"`                  | When `rateLimit` throws: `"closed"` answers 503, `"open"` answers anyway.                                        |
-| `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`…                                |
-| `budget`                   | none                        | `{ requestsPerDay, tokensPerDay, store }`: a daily cap, then a 429 with code `budget_exceeded`.                  |
-| `answerCache`              | off                         | `true`, or `{ store, ttlSeconds }`: repeated questions are answered from the cache.                              |
-| `headers`                  | none                        | Added to every response, such as CORS headers.                                                                   |
-| `onFinish`                 | none                        | Called after each answer with `{ question, answer, sources, refused, retrieval, usage }`.                        |
-| `onError`                  | `console.error`             | Handled errors: embedding fallbacks, model failures, a failing limiter, misconfiguration.                        |
+| Option                     | Default                     | Notes                                                                                                                                                                             |
+| -------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index`                    | required                    | Parsed JSON, its text, a `loadIndex` result, a function returning one, or a `remoteIndex(url)`, which is checked again every five minutes. Loaded once; a failed load is retried. |
+| `model`                    | required                    | Any AI SDK language model, or an AI Gateway model id.                                                                                                                             |
+| `embeddingModel`           | none                        | Must match the index, which is checked. Without it, retrieval is keyword-only.                                                                                                    |
+| `embeddingProviderOptions` | none                        | Must match the build, such as `{ openai: { dimensions: 512 } }`.                                                                                                                  |
+| `siteName`                 | `"this site"`               | Used in the instructions and the "I don't know" message.                                                                                                                          |
+| `instructions`             | grounded defaults           | A string, or `(defaults) => string` to extend them.                                                                                                                               |
+| `retrieval`                | tuned                       | `{ topK, candidates, rrfK, minSimilarity, minKeywordCoverage, similarityNeedsKeyword }`.                                                                                          |
+| `maxContextChars`          | `8000`                      | Characters of source text sent to the model.                                                                                                                                      |
+| `maxQuestionLength`        | `500`                       | Longer questions get a 400.                                                                                                                                                       |
+| `maxBodyBytes`             | 64 KiB                      | Counted while reading the body.                                                                                                                                                   |
+| `noAnswerMessage`          | "I don't know. I couldn't…" | Streamed when nothing is relevant.                                                                                                                                                |
+| `rateLimit`                | 10 a minute per IP          | `memoryRateLimit()`; any `(request) => { success, … }` replaces it, and `false` turns it off.                                                                                     |
+| `rateLimitFailure`         | `"closed"`                  | When `rateLimit` throws: `"closed"` answers 503, `"open"` answers anyway.                                                                                                         |
+| `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`…                                                                                                 |
+| `budget`                   | none                        | `{ requestsPerDay, tokensPerDay, store }`: a daily cap, then a 429 with code `budget_exceeded`.                                                                                   |
+| `answerCache`              | off                         | `true`, or `{ store, ttlSeconds }`: repeated questions are answered from the cache.                                                                                               |
+| `headers`                  | none                        | Added to every response, such as CORS headers.                                                                                                                                    |
+| `onFinish`                 | none                        | Called after each answer with `{ question, answer, sources, refused, retrieval, usage }`.                                                                                         |
+| `onError`                  | `console.error`             | Handled errors: embedding fallbacks, model failures, a failing limiter, misconfiguration.                                                                                         |
 
 ## Logging questions and answers
 

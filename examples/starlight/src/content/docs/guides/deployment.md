@@ -1,12 +1,68 @@
 ---
 # Generated from examples/nextjs/content/docs/deployment.md by scripts/sync-example-docs.mjs. Edit that file instead.
 title: 'Deploying'
-description: 'Deploy the endpoint to Vercel, Netlify or Cloudflare, where the index lives, cold starts and cost.'
+description: 'Write the endpoint for Vercel, Netlify, Cloudflare or GitHub Pages with one command, where the index lives, cold starts and cost.'
 sidebar:
   order: 22
 ---
 
-The endpoint deploys wherever your site's server code runs, as one function. There is no database to provision and nothing to keep in sync: the index is a file built with the site.
+The endpoint deploys wherever your site's server code runs, as one function. There is no database to provision and nothing to keep in sync: the index is a file built with the site. `npx ask-my-site init` writes that function for your host.
+
+## Write the endpoint with init
+
+Run `npx ask-my-site init` in your site's folder. It works out the site and the host from their config files, writes the ask endpoint and the [MCP endpoint](/integrations/mcp/), and prints what it wrote, the environment variables to set and what is left to do:
+
+```sh
+npx ask-my-site init             # detects the site and the host, or asks which host
+npx ask-my-site init --dry-run   # prints every file it would write, and writes nothing
+```
+
+| Host                                   | Detected from                                                                       | What init writes                                                                                                        |
+| -------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Vercel                                 | `vercel.json` or `.vercel/`                                                         | `api/ask.ts` and `api/mcp.ts`, and `includeFiles` for the index in `vercel.json`                                        |
+| Netlify                                | `netlify.toml` or `.netlify/`                                                       | `netlify/functions/ask.mts` and `mcp.mts`, and `included_files` for the index in `netlify.toml`                         |
+| Cloudflare Pages                       | a wrangler config with `pages_build_output_dir`, or `--host cloudflare` without one | `functions/api/ask.ts` and `mcp.ts`, which read the index through the `ASSETS` binding                                  |
+| Cloudflare Workers with static assets  | a wrangler config with `assets`                                                     | `worker/ask-my-site.ts`, which answers `/api/*` and serves the files, and `main` and the `ASSETS` binding in the config |
+| GitHub Pages, or any other static host | a Pages workflow, a `gh-pages` script or `docusaurus deploy`                        | `ask-my-site-worker/`, a Cloudflare Worker of its own that reads the index from the live site                           |
+
+For a Next.js app it writes `app/api/ask/route.ts` and `app/api/mcp/route.ts` instead, which import the index, with the client IP header of the host. An Astro site with an SSR adapter needs no file at all: see [Astro with an adapter](#astro-with-an-adapter).
+
+Every endpoint it writes has a rate limit keyed on the client IP header the host sets (10 questions and 60 tool calls a minute), a daily budget of 500 questions and 1.5 million model tokens, the answer cache, and the CORS preflight answered. The one on another origin than the pages, the GitHub Pages Worker, sends CORS headers for the site's origin only. The files are plain code you own: edit the model, the limits or the budget there.
+
+Run it again whenever you like. Files that are already as it would write them are left alone, a file that differs is only overwritten if you say yes (or pass `--yes`), and an edit to a config file it cannot make safely, such as a `netlify.toml` that already configures the function, is printed for you to make by hand. It never deploys anything, and it reads no `.env` file or credential. `--no-mcp` leaves out the MCP endpoint, and [the CLI reference](/reference/cli/#ask-my-site-init) lists every flag.
+
+## Astro with an adapter
+
+On an Astro or Starlight site with an SSR adapter, the integration serves `POST /api/ask` and `/api/mcp` itself, with `injectRoute`, so there is no endpoint file to write or deploy. CI builds a site this way with the Node, Vercel and Cloudflare adapters and asks it questions. The routes answer from the index the build writes, which they read from the site's own static files, once per server instance (through the `ASSETS` binding on Cloudflare). Questions are embedded with the model the index records. Set `OPENAI_API_KEY` where the site builds and where it runs; `init` says so and writes nothing.
+
+The routes have the same defaults as the files `init` writes: 10 questions and 60 tool calls a minute per visitor, by the client address the adapter reports, a daily budget of 500 questions and 1.5 million model tokens per server instance, and the answer cache. Change them with `route`, or turn the routes off with `route: false` for a route of your own:
+
+```js
+askMySite({
+  route: {
+    model: 'openai:gpt-5.4-mini', // or an AI Gateway id, such as 'anthropic/claude-haiku-4.5'
+    rateLimit: 10,
+    budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+    mcp: '/api/mcp', // false serves no MCP endpoint
+  },
+});
+```
+
+A route file the site already has at `src/pages/api/ask.ts` or `src/pages/api/mcp.ts` answers instead. With `base: '/docs'`, the routes are at `/docs/api/ask` and `/docs/api/mcp`, and the dialog posts there. In `astro dev`, the routes answer from the index the last `astro build` wrote. On a Vercel preview behind Deployment Protection, the route can only read the index with the project's Protection Bypass for Automation secret, which it uses when Vercel sets `VERCEL_AUTOMATION_BYPASS_SECRET`.
+
+## GitHub Pages and other static hosts
+
+A host that serves only files, such as GitHub Pages, S3, Read the Docs or a plain web server, cannot run the endpoint. `init --host github-pages` writes `ask-my-site-worker/`, a Cloudflare Worker of its own, that answers for the site from another origin:
+
+- It fetches `ask-index.json` from the live site, at the site's URL from your config (or `--site-url`), keeps it in memory, and checks it again every five minutes with a conditional request, so it follows the site's deploys without being redeployed.
+- It sends CORS headers for the site's origin, and only for it, so other sites' pages cannot spend your model budget through their visitors' browsers.
+- The MCP endpoint's results link to the pages on the site, not on the Worker.
+
+Deploy it with `cd ask-my-site-worker && npm install && npx wrangler secret put OPENAI_API_KEY && npx wrangler deploy`, then set the dialog's `endpoint` (or the script tag's `data-endpoint`) to the URL Wrangler prints, plus `/api/ask`. The site keeps deploying as it does today.
+
+The Worker uses `remoteIndex` from `ask-my-site/server`, which any endpoint deployed apart from its site can use: `createAskHandler({ index: remoteIndex('https://acme.github.io/docs/ask-index.json'), … })`. A check that fails keeps the index it has; only the first fetch's failure fails a request.
+
+The first request in each Worker instance loads the index. That took 4 ms for this site's docs (229 chunks) and 28 ms for docusaurus.io's (1,074 chunks), in Node.js on an Apple M1 Max, warm; a cold Worker is slower. The Workers Free plan gives a request 10 ms of CPU time, so a site the size of this one fits in it, and one the size of docusaurus.io needs the Workers Paid plan, which allows 30 seconds by default.
 
 ## Runtimes
 
@@ -18,15 +74,15 @@ There are three ways for the endpoint to read the index:
 
 - **Import it.** `import index from './ask-index.json'` bundles the index with the function. This is the simplest, and what a Next.js app does.
 - **Read it from the build output.** A static site's function reads `build/ask-index.json` (Docusaurus) or `dist/ask-index.json` (Astro; `dist/client/ask-index.json` with an adapter) with `readFile`, and the host bundles the file with the function.
-- **Fetch it.** For large indexes on platforms that limit function size, serve the file as a static asset and pass a loader: `index: () => fetch(url).then((r) => r.text())`.
+- **Fetch it.** For large indexes on platforms that limit function size, or an endpoint deployed apart from its site, serve the file as a static asset and fetch it: `index: remoteIndex(url)`, which checks it again after a deploy, or a loader such as `index: () => fetch(url).then((r) => r.text())`.
 
-A loader runs once per server instance, on the first question, and a failed load is retried on the next request.
+A loader runs once per server instance, on the first question, and a failed load is retried on the next request. A `remoteIndex` is checked every five minutes (`revalidateSeconds`), with the file's `ETag`, so an unchanged index is never downloaded again.
 
 ## Deploy to Vercel
 
 In a Next.js app on Vercel there is nothing to configure: the route handler is a Vercel Function, and the imported index is bundled with it.
 
-To deploy the endpoint of a static site, such as a Docusaurus or Astro site, to Vercel, add `api/ask.ts`:
+For a static site, such as a Docusaurus or Astro site, `init` writes `api/ask.ts`. This is it without the budget, the answer cache and the comments:
 
 ```ts
 // api/ask.ts
@@ -48,7 +104,7 @@ Then include the index in the function's bundle with `vercel.json`: `{ "function
 
 ## Deploy to Netlify
 
-To deploy to Netlify, add a function at `netlify/functions/ask.mts`, and rate-limit on the client IP header Netlify sets:
+On Netlify, `init` writes a function at `netlify/functions/ask.mts` that rate-limits on the client IP header Netlify sets. Shortened, it is:
 
 ```ts
 // netlify/functions/ask.mts
@@ -80,7 +136,7 @@ Include the index in the function's bundle with `netlify.toml`:
 
 ## Deploy to Cloudflare
 
-To deploy to Cloudflare Pages, add a Pages Function at `functions/api/ask.ts`. It fetches the index from the site's own static assets, and reads the key from the function's environment:
+On Cloudflare Pages, `init` writes a Pages Function at `functions/api/ask.ts`. It fetches the index from the site's own static assets, and reads the key from the function's environment. Shortened, it is:
 
 ```ts
 // functions/api/ask.ts
@@ -110,11 +166,11 @@ export const onRequest: PagesFunction<{ OPENAI_API_KEY: string; ASSETS: Fetcher 
 };
 ```
 
-In a Cloudflare Worker, `export default { fetch: handler }` serves it. On Cloudflare, always rate-limit with `trustedHeader: 'cf-connecting-ip'`, as above: the default limiter reads `X-Forwarded-For`, which is not the header Cloudflare vouches for.
+For a static site on Cloudflare Workers, `init` writes `worker/ask-my-site.ts`, which answers `/api/ask` and `/api/mcp` and hands every other request to the static assets, and points the wrangler config's `main` at it. A Worker that already has an entry point can call its `askMySite(request, env)` from there. On Cloudflare, always rate-limit with `trustedHeader: 'cf-connecting-ip'`, as above: the default limiter reads `X-Forwarded-For`, which is not the header Cloudflare vouches for.
 
 ## Environment variables
 
-Set your provider's key, such as `OPENAI_API_KEY`, in two places: in the build, if the build embeds the index, and in the function's runtime environment, which embeds questions and calls the model. The key never reaches the browser: the dialog only talks to your endpoint.
+Set your provider's key, such as `OPENAI_API_KEY`, in two places: in the build, if the build embeds the index, and in the function's runtime environment, which embeds questions and calls the model. `init` prints where each goes on your host. The key never reaches the browser: the dialog only talks to your endpoint. A build without the key writes a keyword-only index, which the endpoint answers from without embedding questions.
 
 ## Cold starts
 

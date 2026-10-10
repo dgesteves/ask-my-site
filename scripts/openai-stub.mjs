@@ -1,7 +1,13 @@
-// A stand-in for OpenAI's embeddings API, so builds that embed with `openai:` never reach the real
-// one: the consumer checks in CI and the tests point OPENAI_BASE_URL at it. POST /v1/embeddings
-// answers with fixed vectors, one per input and derived from its text, `dimensions` long (default
-// 1536, as text-embedding-3-small); anything else gets a 404.
+// A stand-in for OpenAI's API, so builds that embed with `openai:` and endpoints that answer with
+// `openai(…)` never reach the real one: the consumer and deploy-recipe checks in CI and the tests
+// point OPENAI_BASE_URL at it.
+//
+// - POST /v1/embeddings answers with fixed vectors, one per input and derived from its text,
+//   `dimensions` long (default 1536, as text-embedding-3-small).
+// - POST /v1/responses streams a fixed answer that cites source [1], as the Responses API streams
+//   one (`stream: true`), with usage.
+//
+// Anything else gets a 404.
 //
 //   node scripts/openai-stub.mjs [port]   # serves on 127.0.0.1, default port 8790
 import { createServer } from 'node:http';
@@ -24,6 +30,37 @@ function vectorFor(text, dimensions) {
   return vector.map((value) => value / norm);
 }
 
+/** The answer the stub streams for every question. */
+export const STUB_ANSWER = 'The stub answers from the first source [1].';
+
+/** Streams `STUB_ANSWER` as the Responses API streams a message: one delta per word. */
+function respond(res, body) {
+  const id = 'msg_stub';
+  const words = STUB_ANSWER.match(/\S+\s*/g) ?? [];
+  const events = [
+    {
+      type: 'response.created',
+      response: { id: 'resp_stub', created_at: 0, model: String(body.model ?? 'stub') },
+    },
+    { type: 'response.output_item.added', output_index: 0, item: { type: 'message', id } },
+    ...words.map((delta) => ({
+      type: 'response.output_text.delta',
+      item_id: id,
+      output_index: 0,
+      delta,
+    })),
+    { type: 'response.output_item.done', output_index: 0, item: { type: 'message', id } },
+    {
+      type: 'response.completed',
+      response: { usage: { input_tokens: 100, output_tokens: words.length } },
+    },
+  ];
+  res.writeHead(200, { 'content-type': 'text/event-stream' });
+  res.end(
+    events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(''),
+  );
+}
+
 /**
  * Starts the stub on 127.0.0.1 (`port` 0 picks a free one). `requests` lists every request as
  * `METHOD /path`, so a caller can check the stub was the only thing called.
@@ -41,6 +78,10 @@ export async function startOpenAIStub({ port = 0, log } = {}) {
       const request = `${req.method ?? ''} ${req.url ?? ''}`;
       requests.push(request);
       log?.(request);
+      if (req.method === 'POST' && req.url === '/v1/responses') {
+        respond(res, JSON.parse(raw));
+        return;
+      }
       if (req.method !== 'POST' || req.url !== '/v1/embeddings') {
         res.writeHead(404, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: { message: `The stub does not serve ${request}.` } }));
