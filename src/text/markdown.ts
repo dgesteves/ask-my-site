@@ -131,6 +131,19 @@ export function parseAtxHeading(line: string): { level: number; text: string } |
   return text ? { level, text } : null;
 }
 
+// Docusaurus's explicit heading id in MDX, where `{#id}` is not valid syntax, is an MDX comment
+// at the end of the heading: `## Title {/* #custom-id */}`.
+const MDX_COMMENT_ID = /^\{\/\*[ \t]*#([^\s{}*]+)[ \t]*\*\/\}[ \t]*$/;
+
+// Splits `Title {/* #custom-id */}` into the title and the id, or returns `null` when the text
+// does not end with such a comment. Linear: one anchored match on the text after the last `{/*`.
+export function mdxCommentId(text: string): { text: string; id: string } | null {
+  const open = text.lastIndexOf('{/*');
+  if (open === -1) return null;
+  const id = MDX_COMMENT_ID.exec(text.slice(open))?.[1];
+  return id ? { text: text.slice(0, open).trimEnd(), id } : null;
+}
+
 /**
  * Finds inline code spans: a run of N backticks closed by the next run of exactly N backticks.
  * Linear time, using a per-length cursor over the backtick runs.

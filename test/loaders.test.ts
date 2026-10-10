@@ -94,6 +94,49 @@ describe('fromMarkdown', () => {
     expect(doc?.content).toContain("import React from 'react';");
     expect(doc?.content).toContain('<Callout>kept in code</Callout>');
   });
+
+  it('keeps the heading ids Docusaurus reads from MDX comments, and drops the other comments', () => {
+    // As docusaurus.io's own docs write them: 164 of their 776 differ from the heading's slug.
+    const source = [
+      '## Docusaurus CLI commands {/* #docusaurus-cli-commands */}',
+      '',
+      '### `docusaurus start [siteDir]` {/* #docusaurus-start-sitedir */}',
+      '',
+      'Builds and serves a preview. {/* not an id */}',
+      '',
+      '#### Options {/* #options */}',
+      '',
+      'Flags for start.',
+      '',
+      '### `docusaurus swizzle [themeName] [componentName] [siteDir]` {/* #docusaurus-swizzle */}',
+      '',
+      'Swizzles a component.',
+      '',
+      '#### Options {/* #options-swizzle */}',
+      '',
+      'Flags for swizzle.',
+      '',
+      '```md',
+      '## In code {/* #not-structure */}',
+      '```',
+    ].join('\n');
+    const doc = fromMarkdown(source, { ...meta, mdx: true });
+    expect(doc?.content).not.toContain('not an id');
+    expect(doc?.content).toContain('## In code {/* #not-structure */}');
+    const chunks = chunkDocument(doc!);
+    expect(chunks.map((c) => [c.heading, c.anchor])).toEqual([
+      ['Docusaurus CLI commands › docusaurus start [siteDir]', 'docusaurus-start-sitedir'],
+      ['Docusaurus CLI commands › docusaurus start [siteDir] › Options', 'options'],
+      [
+        'Docusaurus CLI commands › docusaurus swizzle [themeName] [componentName] [siteDir]',
+        'docusaurus-swizzle',
+      ],
+      [
+        'Docusaurus CLI commands › docusaurus swizzle [themeName] [componentName] [siteDir] › Options',
+        'options-swizzle',
+      ],
+    ]);
+  });
 });
 
 describe('fromHtml', () => {

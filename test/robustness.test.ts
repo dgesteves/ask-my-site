@@ -31,6 +31,8 @@ describe('linear-time parsing of hostile input', () => {
   it('parses headings with long whitespace runs quickly', () => {
     const line = `# a${' \t'.repeat(20_000)}b`;
     expect(timed(() => chunkDocument(doc(line)))).toBeLessThan(250);
+    const ids = `## a {/* #b${' \t'.repeat(400)}`.repeat(25).concat('\n').repeat(400);
+    expect(timed(() => chunkDocument(doc(ids)))).toBeLessThan(250);
     expect(timed(() => fromMarkdown(line, { id: 'x', url: '/x' }))).toBeLessThan(250);
   });
 
@@ -97,6 +99,12 @@ describe('linear-time loaders on unclosed constructs', () => {
     ['labels before a far bracket', md(`${'[x'.repeat(n)}]: y`)],
     ['unclosed Markdown comments', md('<!-- x '.repeat(n))],
     ['unclosed MDX comments', md('{/* x '.repeat(n), true)],
+    ['unclosed MDX heading ids', md('## x {/* #a\n'.repeat(n), true)],
+    ['MDX heading ids full of openers', md(`## x ${'{/* #'.repeat(150)}\n`.repeat(n / 100), true)],
+    [
+      'MDX heading ids with long whitespace',
+      md(`## x {/* #a${' \t'.repeat(400)}*/}${' '.repeat(100)}\n`.repeat(n / 100), true),
+    ],
   ])('%s', (_, parse) => {
     expect(timed(parse)).toBeLessThan(250);
   });

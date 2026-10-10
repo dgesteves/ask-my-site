@@ -88,6 +88,22 @@ export async function embeddingSettingsKey(
   return (await sha256(stableStringify(options))).slice(0, 16);
 }
 
+/**
+ * Whether a document URL is safe to cite: a relative reference (`/docs/a`, `a/b`, `../a`) or an
+ * http(s) URL. `javascript:`, `data:` and any other scheme are not, nor is anything a browser
+ * could read as another host (`//evil.example`, backslashes) or a scheme (a colon before the
+ * first `/`), nor control characters. The dialog drops such links too; this keeps them out of
+ * the index, so a frontmatter `url` cannot put one in front of visitors.
+ */
+export function isCitableUrl(url: string): boolean {
+  const value = url.trim();
+  // eslint-disable-next-line no-control-regex
+  if (!value || /[\\\u0000-\u001f\u007f]/.test(value) || value.startsWith('//')) return false;
+  const scheme = /^([a-z][a-z\d+.-]*):/i.exec(value)?.[1];
+  if (scheme !== undefined) return /^https?$/i.test(scheme) && URL.canParse(value);
+  return !(/^[^/?#]*/.exec(value)?.[0] ?? '').includes(':');
+}
+
 interface PreparedCorpus {
   documents: SourceDocument[];
   chunks: Chunk[];
@@ -104,6 +120,12 @@ async function prepare(
   for (const document of input) {
     if (seen.has(document.id)) throw new Error(`Duplicate document id "${document.id}".`);
     seen.add(document.id);
+    if (!isCitableUrl(document.url)) {
+      throw new Error(
+        `Document "${document.id}" has the URL ${JSON.stringify(document.url)}, which a citation ` +
+          'cannot link to. Use a path, such as /docs/page, or an http(s) URL.',
+      );
+    }
   }
   const documents = [...input].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const chunks = documents.flatMap((document) => chunkDocument(document, chunking));
