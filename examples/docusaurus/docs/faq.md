@@ -14,7 +14,7 @@ Yes. ask-my-site is free and open source under the MIT license, with no paid tie
 
 ## How much does it cost to run?
 
-An answered question costs one embedding call and one model call, with at most 8,000 characters of sources in and 800 tokens out by default. A question the docs can't answer costs the embedding call only, because the model is never called. Hosting is one function and one static file. See [cost](./deployment.md#cost).
+An answered question costs one embedding call and one model call, with at most 8,000 characters of sources in and 800 tokens out by default, and a follow-up that needs rewriting one more short call. A question the docs can't answer costs the embedding call only, because the model is never called. Hosting is one function and one static file. See [cost](./deployment.md#cost).
 
 ## Do I need a vector database?
 
@@ -50,7 +50,7 @@ The relevance gate finds nothing good enough and the endpoint answers "I don't k
 
 ## Does it support follow-up questions?
 
-Not yet. Each question is answered on its own, without the conversation before it, so a follow-up has to stand alone. Condensing the conversation into a standalone question is on the roadmap.
+Yes. The dialog sends the thread with each question, and the endpoint rewrites a follow-up such as "and on Netlify?" into a question that stands on its own before it searches, with one short model call. A question that already stands on its own is not rewritten. "New question" in the dialog starts over. See [Follow-up questions](./ask-endpoint.md#follow-up-questions).
 
 ## Does it work for docs that aren't in English?
 

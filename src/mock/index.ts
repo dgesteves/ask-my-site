@@ -458,15 +458,34 @@ const usage = (text: string) => ({
 });
 
 /**
+ * The mock's rewrite of a follow-up, for the handler's `followUps` prompt: the conversation's last
+ * question and the follow-up, joined, which a real model would turn into one sentence. `null` for
+ * any other prompt.
+ */
+export function mockStandaloneQuestion(prompt: string): string | null {
+  const question = /<question-([\da-f]+)>\n([\s\S]*?)\n<\/question-\1>/.exec(prompt);
+  if (!question?.[1] || !prompt.includes(`<conversation-${question[1]}>`)) return null;
+  const nonce = question[1];
+  const users = [
+    ...prompt.matchAll(new RegExp(`<user-${nonce}>\\n([\\s\\S]*?)\\n</user-${nonce}>`, 'g')),
+  ];
+  const previous = users.at(-1)?.[1]?.trim();
+  const followUp = (question[2] ?? '').trim();
+  return previous ? `${previous} ${followUp}` : followUp;
+}
+
+/**
  * A scripted language model that streams an extractive, cited answer built from the sources in
- * its prompt. Use it for demos, tests and local development without an API key.
+ * its prompt. Use it for demos, tests and local development without an API key. Asked to rewrite
+ * a follow-up, it joins the follow-up to the question before it (see `mockStandaloneQuestion`).
  */
 export function mockLanguageModel(options: MockLanguageModelOptions = {}): MockLanguageModelV4 {
   return new MockLanguageModelV4({
     provider: 'ask-my-site',
     modelId: 'mock-extractive',
     doGenerate: ({ prompt }) => {
-      const text = extractiveAnswer(promptText(prompt));
+      const asked = promptText(prompt);
+      const text = mockStandaloneQuestion(asked) ?? extractiveAnswer(asked);
       return Promise.resolve({
         content: [{ type: 'text', text }],
         finishReason: { unified: 'stop', raw: 'stop' },

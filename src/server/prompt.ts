@@ -63,7 +63,7 @@ const escapeAttribute = (text: string): string =>
  * A random suffix for the prompt's tags, redrawn in the (astronomically unlikely) case that the
  * content already contains it, so nothing in a source or the question can close a block.
  */
-function boundaryFor(texts: readonly string[]): string {
+export function boundaryFor(texts: readonly string[]): string {
   for (;;) {
     const bytes = crypto.getRandomValues(new Uint8Array(8));
     const nonce = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');

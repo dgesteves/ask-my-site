@@ -4,6 +4,7 @@
 
 export { createAskHandler } from './handler';
 export type { AskFinishEvent, AskHandlerOptions, GenerationOptions, IndexSource } from './handler';
+export type { FollowUpOptions } from './follow-up';
 export { createMcpHandler, MCP_PROTOCOL_VERSIONS } from './mcp';
 export type { McpHandlerOptions, McpToolCallEvent } from './mcp';
 export type { McpSearchResult } from './mcp-tools';

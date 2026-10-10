@@ -19,6 +19,16 @@ export interface AskError {
   retryAfter?: number;
 }
 
+/** A question asked earlier in the thread, with its answer. */
+export interface AskTurn {
+  question: string;
+  answer: string;
+  /** The answer's own sources, which its citations number. */
+  sources: AskSource[];
+  refused: boolean;
+  truncated: boolean;
+}
+
 export interface AskState {
   status: AskStatus;
   /** The question being (or last) answered. */
@@ -36,6 +46,11 @@ export interface AskState {
   truncated: boolean;
   retrieval: 'hybrid' | 'keyword' | null;
   error: AskError | null;
+  /**
+   * The questions asked before this one, oldest first, each with its answer and sources. `ask`
+   * adds the current answer here when the next question is asked; `reset` starts a new thread.
+   */
+  turns: AskTurn[];
 }
 
 export interface UseAskOptions {
@@ -47,6 +62,12 @@ export interface UseAskOptions {
   fetch?: typeof fetch;
   /** Called once an answer completes or fails. */
   onFinish?: (state: AskState) => void;
+  /**
+   * Send the thread with each question, as `{ messages }`, so the endpoint can answer a
+   * follow-up such as "and on Netlify?" (it rewrites it to stand on its own). Default `true`;
+   * `false` asks every question on its own, as `{ question }`.
+   */
+  followUps?: boolean;
 }
 
 export interface UseAsk extends AskState {
@@ -54,9 +75,12 @@ export interface UseAsk extends AskState {
   ask: (question: string) => Promise<void>;
   /** Stops the current answer, keeping what has streamed so far. */
   stop: () => void;
-  /** Back to idle. */
+  /** Back to idle, with a new thread. */
   reset: () => void;
 }
+
+/** Earlier questions sent with a follow-up, with their answers. */
+const MAX_TURNS = 3;
 
 const INITIAL: AskState = {
   status: 'idle',
@@ -67,7 +91,23 @@ const INITIAL: AskState = {
   truncated: false,
   retrieval: null,
   error: null,
+  turns: [],
 };
+
+/** The request body: the thread as `useChat` sends it, or the question alone. */
+function requestBody(question: string, turns: readonly AskTurn[]): string {
+  if (turns.length === 0) return JSON.stringify({ question });
+  const text = (value: string) => [{ type: 'text', text: value }];
+  return JSON.stringify({
+    messages: [
+      ...turns.slice(-MAX_TURNS).flatMap((turn) => [
+        { role: 'user', parts: text(turn.question) },
+        { role: 'assistant', parts: text(turn.answer) },
+      ]),
+      { role: 'user', parts: text(question) },
+    ],
+  });
+}
 
 const isAbort = (error: unknown): boolean =>
   error instanceof DOMException
@@ -166,6 +206,8 @@ function frameScheduler(): { schedule: (fn: () => void) => void; flush: () => vo
  */
 export function useAsk(options: UseAskOptions = {}): UseAsk {
   const [state, setState] = useState<AskState>(INITIAL);
+  // The state as last committed, for `ask` to read the thread from without depending on it.
+  const stateRef = useRef<AskState>(INITIAL);
   const controllerRef = useRef<AbortController | null>(null);
   // The in-flight answer, ahead of state by up to one animation frame; stop() keeps all of it.
   const liveAnswerRef = useRef('');
@@ -183,13 +225,40 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     const controller = new AbortController();
     controllerRef.current = controller;
     liveAnswerRef.current = '';
-    const { endpoint = '/api/ask', headers, fetch: fetcher = fetch, onFinish } = optionsRef.current;
+    const {
+      endpoint = '/api/ask',
+      headers,
+      fetch: fetcher = fetch,
+      onFinish,
+      followUps = true,
+    } = optionsRef.current;
 
-    let current: AskState = { ...INITIAL, status: 'loading', question };
+    // The answer on screen joins the thread, if it is one: complete, or stopped with some text.
+    const previous = stateRef.current;
+    const turns =
+      followUps && previous.question && previous.status === 'done'
+        ? [
+            ...previous.turns,
+            {
+              question: previous.question,
+              answer: previous.answer,
+              sources: previous.sources,
+              refused: previous.refused,
+              truncated: previous.truncated,
+            },
+          ]
+        : followUps
+          ? previous.turns
+          : [];
+
+    let current: AskState = { ...INITIAL, turns, status: 'loading', question };
     const commit = (next: Partial<AskState>): void => {
       current = { ...current, ...next };
       const snapshot = current;
-      if (!controller.signal.aborted) setState(snapshot);
+      if (!controller.signal.aborted) {
+        stateRef.current = snapshot;
+        setState(snapshot);
+      }
     };
     commit({});
 
@@ -198,7 +267,7 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
       response = await fetcher(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...headers },
-        body: JSON.stringify({ question }),
+        body: requestBody(question, turns),
         signal: controller.signal,
       });
     } catch (error) {
@@ -275,12 +344,15 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     setState((previous) => {
       if (previous.status !== 'loading' && previous.status !== 'streaming') return previous;
       const kept = answer.length > previous.answer.length ? answer : previous.answer;
-      return { ...previous, answer: kept, status: kept ? 'done' : 'idle' };
+      const next: AskState = { ...previous, answer: kept, status: kept ? 'done' : 'idle' };
+      stateRef.current = next;
+      return next;
     });
   }, []);
 
   const reset = useCallback((): void => {
     controllerRef.current?.abort();
+    stateRef.current = INITIAL;
     setState(INITIAL);
   }, []);
 

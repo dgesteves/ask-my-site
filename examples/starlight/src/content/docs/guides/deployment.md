@@ -178,4 +178,4 @@ Loading the index is a one-time cost per server instance: about 32 ms for 1,000 
 
 ## Cost
 
-ask-my-site itself is free and MIT-licensed; you pay your model provider. Each answered question costs one embedding call for the question and one model call for the answer, with at most 8,000 characters of sources in (`maxContextChars`) and at most 800 tokens out (`generation.maxOutputTokens`). A refused question costs the embedding call only: the model is never called. Indexing costs one embedding call per changed chunk, since unchanged chunks reuse their vectors.
+ask-my-site itself is free and MIT-licensed; you pay your model provider. Each answered question costs one embedding call for the question and one model call for the answer, with at most 8,000 characters of sources in (`maxContextChars`) and at most 800 tokens out (`generation.maxOutputTokens`). A follow-up that needs rewriting costs one more call, with the last three questions and answers in and at most 200 tokens out. A refused question costs the embedding call only: the model is never called. Indexing costs one embedding call per changed chunk, since unchanged chunks reuse their vectors.

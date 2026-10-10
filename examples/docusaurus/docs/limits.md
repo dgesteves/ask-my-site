@@ -20,9 +20,9 @@ The index is rebuilt when you deploy. Content that changes between deploys, or d
 
 Keyword search uses an English stopword list and light plural stripping. Other languages still work through the embedding model, which handles them, but keyword matching is weaker for them. Per-language stopwords and stemming are on the roadmap.
 
-## Single-turn answers
+## Follow-ups and the top sources
 
-The model answers one question at a time, from the top few sources only. There is no conversation memory, so a follow-up question must stand on its own. Follow-up questions, by condensing the conversation into a standalone question before retrieval, are on the roadmap.
+The model answers from the top few sources only, one question at a time. A follow-up is rewritten into a standalone question first, from the last three questions and their answers, so it can lean on them; nothing older is remembered. Whether a question needs the rewrite is decided by an English check, so on a site in another language set `followUps: { always: true }`.
 
 ## Content it cannot see
 
@@ -34,7 +34,7 @@ MDX is reduced to text without being evaluated, so components that render conten
 
 ## Tuning per embedding model
 
-The relevance gate's thresholds are calibrated for OpenAI's `text-embedding-3-small`. Another embedding model needs its own `minSimilarity`, found by checking the `best` scores `retrieve()` reports on real questions. That is the main tuning cost.
+The relevance gate's thresholds are calibrated for OpenAI's `text-embedding-3-small`, and measured for Workers AI's `@cf/baai/bge-small-en-v1.5`. Another embedding model needs its own `minSimilarity`, found by checking the `best` scores `retrieve()` reports on real questions. That is the main tuning cost.
 
 ## Prompt injection
 
@@ -48,7 +48,6 @@ Text on your pages reaches the model as data inside tags it cannot forge, but it
 
 ## What is planned
 
-- **Follow-up questions:** condense the conversation into a standalone question before retrieval.
 - **A reranking hook:** an optional AI SDK reranking model over the fused candidates.
 - **Retrieval evals in CI for your site:** a golden question set scored for hit rate and refusal precision, next to `--check`.
 - **Bigger corpora:** sharded indexes loaded per section, and binary quantization with int8 rescoring.

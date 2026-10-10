@@ -2,6 +2,7 @@ import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   generateId,
+  generateText,
   streamText,
   toUIMessageStream,
   type EmbeddingModel,
@@ -32,6 +33,15 @@ import {
   type AnswerCacheOptions,
   type CachedAnswer,
 } from './cache';
+import {
+  FOLLOW_UP_INSTRUCTIONS,
+  FOLLOW_UP_MAX_TOKENS,
+  followUpPrompt,
+  looksStandalone,
+  standaloneQuestion,
+  type ConversationTurn,
+  type FollowUpOptions,
+} from './follow-up';
 import { buildSources, defaultInstructions, formatPrompt } from './prompt';
 import type { RateLimiter, RateLimitResult } from './rate-limit';
 import {
@@ -131,6 +141,14 @@ export interface AskHandlerOptions {
   answerCache?: boolean | AnswerCacheOptions;
   /** Extra headers on every response, e.g. for CORS. */
   headers?: Record<string, string>;
+  /**
+   * Follow-up questions. A request with the conversation (`{ messages }`, as the dialog and
+   * `useChat` send it) whose last question does not stand on its own ("and on Netlify?") has it
+   * rewritten into one that does, with one short call to `model` (or `followUps.model`), before
+   * retrieval; a question that already stands on its own is not rewritten. The rewrite counts
+   * against `budget`. `false` answers every question on its own, as before.
+   */
+  followUps?: false | FollowUpOptions;
   /** Called once per answered request, after the answer is complete. */
   onFinish?: (event: AskFinishEvent) => void | Promise<void>;
   /** Called with errors that were handled (embedding fallback, model errors). Default `console.error`. */
@@ -150,6 +168,11 @@ export interface AskFinishEvent {
   usage?: LanguageModelUsage;
   /** True when the answer came from `answerCache`, so no model was called. */
   cached: boolean;
+  /**
+   * For a follow-up that was rewritten: the standalone question retrieval and the answer used,
+   * and the rewrite's token usage. `question` is the question as the visitor asked it.
+   */
+  followUp?: { question: string; usage?: LanguageModelUsage };
 }
 
 const MODEL_ERROR_MESSAGE = 'The answer could not be generated. Please try again.';
@@ -172,15 +195,48 @@ const requestSchema = z.union([
   }),
 ]);
 
-function questionFrom(body: z.infer<typeof requestSchema>): string {
-  if ('question' in body) return body.question.trim();
-  const last = [...body.messages].reverse().find((m) => m.role === 'user');
-  if (!last) return '';
-  const fromParts = (last.parts ?? [])
+/** The text of a message, from its text parts or its `content`. */
+function messageText(message: {
+  content?: string | undefined;
+  parts?: { type: string; text?: unknown }[] | undefined;
+}): string {
+  const fromParts = (message.parts ?? [])
     .filter((part) => part.type === 'text' && typeof part.text === 'string')
     .map((part) => String(part.text))
     .join('\n');
-  return (fromParts || last.content || '').trim();
+  return (fromParts || message.content || '').trim();
+}
+
+/** The question, and the conversation before it: the messages before the last user message. */
+function conversationFrom(body: z.infer<typeof requestSchema>): {
+  question: string;
+  history: ConversationTurn[];
+} {
+  if ('question' in body) return { question: body.question.trim(), history: [] };
+  const last = body.messages.findLastIndex((message) => message.role === 'user');
+  if (last === -1) return { question: '', history: [] };
+  const history = body.messages
+    .slice(0, last)
+    .filter(
+      (message): message is typeof message & { role: 'user' | 'assistant' } =>
+        message.role === 'user' || message.role === 'assistant',
+    )
+    .map((message) => ({ role: message.role, text: messageText(message) }))
+    .filter((turn) => turn.text);
+  const lastMessage = body.messages[last];
+  return { question: lastMessage ? messageText(lastMessage) : '', history };
+}
+
+/** Input plus output tokens, when the usage says. */
+function totalTokens(usage: LanguageModelUsage | undefined): number | undefined {
+  if (!usage) return undefined;
+  const { totalTokens: total, inputTokens, outputTokens } = usage;
+  return (
+    total ??
+    (inputTokens === undefined && outputTokens === undefined
+      ? undefined
+      : (inputTokens ?? 0) + (outputTokens ?? 0))
+  );
 }
 
 /**
@@ -230,6 +286,21 @@ export function createAskHandler(
 
   const json = (status: number, body: AskErrorBody, headers?: Record<string, string>): Response =>
     Response.json(body, { status, headers: { ...baseHeaders, ...headers } });
+
+  const followUps =
+    options.followUps === false
+      ? null
+      : {
+          model: options.followUps?.model ?? options.model,
+          always: options.followUps?.always ?? false,
+          maxTurns: options.followUps?.maxTurns ?? 3,
+          instructions: options.followUps?.instructions ?? FOLLOW_UP_INSTRUCTIONS,
+        };
+  if (followUps && (!Number.isInteger(followUps.maxTurns) || followUps.maxTurns < 1)) {
+    throw new RangeError(
+      `followUps.maxTurns must be a positive integer (got ${String(followUps.maxTurns)}).`,
+    );
+  }
 
   const maxOutputTokens = options.generation?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
   const budget = options.budget ? createBudget(options.budget) : null;
@@ -342,7 +413,9 @@ export function createAskHandler(
       return json(400, { error: { code: 'invalid_json', message: 'Body must be JSON.' } });
     }
     const parsed = requestSchema.safeParse(body);
-    const question = parsed.success ? questionFrom(parsed.data) : '';
+    const { question, history: conversation } = parsed.success
+      ? conversationFrom(parsed.data)
+      : { question: '', history: [] };
     if (!question) {
       return json(400, {
         error: { code: 'invalid_request', message: 'Send { "question": string }.' },
@@ -374,7 +447,50 @@ export function createAskHandler(
       return misconfigured(error);
     }
 
-    const cacheKey = cache ? await cache.key(index, question) : null;
+    // A follow-up that does not stand on its own is rewritten first, so everything after it,
+    // the cache included, works from the standalone question. That is a model call, so the
+    // question counts against the budget before it, not after a cache hit as otherwise.
+    const history = followUps ? conversation.slice(-2 * followUps.maxTurns) : [];
+    let searched = question;
+    let followUp: AskFinishEvent['followUp'];
+    let admitted = false;
+    if (followUps && history.length > 0 && (followUps.always || !looksStandalone(question))) {
+      if (budget) {
+        const admission = await overBudget(() => budget.admit());
+        if ('response' in admission) return admission.response;
+        admitted = true;
+      }
+      const prompt = followUpPrompt(history, question);
+      let settle: ((actual: number | undefined) => Promise<void>) | null = null;
+      if (budget) {
+        const estimate =
+          Math.ceil((followUps.instructions.length + prompt.length) / 3) + FOLLOW_UP_MAX_TOKENS;
+        const reserved = await overBudget(() => budget.reserve(estimate));
+        if ('response' in reserved) return reserved.response;
+        if (reserved.result?.allowed) settle = reserved.result.settle;
+      }
+      try {
+        const result = await generateText({
+          model: followUps.model,
+          instructions: followUps.instructions,
+          prompt,
+          maxOutputTokens: FOLLOW_UP_MAX_TOKENS,
+          temperature: 0,
+          reasoning: 'minimal',
+          maxRetries: 1,
+          abortSignal: request.signal,
+        });
+        await settle?.(totalTokens(result.usage)).catch(reportError);
+        searched = standaloneQuestion(result.text, question, maxQuestionLength);
+        followUp = { question: searched, usage: result.usage };
+      } catch (error) {
+        if (request.signal.aborted) return new Response(null, { status: CLIENT_CLOSED });
+        // Answer the question as it was asked rather than fail it.
+        reportError(error);
+      }
+    }
+
+    const cacheKey = cache ? await cache.key(index, searched) : null;
     if (cache && cacheKey) {
       const hit = await cache.get(cacheKey, reportError);
       if (hit) {
@@ -386,24 +502,25 @@ export function createAskHandler(
             refused: hit.refused,
             retrieval: { hits: [], answerable: !hit.refused, mode: hit.retrieval, best: hit.best },
             cached: true,
+            ...(followUp ? { followUp } : {}),
           }),
         );
       }
     }
 
-    if (budget) {
-      const admitted = await overBudget(() => budget.admit());
-      if ('response' in admitted) return admitted.response;
+    if (budget && !admitted) {
+      const admission = await overBudget(() => budget.admit());
+      if ('response' in admission) return admission.response;
     }
 
     let queryVector: number[] | null;
     try {
-      queryVector = await embedQuery(question, index, options, request.signal, reportError);
+      queryVector = await embedQuery(searched, index, options, request.signal, reportError);
     } catch (error) {
       return misconfigured(error);
     }
 
-    const retrieval = retrieve(index, { text: question, vector: queryVector }, options.retrieval);
+    const retrieval = retrieve(index, { text: searched, vector: queryVector }, options.retrieval);
     const promptSources = buildSources(retrieval.hits, maxContextChars);
     const sources: AskSource[] = promptSources.map(({ id, url, title, heading }) => ({
       id,
@@ -435,11 +552,12 @@ export function createAskHandler(
           refused: true,
           retrieval,
           cached: false,
+          ...(followUp ? { followUp } : {}),
         }),
       );
     }
 
-    const prompt = formatPrompt(question, promptSources);
+    const prompt = formatPrompt(searched, promptSources);
     let settle: ((actual: number | undefined) => Promise<void>) | null = null;
     if (budget) {
       // The worst case: the prompt at a pessimistic three characters a token, plus every output
@@ -464,15 +582,7 @@ export function createAskHandler(
           reportError(error);
         },
         onEnd: async (event) => {
-          if (settle) {
-            const { totalTokens, inputTokens, outputTokens } = event.usage;
-            const used =
-              totalTokens ??
-              (inputTokens === undefined && outputTokens === undefined
-                ? undefined
-                : (inputTokens ?? 0) + (outputTokens ?? 0));
-            await settle(used).catch(reportError);
-          }
+          if (settle) await settle(totalTokens(event.usage)).catch(reportError);
           if (!failed && event.finishReason === 'stop') remember(event.text);
           await finish({
             question,
@@ -482,6 +592,7 @@ export function createAskHandler(
             retrieval,
             usage: event.usage,
             cached: false,
+            ...(followUp ? { followUp } : {}),
           });
         },
         // A client that hung up is not an error; `generation.timeout` firing is.

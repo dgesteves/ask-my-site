@@ -10,12 +10,13 @@ description: 'createAskHandler options, the request and response, errors and the
 
 1. The body must be JSON (`content-type: application/json`); anything else gets a 415.
 2. The rate limiter runs: 10 questions a minute per client IP unless you pass your own, or `false`.
-3. The body is validated: `{ "question": string }` of up to 500 characters, in at most 64 KiB.
-4. With `answerCache`, a question asked before is answered from the cache, and nothing else runs.
-5. With `budget`, the question counts against the day's questions.
-6. The question is embedded, and hybrid retrieval runs over the in-memory index.
-7. If nothing clears the relevance gate, the "I don't know" message streams back and the model is never called.
-8. Otherwise the top sources are numbered and, if the answer's worst case fits in the day's token `budget`, sent to the model with grounding instructions, and the answer streams back with its citations.
+3. The body is validated: `{ "question": string }` of up to 500 characters, or the conversation as `{ messages }`, in at most 64 KiB.
+4. A follow-up that does not stand on its own is rewritten into a question that does, with one short model call, and counts against the `budget` first. Everything after works from the rewritten question.
+5. With `answerCache`, a question asked before is answered from the cache, and nothing else runs.
+6. With `budget`, the question counts against the day's questions.
+7. The question is embedded, and hybrid retrieval runs over the in-memory index.
+8. If nothing clears the relevance gate, the "I don't know" message streams back and the model is never called.
+9. Otherwise the top sources are numbered and, if the answer's worst case fits in the day's token `budget`, sent to the model with grounding instructions, and the answer streams back with its citations.
 
 ## Handler options
 
@@ -37,8 +38,9 @@ description: 'createAskHandler options, the request and response, errors and the
 | `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`…                                                                                                 |
 | `budget`                   | none                        | `{ requestsPerDay, tokensPerDay, store }`: a daily cap, then a 429 with code `budget_exceeded`.                                                                                   |
 | `answerCache`              | off                         | `true`, or `{ store, ttlSeconds }`: repeated questions are answered from the cache.                                                                                               |
+| `followUps`                | on                          | `{ model, always, maxTurns, instructions }` for rewriting follow-ups; `false` answers every question on its own.                                                                  |
 | `headers`                  | none                        | Added to every response, such as CORS headers.                                                                                                                                    |
-| `onFinish`                 | none                        | Called after each answer with `{ question, answer, sources, refused, retrieval, usage }`.                                                                                         |
+| `onFinish`                 | none                        | Called after each answer with `{ question, answer, sources, refused, retrieval, usage, followUp }`.                                                                               |
 | `onError`                  | `console.error`             | Handled errors: embedding fallbacks, model failures, a failing limiter, misconfiguration.                                                                                         |
 
 ## Logging questions and answers
@@ -47,7 +49,15 @@ description: 'createAskHandler options, the request and response, errors and the
 
 ## Request body
 
-Send `{ "question": "…" }` as `application/json`. The `{ messages }` body that the AI SDK's `useChat` sends is accepted too, and its last user message is the question. Answers are single-turn: earlier messages are not used.
+Send `{ "question": "…" }` as `application/json` for a question on its own, or the conversation as `{ messages }`, as the dialog and the AI SDK's `useChat` send it: the last user message is the question, and the messages before it are the conversation.
+
+## Follow-up questions
+
+A follow-up such as "and on Netlify?" leans on the conversation, and searched on its own it finds the wrong pages or none. So before retrieval, the handler rewrites it into a question that stands on its own ("How do I deploy the endpoint to Netlify?") with one short call to the model: the last three questions and their answers in, at most 200 tokens out, with minimal reasoning. Retrieval, the relevance gate, the answer cache and the answer then work from the rewritten question, and each answer cites only its own sources.
+
+A question that already stands on its own is not rewritten, so it costs nothing extra. That check reads English: it looks for at least four words and none that point back, such as "it", "that" or "there". For a site whose visitors ask in other languages, `followUps: { always: true }` rewrites every question asked after another. `followUps.model` makes the rewrites with a smaller model than the answers, and `followUps: false` answers every question on its own.
+
+The rewrite counts against the `budget`: the question is admitted before it, and its tokens are reserved and settled like the answer's. If the rewrite fails, the question is answered as it was asked, and the error goes to `onError`. `onFinish` gets the rewritten question and the rewrite's usage as `followUp`.
 
 ## Errors
 

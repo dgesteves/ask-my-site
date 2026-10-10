@@ -63,6 +63,7 @@ export function DialogPanel({
   ...askOptions
 }: DialogPanelProps): ReactNode {
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState('');
   const state = useAsk(askOptions);
   const descriptionId = useId();
@@ -86,13 +87,25 @@ export function DialogPanel({
     setOpen(false);
   };
 
+  /** Starts a new thread: the next question is asked on its own. */
+  const newQuestion = (): void => {
+    state.reset();
+    setQuery('');
+    inputRef.current?.focus();
+  };
+
   const busy = state.status === 'loading' || state.status === 'streaming';
   const trimmedQuery = query.trim();
-  const showList = state.status === 'idle' || trimmedQuery !== (state.question ?? '');
+  const answering = state.status !== 'idle';
+  const showList = !answering || trimmedQuery !== (state.question ?? '');
+  // With an answer on screen, a new question follows up on it, and the suggestions are done with.
+  const followingUp = answering && askOptions.followUps !== false;
   const normalized = trimmedQuery.toLowerCase();
-  const matchingSuggestions = normalized
-    ? suggestions.filter((s) => s.toLowerCase().includes(normalized) && s.trim() !== trimmedQuery)
-    : suggestions;
+  const matchingSuggestions = answering
+    ? []
+    : normalized
+      ? suggestions.filter((s) => s.toLowerCase().includes(normalized) && s.trim() !== trimmedQuery)
+      : suggestions;
   const themeAttribute = theme === 'system' ? undefined : theme;
 
   return (
@@ -134,6 +147,7 @@ export function DialogPanel({
             <div className="ask-input-row">
               <SearchIcon />
               <Command.Input
+                ref={inputRef}
                 value={query}
                 onValueChange={setQuery}
                 placeholder={placeholder}
@@ -162,7 +176,7 @@ export function DialogPanel({
                       }}
                       className={cx('ask-item', 'ask-item-primary', classNames.item)}
                     >
-                      <span className="ask-item-label">Ask</span>
+                      <span className="ask-item-label">{followingUp ? 'Follow up' : 'Ask'}</span>
                       <span className="ask-item-text">{trimmedQuery}</span>
                       <kbd className="ask-kbd">↵</kbd>
                     </Command.Item>
@@ -186,14 +200,15 @@ export function DialogPanel({
                 </>
               ) : null}
             </Command.List>
-            {showList ? null : (
+            {answering ? (
               <AnswerPanel
                 state={state}
                 onNavigate={navigate}
+                onNewQuestion={newQuestion}
                 classNames={classNames}
                 links={links}
               />
-            )}
+            ) : null}
           </Command>
 
           <p role="status" className="ask-sr-only">
@@ -216,19 +231,38 @@ export function DialogPanel({
 function AnswerPanel({
   state,
   onNavigate,
+  onNewQuestion,
   classNames,
   links,
 }: {
   state: ReturnType<typeof useAsk>;
   onNavigate: (url: string, event: MouseEvent<HTMLAnchorElement>) => void;
+  onNewQuestion: () => void;
   classNames: Partial<Record<AskDialogSlot, string>>;
   links: AnswerLinks;
 }): ReactNode {
   const streaming = state.status === 'streaming';
+  const settled = state.status === 'done' || state.status === 'error';
   // Once the answer is complete, sources it never cites are de-emphasized.
   const cited = state.status === 'done' ? citedSourceIds(state.answer) : null;
+  const thread = state.turns.length > 0;
   return (
     <div className="ask-panel">
+      {/* The thread so far: each answer with its own citations, which link to its own sources. */}
+      {state.turns.map((turn, i) => (
+        <div key={i} className="ask-turn">
+          <p className="ask-turn-question">{turn.question}</p>
+          <div className="ask-answer" data-refused={turn.refused || undefined}>
+            <AskAnswer
+              text={turn.answer}
+              sources={turn.sources}
+              onNavigate={onNavigate}
+              links={links}
+            />
+          </div>
+        </div>
+      ))}
+      {thread && state.question ? <p className="ask-turn-question">{state.question}</p> : null}
       <div
         className={cx('ask-answer', classNames.answer)}
         aria-live="polite"
@@ -303,6 +337,14 @@ function AnswerPanel({
             })}
           </ol>
         </nav>
+      ) : null}
+
+      {settled ? (
+        <div className="ask-actions">
+          <button type="button" className="ask-new" onClick={onNewQuestion}>
+            New question
+          </button>
+        </div>
       ) : null}
     </div>
   );
