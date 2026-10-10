@@ -19,5 +19,10 @@
     "wrangler": "^4.0.0",
     "@cloudflare/vitest-plugin": "^1.4.0",
     "vitest": "^5.0.0"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "workerd": true,
+    "fsevents": false
   }
 }

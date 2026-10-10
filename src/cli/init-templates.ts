@@ -559,6 +559,9 @@ export function standaloneWorkerFiles(
             typescript: versions.typescript,
             wrangler: versions.wrangler,
           },
+          // npm 12 runs no install scripts unless allowed. Wrangler's esbuild and workerd set up
+          // their binaries in one; fsevents (macOS file watching) has a prebuilt fallback.
+          allowScripts: { esbuild: true, workerd: true, fsevents: false },
         },
         null,
         2,

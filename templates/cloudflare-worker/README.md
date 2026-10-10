@@ -22,6 +22,8 @@ Wrangler prints the Worker's URL. Point the dialog at it, plus `/api/ask`:
 - **Starlight:** `ondocs({ endpoint: 'https://my-docs-ask.<subdomain>.workers.dev/api/ask' })`
 - **Any other site:** `data-endpoint="https://my-docs-ask.<subdomain>.workers.dev/api/ask"` on the script tag
 
+`package.json` allows the install scripts of esbuild and workerd, which Wrangler needs to set up their binaries, and declines fsevents (macOS file watching, with a prebuilt fallback). npm 12 runs no install scripts unless they are allowed this way.
+
 The site must serve its index at `SITE_URL/ask-index.json`. The Docusaurus and Starlight plugins write it with every build; for another generator, run `npx ondocs index <build folder> -o <build folder>/ask-index.json -e none` after the build.
 
 ## What it does
