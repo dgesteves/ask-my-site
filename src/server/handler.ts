@@ -35,7 +35,7 @@ import {
   type CachedAnswer,
 } from './cache';
 import { buildSources, defaultInstructions, formatPrompt } from './prompt';
-import type { RateLimiter, RateLimitResult } from './rate-limit';
+import { memoryRateLimit, type RateLimiter, type RateLimitResult } from './rate-limit';
 
 type StreamTextOptions = Parameters<typeof streamText>[0];
 
@@ -90,7 +90,16 @@ export interface AskHandlerOptions {
   maxBodyBytes?: number;
   /** Answer used when retrieval finds nothing relevant. The model is not called. */
   noAnswerMessage?: string;
-  rateLimit?: RateLimiter;
+  /**
+   * Limits how often one client may ask, before any work is done. Default `memoryRateLimit()`:
+   * 10 questions a minute per client IP, read from the last `X-Forwarded-For` entry (which Vercel
+   * sets), counted per server instance. Pass your own limiter, such as
+   * `memoryRateLimit({ trustedHeader: 'cf-connecting-ip' })` on Cloudflare or `upstashRateLimit`
+   * for a limit shared by every instance, or `false` when something in front of the endpoint
+   * already limits it. Requests that carry no `X-Forwarded-For` share one bucket under the default
+   * limiter, and the first one is reported to `onError`.
+   */
+  rateLimit?: RateLimiter | false;
   /**
    * What to do when `rateLimit` throws or rejects, e.g. because Redis is unreachable. `"closed"`
    * (the default) answers 503 without calling the model; `"open"` answers as if the request were
@@ -228,6 +237,8 @@ export function createAskHandler(
     ((error: unknown) => {
       console.error('[ask-my-site]', error);
     });
+  const rateLimit =
+    options.rateLimit === undefined ? defaultRateLimit(reportError) : options.rateLimit || null;
   const baseHeaders = { 'cache-control': 'no-store', ...options.headers };
   // The answer has already streamed when `onFinish` runs, so its failure (an analytics write,
   // say) is reported, never turned into an error part the visitor sees.
@@ -318,10 +329,10 @@ export function createAskHandler(
       });
     }
 
-    if (options.rateLimit) {
+    if (rateLimit) {
       let limit: RateLimitResult;
       try {
-        limit = await options.rateLimit(request);
+        limit = await rateLimit(request);
       } catch (error) {
         // Failing closed by default: the limiter is what stands between the endpoint and an
         // unbounded model bill, and its outage can be provoked (a flood can exhaust a Redis
@@ -709,4 +720,32 @@ async function embedQuery(
     );
   }
   return embedding;
+}
+
+/** What `rateLimit` defaults to: 10 questions a minute per client IP, per instance. */
+const DEFAULT_RATE_LIMIT = { limit: 10, windowMs: 60_000 } as const;
+
+/**
+ * The limiter used when `rateLimit` is not given. A request without an `X-Forwarded-For` header
+ * has no client IP to key on, so all such requests share one bucket: on a platform that does not
+ * set the header, that is one 10-a-minute limit for every visitor, which errs on the side of the
+ * bill rather than letting them through unlimited. The first one is reported, with the fix.
+ */
+function defaultRateLimit(report: (error: unknown) => void): RateLimiter {
+  const limiter = memoryRateLimit(DEFAULT_RATE_LIMIT);
+  let reported = false;
+  return (request) => {
+    if (!reported && !request.headers.get('x-forwarded-for')?.trim()) {
+      reported = true;
+      report(
+        new Error(
+          'The default rate limit found no X-Forwarded-For header, so every request without one ' +
+            `shares a single bucket of ${String(DEFAULT_RATE_LIMIT.limit)} questions a minute. ` +
+            "Pass rateLimit: memoryRateLimit({ trustedHeader: '<the client IP header your " +
+            "platform sets>' }), or rateLimit: false if something else limits this endpoint.",
+        ),
+      );
+    }
+    return limiter(request);
+  };
 }

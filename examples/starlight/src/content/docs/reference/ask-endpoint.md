@@ -11,7 +11,7 @@ sidebar:
 ## What happens per request
 
 1. The body must be JSON (`content-type: application/json`); anything else gets a 415.
-2. The rate limiter runs, if one is configured.
+2. The rate limiter runs: 10 questions a minute per client IP unless you pass your own, or `false`.
 3. The body is validated: `{ "question": string }` of up to 500 characters, in at most 64 KiB.
 4. With `answerCache`, a question asked before is answered from the cache, and nothing else runs.
 5. With `budget`, the question counts against the day's questions.
@@ -34,7 +34,7 @@ sidebar:
 | `maxQuestionLength`        | `500`                       | Longer questions get a 400.                                                                                      |
 | `maxBodyBytes`             | 64 KiB                      | Counted while reading the body.                                                                                  |
 | `noAnswerMessage`          | "I don't know. I couldn't…" | Streamed when nothing is relevant.                                                                               |
-| `rateLimit`                | none                        | `(request) => { success, limit?, remaining?, reset? }`, sync or async.                                           |
+| `rateLimit`                | 10 a minute per IP          | `memoryRateLimit()`; any `(request) => { success, … }` replaces it, and `false` turns it off.                    |
 | `rateLimitFailure`         | `"closed"`                  | When `rateLimit` throws: `"closed"` answers 503, `"open"` answers anyway.                                        |
 | `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`…                                |
 | `budget`                   | none                        | `{ requestsPerDay, tokensPerDay, store }`: a daily cap, then a 429 with code `budget_exceeded`.                  |
