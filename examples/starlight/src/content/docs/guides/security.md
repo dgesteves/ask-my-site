@@ -10,7 +10,7 @@ A public ask endpoint spends your model budget on every question, so it needs a 
 
 ## Add a rate limit
 
-To add rate limiting, pass `rateLimit` to `createAskHandler`. `memoryRateLimit` is a token bucket per client IP, kept in the memory of one server instance:
+The handler rate-limits by default: 10 questions a minute per client IP, read from `X-Forwarded-For`, which suits Vercel. To set your own limit, or to read the IP header your platform sets, pass `rateLimit` to `createAskHandler`. `memoryRateLimit` is a token bucket per client IP, kept in the memory of one server instance:
 
 ```ts
 import { openai } from '@ai-sdk/openai';
@@ -39,7 +39,7 @@ A rate limit is only as strong as its key. Both limiters key each request by the
 | Fly.io                        | `trustedHeader: 'fly-client-ip'`                                                               |
 | Behind your own reverse proxy | Nothing if it appends to `X-Forwarded-For`; otherwise the header it sets, such as `x-real-ip`. |
 
-Requests without the header share one `"anonymous"` bucket. `key: (request) => string` replaces the lookup, for example to limit per signed-in user.
+Requests without the header share one `"anonymous"` bucket. On a platform that does not set `X-Forwarded-For`, the default limiter is therefore one limit of 10 a minute for all visitors together, which errs on the side of your bill, and the handler reports the first such request to `onError` with the setting to change. Pass `rateLimit: false` only when something in front of the endpoint already limits it. `key: (request) => string` replaces the lookup, for example to limit per signed-in user.
 
 ## When the rate limiter fails
 

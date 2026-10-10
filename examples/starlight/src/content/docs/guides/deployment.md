@@ -33,13 +33,14 @@ To deploy the endpoint of a static site, such as a Docusaurus or Astro site, to 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
 
 export const POST = createAskHandler({
   index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
   model: openai('gpt-5.4-mini'),
   embeddingModel: openai.embedding('text-embedding-3-small'),
   siteName: 'Acme Docs',
+  rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000 }),
 });
 ```
 
@@ -84,7 +85,7 @@ To deploy to Cloudflare Pages, add a Pages Function at `functions/api/ask.ts`. I
 ```ts
 // functions/api/ask.ts
 import { createOpenAI } from '@ai-sdk/openai';
-import { createAskHandler } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
 
 const INDEX = '/ask-index.json';
 
@@ -103,12 +104,13 @@ export const onRequest: PagesFunction<{ OPENAI_API_KEY: string; ASSETS: Fetcher 
     },
     model: openai('gpt-5.4-mini'),
     embeddingModel: openai.embedding('text-embedding-3-small'),
+    rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
   });
   return handler(request);
 };
 ```
 
-In a Cloudflare Worker, `export default { fetch: handler }` serves it. On Cloudflare, rate-limit with `trustedHeader: 'cf-connecting-ip'`.
+In a Cloudflare Worker, `export default { fetch: handler }` serves it. On Cloudflare, always rate-limit with `trustedHeader: 'cf-connecting-ip'`, as above: the default limiter reads `X-Forwarded-For`, which is not the header Cloudflare vouches for.
 
 ## Environment variables
 

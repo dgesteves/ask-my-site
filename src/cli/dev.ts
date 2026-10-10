@@ -14,7 +14,7 @@ import { MOCK_MIN_SIMILARITY, mockEmbeddingModel, mockLanguageModel } from '../m
 import { readIndexFile } from '../node';
 import { importOptional } from '../node/optional';
 import type { RetrievalOptions } from '../search/retrieve';
-import { createAskHandler } from '../server';
+import { createAskHandler, memoryRateLimit } from '../server';
 import type { CliIO } from './main';
 
 export const DEV_USAGE = `Usage: ask-my-site dev [options]
@@ -33,7 +33,7 @@ Options:
   -h, --help                   Show this help
 
 .env and .env.local in the working directory are loaded first. A rebuilt index is picked up on
-the next question.`;
+the next question. Up to 30 questions a minute are answered.`;
 
 /** Where `dev` looks for an index: the CLI's output, then Docusaurus's and Astro's build output. */
 export const INDEX_FILES = ['ask-index.json', 'build/ask-index.json', 'dist/ask-index.json'];
@@ -188,6 +188,9 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     const handler = createAskHandler({
       index,
       ...models,
+      // Every question comes from this machine, so one bucket, roomier than a public endpoint's
+      // default, still bounds what a runaway page can spend of your key.
+      rateLimit: memoryRateLimit({ limit: 30, windowMs: 60_000, key: () => 'local' }),
       onFinish: ({ question, refused, sources }) => {
         options.log(
           `  ${refused ? 'refused' : `answered from ${String(sources.length)} sources`}: ${question}`,

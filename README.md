@@ -220,13 +220,15 @@ A Docusaurus site is static, so the endpoint runs as a function on your host. It
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
 
 export const POST = createAskHandler({
   index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
   model: openai('gpt-5.4-mini'),
   embeddingModel: openai.embedding('text-embedding-3-small'),
   siteName: 'Acme Docs',
+  // Per client IP, from the X-Forwarded-For header Vercel sets.
+  rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000 }),
 });
 ```
 
@@ -273,7 +275,7 @@ Include the index in the function's bundle with `netlify.toml`:
 
 ```ts
 import { createOpenAI } from '@ai-sdk/openai';
-import { createAskHandler } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
 
 // `${baseUrl}ask-index.json`: '/docs/ask-index.json' for `baseUrl: '/docs/'`.
 const INDEX = '/ask-index.json';
@@ -293,6 +295,8 @@ export const onRequest: PagesFunction<{ OPENAI_API_KEY: string; ASSETS: Fetcher 
     },
     model: openai('gpt-5.4-mini'),
     embeddingModel: openai.embedding('text-embedding-3-small'),
+    // Per client IP, from the header Cloudflare sets.
+    rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
   });
   return handler(request);
 };
@@ -470,7 +474,7 @@ export default {
 | `maxQuestionLength`        | `500`                       | Longer questions get a 400.                                                                                                                                                                                                    |
 | `maxBodyBytes`             | 64 KiB                      | Counted while reading, so a chunked upload cannot exhaust memory.                                                                                                                                                              |
 | `noAnswerMessage`          | "I don't know. I couldn't…" | Streamed when nothing is relevant.                                                                                                                                                                                             |
-| `rateLimit`                | none                        | `(request) => { success, limit?, remaining?, reset? }`, sync or async. See [rate limits and client IPs](#rate-limits-and-client-ips).                                                                                          |
+| `rateLimit`                | 10 a minute per IP          | `memoryRateLimit()` by default. Any `(request) => { success, limit?, remaining?, reset? }`, sync or async, replaces it; `false` turns it off. See [rate limits and client IPs](#rate-limits-and-client-ips).                   |
 | `rateLimitFailure`         | `"closed"`                  | When `rateLimit` throws (e.g. Redis is down): `"closed"` answers 503 without calling the model, `"open"` answers anyway. Reported to `onError` either way.                                                                     |
 | `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`, …                                                                                                                                            |
 | `headers`                  | none                        | Added to every response, including the 204 that answers a CORS preflight. Cross-origin: set `access-control-allow-origin` and `access-control-allow-headers: content-type`, and in Next.js also `export const OPTIONS = POST`. |
@@ -490,7 +494,7 @@ data: {"type":"finish"}
 data: [DONE]
 ```
 
-Rate limiters: `memoryRateLimit({ limit, windowMs })` is a per-instance token bucket keyed by client IP; `upstashRateLimit(new Ratelimit({ … }))` adapts `@upstash/ratelimit` for a shared limit without ask-my-site depending on it. Both take `trustedHeader` and `key`, below.
+Rate limiters: without a `rateLimit`, the handler limits each client IP to 10 questions a minute with `memoryRateLimit()`, which suits Vercel; elsewhere, pass one with your platform's `trustedHeader`. `memoryRateLimit({ limit, windowMs })` is a per-instance token bucket keyed by client IP; `upstashRateLimit(new Ratelimit({ … }))` adapts `@upstash/ratelimit` for a shared limit without ask-my-site depending on it. Both take `trustedHeader` and `key`, below.
 
 #### Rate limits and client IPs
 
@@ -505,7 +509,7 @@ A rate limit is only as strong as its key. Both limiters key each request by the
 | Behind one reverse proxy you run                           | Nothing if it appends the peer address to `X-Forwarded-For` (nginx: `$proxy_add_x_forwarded_for`); otherwise the header it sets, e.g. `trustedHeader: 'x-real-ip'`. |
 | Exposed directly, with no proxy in front                   | Every header, `X-Forwarded-For` included, comes from the client. Put a proxy in front, or pass a `key` the client cannot forge, such as a signed-in user id.        |
 
-Use your platform's header even when others are present: on Vercel, for example, a client can send its own `cf-connecting-ip`. When the header holds a list, the last entry (added by the nearest proxy) is used, so with several proxies in a chain, name a header the outermost one sets. Requests that lack the header share one `"anonymous"` bucket rather than falling back to a header the client controls. `key: (request) => string` replaces the lookup entirely, for example to limit per signed-in user; `clientKey(request, { trustedHeader })` is exported for custom limiters.
+Use your platform's header even when others are present: on Vercel, for example, a client can send its own `cf-connecting-ip`. When the header holds a list, the last entry (added by the nearest proxy) is used, so with several proxies in a chain, name a header the outermost one sets. Requests that lack the header share one `"anonymous"` bucket rather than falling back to a header the client controls: on a platform that does not set the header, the default limiter is one 10-a-minute limit for all visitors together, which errs on the side of your bill, and the handler reports the first such request to `onError` with what to set. `key: (request) => string` replaces the lookup entirely, for example to limit per signed-in user; `clientKey(request, { trustedHeader })` is exported for custom limiters.
 
 If the limiter itself fails (Upstash unreachable, a bug in your own), the handler fails closed: it reports the error and answers 503 without calling the model. The limiter is what stands between a public endpoint and an unbounded model bill, and its outage can be provoked, for example by a flood that exhausts a Redis plan's request quota, so its failure should not quietly switch it off. Set `rateLimitFailure: 'open'` if you would rather keep answering during an outage and rely on your provider's spend limits. (`@upstash/ratelimit` already allows requests when Redis is merely slow, after its own `timeout`.)
 

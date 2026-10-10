@@ -9,7 +9,7 @@ description: 'createAskHandler options, the request and response, errors and the
 ## What happens per request
 
 1. The body must be JSON (`content-type: application/json`); anything else gets a 415.
-2. The rate limiter runs, if one is configured.
+2. The rate limiter runs: 10 questions a minute per client IP unless you pass your own, or `false`.
 3. The body is validated: `{ "question": string }` of up to 500 characters, in at most 64 KiB.
 4. The question is embedded, and hybrid retrieval runs over the in-memory index.
 5. If nothing clears the relevance gate, the "I don't know" message streams back and the model is never called.
@@ -30,7 +30,7 @@ description: 'createAskHandler options, the request and response, errors and the
 | `maxQuestionLength`        | `500`                       | Longer questions get a 400.                                                                                      |
 | `maxBodyBytes`             | 64 KiB                      | Counted while reading the body.                                                                                  |
 | `noAnswerMessage`          | "I don't know. I couldn't…" | Streamed when nothing is relevant.                                                                               |
-| `rateLimit`                | none                        | `(request) => { success, limit?, remaining?, reset? }`, sync or async.                                           |
+| `rateLimit`                | 10 a minute per IP          | `memoryRateLimit()`; any `(request) => { success, … }` replaces it, and `false` turns it off.                    |
 | `rateLimitFailure`         | `"closed"`                  | When `rateLimit` throws: `"closed"` answers 503, `"open"` answers anyway.                                        |
 | `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`…                                |
 | `headers`                  | none                        | Added to every response, such as CORS headers.                                                                   |
