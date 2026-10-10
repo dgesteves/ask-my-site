@@ -1,12 +1,12 @@
 // The Worker that answers questions for your docs, with Workers AI: no API key to set, and within
-// Workers AI's free daily allowance for a small site. Written by `npx ask-my-site init`: edit it as
-// you like, and init asks before it overwrites it.
+// Workers AI's free daily allowance for a small site. Written by `npx ondocs init`: edit it as you
+// like, and init asks before it overwrites it.
 //
 // It fetches the index from the live site, SITE_URL/ask-index.json, and checks it again every five
 // minutes, so it follows the site's deploys. The site's pages call it across origins, so it sends
 // CORS headers for SITE_URL's origin, and only for it.
 //
-// Questions are embedded with the Workers AI model the index records, as with `ask-my-site index -e
+// Questions are embedded with the Workers AI model the index records, as with `ondocs index -e
 // workers-ai:@cf/baai/bge-small-en-v1.5`, and matched on keywords for an index built without one.
 // CHAT_MODEL, in wrangler.jsonc, writes the answers.
 //
@@ -16,7 +16,7 @@ import {
   createMcpHandler,
   memoryRateLimit,
   remoteIndex,
-} from 'ask-my-site/server';
+} from 'ondocs/server';
 import { createWorkersAI } from 'workers-ai-provider';
 
 interface Env {
@@ -54,7 +54,7 @@ async function create(env: Env) {
     : undefined;
   if (embedding && !embeddingModel) {
     console.warn(
-      `[ask-my-site] The index was embedded with ${embedding.model}, which Workers AI does not run, so questions are matched on keywords. Build it with -e workers-ai:@cf/baai/bge-small-en-v1.5, or -e none.`,
+      `[ondocs] The index was embedded with ${embedding.model}, which Workers AI does not run, so questions are matched on keywords. Build it with -e workers-ai:@cf/baai/bge-small-en-v1.5, or -e none.`,
     );
   }
   const cors = corsFor(env);
@@ -101,7 +101,7 @@ export default {
       ready = await handlers;
     } catch (error) {
       // The index could not be fetched or used; the next request tries again.
-      console.error('[ask-my-site]', error);
+      console.error('[ondocs]', error);
       return Response.json(
         { error: { code: 'internal_error', message: 'The ask endpoint is misconfigured.' } },
         { status: 500, headers: corsFor(env) },

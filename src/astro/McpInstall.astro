@@ -1,15 +1,15 @@
 ---
-// How to connect an AI tool to the site's MCP endpoint, the `mcp` option of ask-my-site/starlight
-// or ask-my-site/astro: "Add to Cursor", "Add to VS Code" and "Add to Claude" links, the Claude
+// How to connect an AI tool to the site's MCP endpoint, the `mcp` option of ondocs/starlight
+// or ondocs/astro: "Add to Cursor", "Add to VS Code" and "Add to Claude" links, the Claude
 // Code command and the JSON for other clients. For an MDX page:
 //
-//   import McpInstall from 'ask-my-site/astro/McpInstall.astro';
+//   import McpInstall from 'ondocs/astro/McpInstall.astro';
 //
 //   <McpInstall />
 //
 // Pass `url` and `name` to show another server. Plain markup, styled as the page's content.
 import { mcpInstallLinks } from '../index.js';
-import mcp from 'virtual:ask-my-site/mcp';
+import mcp from 'virtual:ondocs/mcp';
 
 interface Props {
   /** The MCP server's absolute URL. Default: the plugin's `mcp` option. */
@@ -21,7 +21,7 @@ interface Props {
 const { url = mcp?.url, name = mcp?.name ?? 'docs' } = Astro.props;
 if (!url) {
   throw new Error(
-    'McpInstall: set the mcp option of ask-my-site/starlight (or ask-my-site/astro), or pass a url.',
+    'McpInstall: set the mcp option of ondocs/starlight (or ondocs/astro), or pass a url.',
   );
 }
 const links = mcpInstallLinks({ url, name });

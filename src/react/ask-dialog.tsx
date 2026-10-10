@@ -36,7 +36,7 @@ export interface AskDialogProps extends Omit<UseAskOptions, 'onFinish'> {
   /**
    * A floating "Ask AI" button in the corner of the page, as the framework plugins and the script
    * embed show, with the shortcut on it: `true`, or the button's label. Import
-   * `ask-my-site/embed/launcher.css` for its look, or style `.ask-my-site-launcher` yourself.
+   * `ondocs/embed/launcher.css` for its look, or style `.ondocs-launcher` yourself.
    */
   launcher?: boolean | string;
   /**
@@ -112,7 +112,7 @@ function isEditable(target: EventTarget | null): boolean {
  * disabled under `prefers-reduced-motion`.
  *
  * Unstyled-friendly: every part has a stable `ask-*` class and accepts extra classes through
- * `classNames`. Import `ask-my-site/react/styles.css` for the default theme.
+ * `classNames`. Import `ondocs/react/styles.css` for the default theme.
  */
 export function AskDialog({
   open: openProp,
@@ -206,7 +206,7 @@ export function AskDialog({
       {launcher === false ? null : (
         <button
           type="button"
-          className="ask-my-site-launcher"
+          className="ondocs-launcher"
           data-ask-theme={themeAttribute}
           aria-keyshortcuts={key ? `Meta+${key} Control+${key}` : undefined}
           onClick={openFrom}

@@ -4,21 +4,21 @@ title: 'Package API'
 description: "The package's imports, the core functions for building and searching an index, and what each entry point exports."
 ---
 
-The package has one CLI and these imports. Each is tree-shakeable, and only `ask-my-site/node`, the framework plugins and the CLI touch Node.js built-ins, so the rest runs on edge runtimes, in workers and in browsers.
+The package has one CLI and these imports. Each is tree-shakeable, and only `ondocs/node`, the framework plugins and the CLI touch Node.js built-ins, so the rest runs on edge runtimes, in workers and in browsers.
 
-| Import                               | For                                                                                                             |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `ask-my-site`                        | Loaders, chunking, `buildIndex`, `checkIndex`, `loadIndex`, `retrieve`, `buildLlmsFiles`, `mcpInstallLinks`     |
-| `ask-my-site/node`                   | `loadDirectory`, `readIndexFile`, `writeIndexFile`, and the config module's types                               |
-| `ask-my-site/server`                 | `createAskHandler`, `createMcpHandler`, `remoteIndex`, the rate limiters, the budget and answer cache stores    |
-| `ask-my-site/react`                  | `AskDialog`, `useAsk`, `AskAnswer`, `McpInstall` and `loadAskDialog`; needs `@radix-ui/react-dialog` and `cmdk` |
-| `ask-my-site/embed`                  | `mountAskDialog`: the dialog and its button without writing React                                               |
-| `ask-my-site/docusaurus`             | The [Docusaurus plugin](./docusaurus.md)                                                                        |
-| `ask-my-site/astro`                  | The [Astro integration](./astro.md)                                                                             |
-| `ask-my-site/starlight`              | The [Starlight plugin](./astro.md)                                                                              |
-| `ask-my-site/astro/McpInstall.astro` | The "Add to Cursor / VS Code / Claude" block for an Astro or Starlight page                                     |
-| `ask-my-site/mock`                   | `mockEmbeddingModel` and `mockLanguageModel`, for tests and offline demos                                       |
-| `ask-my-site` (bin)                  | [`ask-my-site index`, `init` and `dev`](./cli.md)                                                               |
+| Import                          | For                                                                                                             |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `ondocs`                        | Loaders, chunking, `buildIndex`, `checkIndex`, `loadIndex`, `retrieve`, `buildLlmsFiles`, `mcpInstallLinks`     |
+| `ondocs/node`                   | `loadDirectory`, `readIndexFile`, `writeIndexFile`, and the config module's types                               |
+| `ondocs/server`                 | `createAskHandler`, `createMcpHandler`, `remoteIndex`, the rate limiters, the budget and answer cache stores    |
+| `ondocs/react`                  | `AskDialog`, `useAsk`, `AskAnswer`, `McpInstall` and `loadAskDialog`; needs `@radix-ui/react-dialog` and `cmdk` |
+| `ondocs/embed`                  | `mountAskDialog`: the dialog and its button without writing React                                               |
+| `ondocs/docusaurus`             | The [Docusaurus plugin](./docusaurus.md)                                                                        |
+| `ondocs/astro`                  | The [Astro integration](./astro.md)                                                                             |
+| `ondocs/starlight`              | The [Starlight plugin](./astro.md)                                                                              |
+| `ondocs/astro/McpInstall.astro` | The "Add to Cursor / VS Code / Claude" block for an Astro or Starlight page                                     |
+| `ondocs/mock`                   | `mockEmbeddingModel` and `mockLanguageModel`, for tests and offline demos                                       |
+| `ondocs` (bin)                  | [`ondocs index`, `init` and `dev`](./cli.md)                                                                    |
 
 The handlers are documented in [The ask endpoint](./ask-endpoint.md) and [MCP server](./mcp.md), and the React components in [The ask dialog](./ask-dialog.md).
 
@@ -27,7 +27,7 @@ The handlers are documented in [The ask endpoint](./ask-endpoint.md) and [MCP se
 The plugins and the CLI are built on these functions, which work on content from anywhere:
 
 ```ts
-import { buildIndex, fromMarkdown, loadIndex, retrieve, serializeIndexFile } from 'ask-my-site';
+import { buildIndex, fromMarkdown, loadIndex, retrieve, serializeIndexFile } from 'ondocs';
 
 const doc = fromMarkdown(source, { id: 'guide.md', url: '/guide' });
 const { index, stats } = await buildIndex({ documents: [doc], embeddingModel, previous });

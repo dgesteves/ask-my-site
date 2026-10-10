@@ -1,4 +1,4 @@
-import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createMcpHandler, memoryRateLimit } from 'ondocs/server';
 
 import index from '../ask-index.json';
 import { SITE_URL } from './site';
@@ -8,7 +8,7 @@ import { SITE_URL } from './site';
 // reads cost this site no model call at all, embedding included. The agent brings its own model.
 export const mcpHandler = createMcpHandler({
   index,
-  siteName: 'the ask-my-site docs',
+  siteName: 'the ondocs documentation',
   siteUrl: SITE_URL,
   // Agents search and read several times per task, and nothing here spends a model key, so the
   // limit is looser than the ask endpoint's: 30 tool calls a minute per client IP (last

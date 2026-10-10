@@ -10,7 +10,7 @@ import { matchesGlob } from '../src/node/glob';
 let root: string;
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'ask-my-site-node-'));
+  root = await mkdtemp(join(tmpdir(), 'ondocs-node-'));
 });
 
 afterEach(async () => {

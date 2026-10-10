@@ -1,5 +1,5 @@
 /* The launcher in Starlight's colors, which follow its light and dark themes. */
-.ask-my-site-launcher {
+.ondocs-launcher {
   --ask-launcher-bg: var(--sl-color-bg-nav);
   --ask-launcher-fg: var(--sl-color-white);
   --ask-launcher-border: var(--sl-color-hairline-shade);

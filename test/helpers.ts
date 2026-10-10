@@ -58,7 +58,7 @@ You need Node.js 22 or newer. Bun and Deno work for the runtime parts.
 
 ## With pnpm
 
-Run pnpm add ask-my-site ai zod, then add a provider such as @ai-sdk/openai.`,
+Run pnpm add ondocs ai zod, then add a provider such as @ai-sdk/openai.`,
   },
   {
     id: 'quantization.md',

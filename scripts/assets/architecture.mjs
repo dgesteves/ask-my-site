@@ -231,7 +231,7 @@ const returnLabel = 'SSE: metadata, then numbered sources, then the cited answer
 const returnLabelX = (dialog.cx + gate.cx) / 2;
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="title desc">
-  <title id="title">ask-my-site architecture</title>
+  <title id="title">ondocs architecture</title>
   <desc id="desc">Build time: pages are chunked per heading, embedded, quantized to int8 and written to a static ask-index.json. Request time: the dialog posts a question, the handler embeds it, runs BM25 and cosine search over the index in memory, fuses the rankings with reciprocal rank fusion behind a relevance gate, and either answers "I don't know" without calling the model or streams a cited answer back over Server-Sent Events.</desc>
   <style>
     .pulse{stroke-dasharray:14 1000;stroke-dashoffset:14;animation:flow 3.2s cubic-bezier(.45,0,.55,1) infinite both}
@@ -250,7 +250,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
     <rect width="${W}" height="${H}" fill="url(#glow)"/>
 
     <rect x="${X - 20}" y="28" width="${INNER + 40}" height="160" rx="16" fill="${C.panel}" fill-opacity=".72" stroke="${C.edge}"/>
-    ${laneLabel('BUILD TIME', 'npx ask-my-site index · once per deploy', 62)}
+    ${laneLabel('BUILD TIME', 'npx ondocs index · once per deploy', 62)}
     ${chain(build, 'build')}
     ${build.map(node).join('')}
 

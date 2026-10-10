@@ -1,4 +1,4 @@
-// The Astro integration behind ask-my-site/astro and ask-my-site/starlight. Node.js only.
+// The Astro integration behind ondocs/astro and ondocs/starlight. Node.js only.
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -7,13 +7,14 @@ import { fileURLToPath } from 'node:url';
 
 import type { AstroConfig, AstroIntegration } from 'astro';
 
-import type { AskMySiteDialogOptions as DialogOptions, AskMySiteTheme } from '../embed/options';
+import type { OndocsDialogOptions as DialogOptions, OndocsTheme } from '../embed/options';
 import {
   buildEmbedding,
   checkIndexOptions,
   dialogEndpoint,
   excluder,
   hintDevEndpoint,
+  indexCache,
   resolveMcp,
   warnMissingDialogPeers,
   writeSiteIndex,
@@ -31,35 +32,35 @@ import { fromHtml } from '../loaders/html';
 import type { SourceDocument } from '../types';
 import type { RouteSettings } from './route';
 
-/** What the dialog shows; passed to `mountAskDialog` from `ask-my-site/embed`. */
+/** What the dialog shows; passed to `mountAskDialog` from `ondocs/embed`. */
 /** What the dialog shows in one locale, over the dialog's own options. */
-export type AskMySiteLocaleDialogOptions = Pick<
+export type OndocsLocaleDialogOptions = Pick<
   DialogOptions,
   'labels' | 'placeholder' | 'suggestions' | 'buttonLabel'
 > & { title?: string };
 
-export interface AskMySiteDialogOptions extends DialogOptions {
+export interface OndocsDialogOptions extends DialogOptions {
   /**
    * The dialog's accessible name. Default "Ask this site", or "Ask {site title}" in Starlight, or
    * `labels.title`.
    */
   title?: string;
   /** Default `auto`: the `data-theme` on `<html>` when the site sets one, else the system's. */
-  theme?: AskMySiteTheme;
+  theme?: OndocsTheme;
   /**
    * Options for each locale, by its path prefix (`fr`, `pt-br`), over these: the labels, the
    * title and the suggestions in that language. The dialog picks its locale from the page's
    * path, uses its options, and sends the locale with each question, so the endpoint answers
    * from that locale's index.
    */
-  locales?: Record<string, AskMySiteLocaleDialogOptions>;
+  locales?: Record<string, OndocsLocaleDialogOptions>;
 }
 
 /**
  * The endpoints the integration serves itself on a site with an SSR adapter: the ask endpoint at
  * `endpoint`, and an MCP endpoint, answering from the index the build writes.
  */
-export interface AskMySiteRouteOptions {
+export interface OndocsRouteOptions {
   /**
    * The model that answers: `openai:<model>` (with @ai-sdk/openai installed and `OPENAI_API_KEY`
    * set where the site runs), an AI Gateway id such as `openai/gpt-5.4-mini`
@@ -85,12 +86,12 @@ export interface AskMySiteRouteOptions {
   siteName?: string;
 }
 
-export interface AskMySiteOptions extends IndexOptions {
+export interface OndocsOptions extends IndexOptions {
   /**
    * URL the dialog posts questions to. Default `/api/ask` (under `base` when the integration
    * serves it). The `ASK_ENDPOINT` environment variable, when it is set as the site builds or
    * starts, takes precedence over it: `ASK_ENDPOINT=http://localhost:8787/api/ask` points the
-   * dialog at `ask-my-site dev`.
+   * dialog at `ondocs dev`.
    */
   endpoint?: string;
   /**
@@ -99,7 +100,7 @@ export interface AskMySiteOptions extends IndexOptions {
    * file to write. An object sets the model and the limits; `false` turns it off, for a route of
    * your own. A route file the site already has at either path is left to answer instead.
    */
-  route?: AskMySiteRouteOptions | false;
+  route?: OndocsRouteOptions | false;
   /**
    * The part of each page to index, as a selector: a tag name, `#id`, `.class` or `[attribute]`,
    * combined as in `div.prose` or listed as in `main, .post`. Default `main` (then the page's
@@ -117,12 +118,12 @@ export interface AskMySiteOptions extends IndexOptions {
    * and, in French, `/docs/fr/changelog`; `/fr` leaves out the French pages.
    */
   exclude?: string[];
-  dialog?: AskMySiteDialogOptions;
+  dialog?: OndocsDialogOptions;
   /**
-   * The site's MCP endpoint (`createMcpHandler` from `ask-my-site/server`), as an absolute URL or a
+   * The site's MCP endpoint (`createMcpHandler` from `ondocs/server`), as an absolute URL or a
    * path on the site such as `/api/mcp` (then `site` must be set), and optionally the name clients
    * list it under (default: from the site title). `McpInstall` from
-   * `ask-my-site/astro/McpInstall.astro` then shows how to add it to Cursor, VS Code, Claude and
+   * `ondocs/astro/McpInstall.astro` then shows how to add it to Cursor, VS Code, Claude and
    * ChatGPT.
    */
   mcp?: McpOption;
@@ -138,9 +139,9 @@ export interface AskMySiteOptions extends IndexOptions {
 }
 
 /** The module `McpInstall.astro` reads the `mcp` option from. */
-const MCP_MODULE = 'virtual:ask-my-site/mcp';
+const MCP_MODULE = 'virtual:ondocs/mcp';
 /** The module the injected routes read their settings and models from (see route.ts). */
-const ROUTE_MODULE = 'virtual:ask-my-site/route';
+const ROUTE_MODULE = 'virtual:ondocs/route';
 
 const DEFAULT_PATH = '/api/ask';
 const DEFAULT_MCP_PATH = '/api/mcp';
@@ -172,7 +173,7 @@ export interface IntegrationPreset {
 }
 
 export function createIntegration(
-  options: AskMySiteOptions,
+  options: OndocsOptions,
   preset: IntegrationPreset,
 ): AstroIntegration {
   checkIndexOptions(options);
@@ -180,7 +181,7 @@ export function createIntegration(
   const model = routeOptions?.model ?? DEFAULT_ROUTE_MODEL;
   if (!ROUTE_MODEL.test(model)) {
     throw new Error(
-      `ask-my-site: route.model must be openai:<model>, an AI Gateway id <provider>/<model>, or mock (got '${model}').`,
+      `ondocs: route.model must be openai:<model>, an AI Gateway id <provider>/<model>, or mock (got '${model}').`,
     );
   }
   let endpoint = dialogEndpoint(options.endpoint);
@@ -192,7 +193,7 @@ export function createIntegration(
   let dev = false;
   let served = false;
   return {
-    name: 'ask-my-site',
+    name: 'ondocs',
     hooks: {
       'astro:config:setup': ({
         config: astro,
@@ -240,7 +241,7 @@ export function createIntegration(
           for (const [which, pattern] of Object.entries(routes)) {
             injectRoute({
               pattern,
-              entrypoint: `ask-my-site/astro/${which === 'ask' ? 'ask' : 'mcp'}-route`,
+              entrypoint: `ondocs/astro/${which === 'ask' ? 'ask' : 'mcp'}-route`,
               prerender: false,
             });
           }
@@ -260,7 +261,7 @@ export function createIntegration(
         // The stylesheets go into every page's CSS: a `page` script's CSS is built but not linked.
         injectScript(
           'page-ssr',
-          ['ask-my-site/react/styles.css', 'ask-my-site/embed/launcher.css']
+          ['ondocs/react/styles.css', 'ondocs/embed/launcher.css']
             .concat(preset.stylesheets ?? [])
             .map((stylesheet) => `import ${JSON.stringify(stylesheet)};`)
             .join('\n'),
@@ -286,7 +287,7 @@ export function createIntegration(
             ],
             // Vite's dev server does not see injected scripts when it scans for dependencies to
             // prebundle, and would find the dialog's on the first page load, then reload it.
-            optimizeDeps: { include: ['ask-my-site/embed'] },
+            optimizeDeps: { include: ['ondocs/embed'] },
           },
         });
       },
@@ -308,7 +309,7 @@ export function createIntegration(
         if (dev && !served) hintDevEndpoint(endpoint, 'astro dev', logger);
       },
       'astro:build:done': async ({ dir, pages, logger }) => {
-        if (!config) throw new Error('ask-my-site: astro:config:done did not run');
+        if (!config) throw new Error('ondocs: astro:config:done did not run');
         const indexFile = (options.indexFile ?? 'ask-index.json').replace(/^\/+/, '');
         const outDir = fileURLToPath(dir);
         const outputs = llmsOutputs(options.llmsTxt);
@@ -339,15 +340,8 @@ export function createIntegration(
             embeddingProviderOptions: embedding.providerOptions,
             options,
             file: join(outDir, name),
-            // One file per locale, in node_modules/.cache, which Netlify and Vercel keep between
-            // builds.
-            cache: join(
-              fileURLToPath(config.root),
-              'node_modules',
-              '.cache',
-              'ask-my-site',
-              `astro-${locale || 'root'}.json`,
-            ),
+            // One file per locale.
+            cache: indexCache(fileURLToPath(config.root), `astro-${locale || 'root'}.json`),
             // With an adapter, Astro serves static files from `dist/client/`: say so.
             name: relative(fileURLToPath(config.root), join(outDir, name)) || name,
             log: logger,
@@ -389,9 +383,9 @@ export function createIntegration(
  * file for is left to it.
  */
 function routesToInject(
-  options: AskMySiteOptions,
+  options: OndocsOptions,
   astro: AstroConfig,
-  route: AskMySiteRouteOptions,
+  route: OndocsRouteOptions,
   logger: { info: (message: string) => void; warn: (message: string) => void },
 ): { ask?: string; mcp?: string } | null {
   const base = astro.base.replace(/\/+$/, '');
@@ -447,7 +441,7 @@ function hasPackage(name: string, root: URL): boolean {
 }
 
 /**
- * The source of `virtual:ask-my-site/route`: the settings, and the model, imported from the
+ * The source of `virtual:ondocs/route`: the settings, and the model, imported from the
  * site's own packages, which is why it is generated rather than shipped.
  */
 export function routeModuleCode(
@@ -459,7 +453,7 @@ export function routeModuleCode(
   const id = model.replace(/^openai:/, '');
   if (model.startsWith('openai:') && !openai) {
     throw new Error(
-      `ask-my-site: route.model '${model}' needs @ai-sdk/openai, which is not installed: npm i @ai-sdk/openai`,
+      `ondocs: route.model '${model}' needs @ai-sdk/openai, which is not installed: npm i @ai-sdk/openai`,
     );
   }
   const chat =
@@ -471,7 +465,7 @@ export function routeModuleCode(
   return [
     "import { getSecret } from 'astro:env/server';",
     ...(openai ? ["import { createOpenAI } from '@ai-sdk/openai';"] : []),
-    ...(model === 'mock' ? ["import { mockLanguageModel } from 'ask-my-site/mock';"] : []),
+    ...(model === 'mock' ? ["import { mockLanguageModel } from 'ondocs/mock';"] : []),
     // The Cloudflare adapter's bindings, where the route reads the index through ASSETS.
     ...(cloudflare ? ["import { env } from 'cloudflare:workers';"] : []),
     ...(openai
@@ -493,7 +487,7 @@ export function routeModuleCode(
 function virtualSource(id: string, source: string) {
   const resolved = `\0${id}`;
   return {
-    name: 'ask-my-site:virtual-source',
+    name: 'ondocs:virtual-source',
     resolveId: (module: string) => (module === id ? resolved : null),
     load: (module: string) => (module === resolved ? source : null),
   };
@@ -568,7 +562,7 @@ function serveBuiltIndex(
  */
 function quietUseClient() {
   return {
-    name: 'ask-my-site:quiet-use-client',
+    name: 'ondocs:quiet-use-client',
     transform(code: string, id: string) {
       if (!/[\\/]node_modules[\\/](?:@radix-ui[\\/][^\\/]+|cmdk)[\\/]/.test(id)) return null;
       const blanked = code.replace(/^(["'])use client\1;?/, (directive) =>
@@ -583,7 +577,7 @@ function quietUseClient() {
 function virtualModule(id: string, value: unknown) {
   const resolved = `\0${id}`;
   return {
-    name: 'ask-my-site:virtual-module',
+    name: 'ondocs:virtual-module',
     resolveId: (source: string) => (source === id ? resolved : null),
     load: (module: string) =>
       module === resolved ? `export default ${JSON.stringify(value)};` : null,
@@ -593,7 +587,7 @@ function virtualModule(id: string, value: unknown) {
 /** The script every page runs: `mountAskDialog` with the dialog's options. */
 function pageScript(
   endpoint: string,
-  options: AskMySiteOptions,
+  options: OndocsOptions,
   preset: IntegrationPreset,
   locales: readonly string[],
   base: string,
@@ -606,7 +600,7 @@ function pageScript(
   };
   if (locales.length === 0) {
     return [
-      "import { mountAskDialog } from 'ask-my-site/embed';",
+      "import { mountAskDialog } from 'ondocs/embed';",
       `mountAskDialog(${JSON.stringify(mount)});`,
     ].join('\n');
   }
@@ -633,7 +627,7 @@ function pageScript(
     }),
   );
   return [
-    "import { mountAskDialog } from 'ask-my-site/embed';",
+    "import { mountAskDialog } from 'ondocs/embed';",
     `const options = ${JSON.stringify(mount)};`,
     `const locales = ${JSON.stringify(byLocale)};`,
     // The page's locale, from its path under `base`: `/docs/fr/guides/` is French.
@@ -670,7 +664,7 @@ async function loadBuiltPages(
   outDir: string,
   pages: readonly { pathname: string }[],
   config: AstroConfig,
-  options: AskMySiteOptions,
+  options: OndocsOptions,
   preset: IntegrationPreset,
   markdown: boolean,
 ): Promise<{ groups: Map<string, SourceDocument[]>; copies: Map<string, LlmsPage[]> }> {

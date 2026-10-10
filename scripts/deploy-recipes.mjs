@@ -1,7 +1,7 @@
-// Builds what `ask-my-site init` writes for a host with that host's own tooling, offline and signed
+// Builds what `ondocs init` writes for a host with that host's own tooling, offline and signed
 // in to nothing, then asks it questions. A run makes a static docs site (a Docusaurus config and a
-// built `build/` with an index of this repo's docs), installs ask-my-site from a packed tarball,
-// runs `ask-my-site init --host <host>`, builds, serves or invokes the result. The astro-* recipes
+// built `build/` with an index of this repo's docs), installs ondocs from a packed tarball,
+// runs `ondocs init --host <host>`, builds, serves or invokes the result. The astro-* recipes
 // instead build an Astro site of this repo's docs with an SSR adapter and no route file, which the
 // integration serves the endpoints for. Each then checks:
 //
@@ -14,7 +14,7 @@
 // and `netlify serve --offline`, and Wrangler's `--dry-run` and local `dev` run with a HOME of
 // their own, so they see no credentials.
 //
-//   npm pack && node scripts/deploy-recipes.mjs <recipe> ask-my-site-x.y.z.tgz [dir]
+//   npm pack && node scripts/deploy-recipes.mjs <recipe> ondocs-x.y.z.tgz [dir]
 //
 // Recipes: vercel, netlify, cloudflare-pages, cloudflare-workers, github-pages (with OpenAI),
 // workers-ai (the zero-key Worker template, in workerd), astro-node, astro-vercel,
@@ -92,7 +92,7 @@ if (!recipe || !tarball) {
   );
   process.exit(2);
 }
-const dir = resolve(target ?? join(tmpdir(), `ask-my-site-recipe-${name}`));
+const dir = resolve(target ?? join(tmpdir(), `ondocs-recipe-${name}`));
 rmSync(dir, { recursive: true, force: true });
 mkdirSync(dir, { recursive: true });
 
@@ -300,7 +300,7 @@ async function docusaurusRecipe() {
   await run(
     'npx',
     [
-      'ask-my-site',
+      'ondocs',
       'index',
       DOCS.pathname,
       '--base-url',
@@ -315,7 +315,7 @@ async function docusaurusRecipe() {
     { env: model },
   );
   await run('npx', [
-    'ask-my-site',
+    'ondocs',
     'init',
     '--host',
     recipe.host,
@@ -438,7 +438,7 @@ async function docusaurusRecipe() {
     // The site on its static host, and the Worker init wrote, which reads the index from it.
     const site = await staticSite(join(dir, 'build'));
     stops.push(site.close);
-    const worker = join(dir, 'ask-my-site-worker');
+    const worker = join(dir, 'ondocs-worker');
     await run('npm', ['install', '--no-audit', '--no-fund', resolve(tarball)], { cwd: worker });
     await run('npx', ['wrangler', 'deploy', '--dry-run', '--outdir', 'out'], {
       cwd: worker,
@@ -485,7 +485,7 @@ async function templateRecipe() {
   });
   // The package as it is about to be released, in place of the published version.
   const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-  manifest.dependencies['ask-my-site'] = `file:${resolve(tarball)}`;
+  manifest.dependencies.ondocs = `file:${resolve(tarball)}`;
   writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   await run('npm', ['install', '--no-audit', '--no-fund']);
   await run('npx', ['tsc']);
@@ -507,13 +507,13 @@ async function astroRecipe() {
     join(dir, 'astro.config.mjs'),
     [
       `import ${recipe.import} from '${recipe.adapter}';`,
-      "import askMySite from 'ask-my-site/astro';",
+      "import ondocs from 'ondocs/astro';",
       "import { defineConfig } from 'astro/config';",
       '',
       'export default defineConfig({',
       "  site: 'https://recipe.example.com',",
       `  adapter: ${recipe.call},`,
-      "  integrations: [askMySite({ embedding: 'openai:text-embedding-3-small', dimensions: 512 })],",
+      "  integrations: [ondocs({ embedding: 'openai:text-embedding-3-small', dimensions: 512 })],",
       '});',
       '',
     ].join('\n'),
@@ -546,7 +546,7 @@ async function astroRecipe() {
     'cmdk',
   ]);
   const before = readdirSync(dir).sort().join();
-  await run('npx', ['ask-my-site', 'init']);
+  await run('npx', ['ondocs', 'init']);
   expect(
     readdirSync(dir).sort().join() === before,
     'init wrote files for an Astro site with an adapter',

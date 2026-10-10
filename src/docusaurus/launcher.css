@@ -1,5 +1,5 @@
 /* The floating "Ask AI" button the Docusaurus plugin adds. Uses the site's Infima variables. */
-.ask-my-site-launcher {
+.ondocs-launcher {
   position: fixed;
   /* Left of Docusaurus's back-to-top button (3rem wide, 1.3rem from the corner), centered on it,
      and below the navbar, so the mobile menu covers it. */
@@ -24,17 +24,17 @@
   box-shadow: var(--ifm-global-shadow-md, 0 5px 40px rgb(0 0 0 / 20%));
   cursor: pointer;
 }
-.ask-my-site-launcher:hover {
+.ondocs-launcher:hover {
   border-color: var(--ifm-color-primary, #2e8555);
 }
-.ask-my-site-launcher:focus-visible {
+.ondocs-launcher:focus-visible {
   outline: 2px solid var(--ifm-color-primary, #2e8555);
   outline-offset: 2px;
 }
-.ask-my-site-launcher > span {
+.ondocs-launcher > span {
   color: var(--ifm-color-primary, #2e8555);
 }
-.ask-my-site-launcher > kbd {
+.ondocs-launcher > kbd {
   margin-left: 0.25rem;
   font-size: 0.75rem;
   font-weight: 500;
@@ -42,22 +42,22 @@
      (Infima's emphasis scale runs the other way in dark mode). */
   color: var(--ifm-color-emphasis-700, #606770);
 }
-[data-theme='dark'] .ask-my-site-launcher > kbd {
+[data-theme='dark'] .ondocs-launcher > kbd {
   color: var(--ifm-color-emphasis-500, #bec3c9);
 }
 /* Touch screens have no shortcut to show. */
 @media (hover: none) {
-  .ask-my-site-launcher > kbd {
+  .ondocs-launcher > kbd {
     display: none;
   }
 }
 @media print {
-  .ask-my-site-launcher {
+  .ondocs-launcher {
     display: none;
   }
 }
 
-/* <AskMySiteMcp />: its links are Infima buttons; space them like a button group. */
+/* <OndocsMcp />: its links are Infima buttons; space them like a button group. */
 .ask-mcp-links {
   display: flex;
   flex-wrap: wrap;

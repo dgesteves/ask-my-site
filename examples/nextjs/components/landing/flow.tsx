@@ -4,14 +4,14 @@
  */
 export function Flow() {
   return (
-    <figure className="flow" aria-label="How ask-my-site works, at build time and per question">
+    <figure className="flow" aria-label="How ondocs works, at build time and per question">
       <p className="flow-lane-label flow-lane-build">
         <span>Build time</span> once per deploy
       </p>
       <div className="flow-node flow-cli" data-arrow="right">
         <span className="flow-kicker">CLI or framework plugin</span>
         <span className="flow-title">
-          <code>ask-my-site index</code>
+          <code>ondocs index</code>
         </span>
         <span className="flow-note">
           Reads your Markdown, MDX or built HTML. Splits it at every heading, embeds each chunk and

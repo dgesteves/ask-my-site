@@ -3,7 +3,7 @@ import { ImageResponse } from 'next/og';
 import { getDoc, getDocs } from '../../../lib/docs';
 import { Brand, COLORS, OG_SIZE, Spark, ogFonts } from '../../../lib/og';
 
-export const alt = 'The title and summary of a page in the ask-my-site docs';
+export const alt = 'The title and summary of a page in the ondocs documentation';
 export const size = OG_SIZE;
 export const contentType = 'image/png';
 
@@ -51,7 +51,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
           letterSpacing: '-0.035em',
         }}
       >
-        {doc?.title ?? 'ask-my-site'}
+        {doc?.title ?? 'ondocs'}
       </div>
       <div
         style={{

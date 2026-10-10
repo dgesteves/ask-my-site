@@ -218,7 +218,7 @@ describe('fromMarkdown with markdown', () => {
 describe('writeLlmsFiles', () => {
   let dir: string;
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'ask-my-site-llms-'));
+    dir = await mkdtemp(join(tmpdir(), 'ondocs-llms-'));
   });
   afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
@@ -259,7 +259,7 @@ describe('writeLlmsFiles', () => {
     expect(existsSync(join(dir, 'llms-full.txt'))).toBe(false);
     expect(existsSync(join(dir, 'docs/guides/deploy.md'))).toBe(true);
     expect(logger.info).toHaveBeenCalledWith(
-      'docusaurus-plugin-llms writes llms-full.txt, so ask-my-site does not.',
+      'docusaurus-plugin-llms writes llms-full.txt, so ondocs does not.',
     );
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringMatching(/^Left docs\/install\.md, llms\.txt as they were/),

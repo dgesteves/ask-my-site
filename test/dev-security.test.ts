@@ -16,7 +16,7 @@ let root: string;
 let server: DevServer | undefined;
 let logs: string[];
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'ask-my-site-dev-security-'));
+  root = await mkdtemp(join(tmpdir(), 'ondocs-dev-security-'));
   const { index } = await buildIndex({ documents: corpus, embeddingModel: mockEmbeddingModel() });
   await writeIndexFile(join(root, 'ask-index.json'), index);
   logs = [];
@@ -65,7 +65,7 @@ function raw(
   });
 }
 
-describe('ask-my-site dev, against pages on other sites', () => {
+describe('ondocs dev, against pages on other sites', () => {
   it('refuses a cross-site page, so it cannot spend your key', async () => {
     const response = await raw({
       host: `localhost:${String(port())}`,

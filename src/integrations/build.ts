@@ -2,7 +2,7 @@
 // writing an index that reuses the previous build's vectors. Node.js only.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import type { EmbeddingModel } from 'ai';
 
@@ -58,10 +58,10 @@ export type IndexOptions = {
 export function consoleLogger(): Logger {
   return {
     info: (message) => {
-      console.log(`[ask-my-site] ${message}`);
+      console.log(`[ondocs] ${message}`);
     },
     warn: (message) => {
-      console.warn(`[ask-my-site] ${message}`);
+      console.warn(`[ondocs] ${message}`);
     },
   };
 }
@@ -69,11 +69,11 @@ export function consoleLogger(): Logger {
 /** Throws on options that contradict each other or name no model, before anything is built. */
 export function checkIndexOptions(options: IndexOptions): void {
   if (options.embedding !== undefined && options.embeddingModel !== undefined) {
-    throw new Error('ask-my-site: pass `embedding` or `embeddingModel`, not both.');
+    throw new Error('ondocs: pass `embedding` or `embeddingModel`, not both.');
   }
   if (options.dimensions !== undefined && options.embeddingModel !== undefined) {
     throw new Error(
-      'ask-my-site: `dimensions` applies to `embedding` or the default model. With ' +
+      'ondocs: `dimensions` applies to `embedding` or the default model. With ' +
         '`embeddingModel`, set `embeddingProviderOptions` instead.',
     );
   }
@@ -81,7 +81,7 @@ export function checkIndexOptions(options: IndexOptions): void {
     try {
       checkEmbeddingSpec(options.embedding, `embedding: '${options.embedding}'`);
     } catch (error) {
-      throw new Error(`ask-my-site: ${(error as Error).message}`, { cause: error });
+      throw new Error(`ondocs: ${(error as Error).message}`, { cause: error });
     }
   }
 }
@@ -158,7 +158,7 @@ export async function buildEmbedding(
       options.embedding === undefined
         ? " Or set `embedding: 'none'` to build a keyword-only index."
         : '';
-    throw new Error(`ask-my-site: ${message}${hint}`, { cause: error });
+    throw new Error(`ondocs: ${message}${hint}`, { cause: error });
   }
   const providerOptions = mergeProviderOptions(given, choice.providerOptions);
   return { model: choice.model, ...(providerOptions ? { providerOptions } : {}) };
@@ -180,13 +180,13 @@ function mergeProviderOptions(
 /**
  * Where the dialog posts: `ASK_ENDPOINT` when it is set at build or dev time, else `endpoint`,
  * else `/api/ask`. The variable wins so that `ASK_ENDPOINT=http://localhost:8787/api/ask npm start`
- * points any site at `ask-my-site dev`, whatever its config says, without editing it.
+ * points any site at `ondocs dev`, whatever its config says, without editing it.
  */
 export function dialogEndpoint(endpoint: string | undefined): string {
   return process.env.ASK_ENDPOINT?.trim() || (endpoint ?? '/api/ask');
 }
 
-const HINTED = Symbol.for('ask-my-site.devEndpointHint');
+const HINTED = Symbol.for('ondocs.devEndpointHint');
 
 /**
  * Says how to get answers while developing, when the dialog posts to a path on the site that
@@ -199,12 +199,12 @@ export function hintDevEndpoint(endpoint: string, server: string, log: Logger): 
   shared[HINTED] = true;
   log.info(
     `The dialog posts to ${endpoint}, which ${server} does not serve. For answers while you ` +
-      'work, build the site once, run `npx ask-my-site dev`, and start the site with ' +
+      'work, build the site once, run `npx ondocs dev`, and start the site with ' +
       'ASK_ENDPOINT=http://localhost:8787/api/ask.',
   );
 }
 
-/** What the dialog renders with: optional peers of ask-my-site that a plugin's site needs. */
+/** What the dialog renders with: optional peers of ondocs that a plugin's site needs. */
 const DIALOG_PEERS = ['react', 'react-dom', '@radix-ui/react-dialog', 'cmdk'];
 
 /**
@@ -242,9 +242,32 @@ export function excluder(exclude: readonly string[]): (path: string) => boolean 
 }
 
 /**
+ * Where a plugin keeps the previous build's index, `file`, under the site's `root`: in
+ * `node_modules/.cache`, which Netlify and Vercel keep between builds. `legacy` is where it was
+ * kept before ask-my-site became ondocs.
+ */
+export function indexCache(root: string, file: string): { path: string; legacy: string } {
+  return {
+    path: join(root, 'node_modules', '.cache', 'ondocs', file),
+    legacy: join(root, 'node_modules', '.cache', 'ask-my-site', file),
+  };
+}
+
+/** The index at `path`, or null when there is none or it cannot be read. */
+async function readCachedIndex(path: string): Promise<AskIndexFile | null> {
+  try {
+    return parseIndexFile(await readFile(path, 'utf8'));
+  } catch {
+    // First build, or an index from an incompatible version.
+    return null;
+  }
+}
+
+/**
  * Builds the index of `documents` and writes it to `file`. The previous build's index, kept at
- * `cache`, gives unchanged pages their vectors back instead of embedding them again; the new one
- * replaces it there. `name` is how the log line refers to the file.
+ * `cache.path` (or, the first time after the rename, at `cache.legacy`), gives unchanged pages
+ * their vectors back instead of embedding them again; the new one replaces it at `cache.path`.
+ * `name` is how the log line refers to the file.
  */
 export async function writeSiteIndex({
   documents,
@@ -261,16 +284,14 @@ export async function writeSiteIndex({
   embeddingProviderOptions?: EmbeddingProviderOptions | undefined;
   options: IndexOptions;
   file: string;
-  cache: string;
+  cache: { path: string; legacy?: string };
   name: string;
   log: Logger;
 }): Promise<void> {
-  let previous: AskIndexFile | null = null;
-  try {
-    previous = parseIndexFile(await readFile(cache, 'utf8'));
-  } catch {
-    // First build, or an index from an incompatible version: embed everything.
-  }
+  // Without one, embed everything.
+  const previous =
+    (await readCachedIndex(cache.path)) ??
+    (cache.legacy ? await readCachedIndex(cache.legacy) : null);
 
   const started = Date.now();
   const { index, stats } = await buildIndex({
@@ -283,8 +304,8 @@ export async function writeSiteIndex({
   const json = serializeIndexFile(index);
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, json, 'utf8');
-  await mkdir(dirname(cache), { recursive: true });
-  await writeFile(cache, json, 'utf8');
+  await mkdir(dirname(cache.path), { recursive: true });
+  await writeFile(cache.path, json, 'utf8');
 
   const reuse = embeddingModel
     ? `, ${String(stats.embedded)} embedded, ${String(stats.reused)} reused`
@@ -315,7 +336,7 @@ export function resolveMcp(
   else if (siteUrl && URL.canParse(siteUrl)) absolute = new URL(url, siteUrl).href;
   else {
     throw new Error(
-      `ask-my-site: mcp: '${url}' is a path, so the site's URL is needed to make it absolute. ` +
+      `ondocs: mcp: '${url}' is a path, so the site's URL is needed to make it absolute. ` +
         `Set it in ${where}, or give the MCP endpoint as an absolute URL.`,
     );
   }

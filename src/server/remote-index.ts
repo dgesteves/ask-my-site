@@ -3,7 +3,7 @@
 import { loadIndex, type LoadedIndex } from '../search/retrieve';
 
 /** Marks a source the handlers ask for the index on every request, as it can change. */
-export const LIVE_INDEX = Symbol.for('ask-my-site.liveIndex');
+export const LIVE_INDEX = Symbol.for('ondocs.liveIndex');
 
 export interface RemoteIndexOptions {
   /**

@@ -34,8 +34,8 @@ const INFIMA = {
 
 describe('the Docusaurus launcher’s shortcut hint', () => {
   it('reaches 4.5:1 in light and dark mode, with a color rather than opacity', () => {
-    const light = rule('.ask-my-site-launcher > kbd');
-    const dark = rule("[data-theme='dark'] .ask-my-site-launcher > kbd");
+    const light = rule('.ondocs-launcher > kbd');
+    const dark = rule("[data-theme='dark'] .ondocs-launcher > kbd");
     // Opacity blends the text into the background: 3.97:1 in light mode at 0.7.
     expect(light).not.toMatch(/opacity\s*:/);
     expect(dark).not.toMatch(/opacity\s*:/);

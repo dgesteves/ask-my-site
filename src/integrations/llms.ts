@@ -79,7 +79,7 @@ export async function writeLlmsFiles({
   for (const [output, owner] of owners) {
     if (!outputs[output]) continue;
     const what = output === 'markdown' ? 'the pages’ .md copies' : FILE_OF[output];
-    log.info(`${owner} writes ${what}, so ask-my-site does not.`);
+    log.info(`${owner} writes ${what}, so ondocs does not.`);
   }
   if (!enabled.index && !enabled.full && !enabled.markdown) return;
 

@@ -8,14 +8,14 @@ import type { StarlightUserConfig } from '@astrojs/starlight/types';
 import type { AstroIntegration } from 'astro';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import askMySite from '../src/astro';
+import ondocs from '../src/astro';
 import { parseIndexFile } from '../src/index-file';
 import { mockEmbeddingModel } from '../src/mock';
-import starlightAskMySite from '../src/starlight';
+import starlightOndocs from '../src/starlight';
 
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'ask-my-site-astro-'));
+  root = await mkdtemp(join(tmpdir(), 'ondocs-astro-'));
   vi.stubEnv('OPENAI_API_KEY', '');
   vi.stubEnv('AI_GATEWAY_API_KEY', '');
 });
@@ -115,7 +115,7 @@ async function build(
     config: {
       root: pathToFileURL(`${root}/`),
       ...(site ? { site } : {}),
-      integrations: [{ name: 'ask-my-site' }, ...integrations.map((name) => ({ name }))],
+      integrations: [{ name: 'ondocs' }, ...integrations.map((name) => ({ name }))],
       base,
       trailingSlash,
       build: { format },
@@ -136,10 +136,10 @@ async function build(
 
 /** The Astro integration the Starlight plugin adds, for a Starlight config. */
 function starlightIntegration(
-  options: Parameters<typeof starlightAskMySite>[0] = {},
+  options: Parameters<typeof starlightOndocs>[0] = {},
   config: Partial<StarlightUserConfig> = {},
 ): AstroIntegration {
-  const plugin = starlightAskMySite({ embeddingModel: mockEmbeddingModel(), ...options });
+  const plugin = starlightOndocs({ embeddingModel: mockEmbeddingModel(), ...options });
   let added: AstroIntegration | undefined;
   const setup = plugin.hooks['config:setup'] as unknown as (options: unknown) => void;
   setup({
@@ -166,7 +166,7 @@ const STARLIGHT_PAGES: Record<string, string> = {
   '404': starlightPage('404', '<p>Page not found.</p>', { pagefind: false }),
 };
 
-describe('ask-my-site/starlight', () => {
+describe('ondocs/starlight', () => {
   it('indexes the region Starlight marks for search, at the URLs Astro serves', async () => {
     const { read } = await build(starlightIntegration(), STARLIGHT_PAGES);
     const index = await read();
@@ -294,7 +294,7 @@ describe('ask-my-site/starlight', () => {
     for (const [message] of logger.info.mock.calls) {
       expect(message).toMatch(/^Indexed \d+ pages into \d+ chunks, 0 embedded, \d+ reused → /);
     }
-    const cache = join(root, 'node_modules', '.cache', 'ask-my-site');
+    const cache = join(root, 'node_modules', '.cache', 'ondocs');
     expect(existsSync(join(cache, 'astro-root.json'))).toBe(true);
     expect(existsSync(join(cache, 'astro-fr.json'))).toBe(true);
 
@@ -319,13 +319,13 @@ describe('ask-my-site/starlight', () => {
     const [styles, script] = injected;
     expect(styles?.[0]).toBe('page-ssr');
     expect(styles?.[1].split('\n')).toEqual([
-      'import "ask-my-site/react/styles.css";',
-      'import "ask-my-site/embed/launcher.css";',
-      'import "ask-my-site/starlight/launcher.css";',
+      'import "ondocs/react/styles.css";',
+      'import "ondocs/embed/launcher.css";',
+      'import "ondocs/starlight/launcher.css";',
     ]);
     expect(script?.[0]).toBe('page');
     expect(script?.[1]).toBe(
-      `import { mountAskDialog } from 'ask-my-site/embed';\nmountAskDialog(${JSON.stringify({
+      `import { mountAskDialog } from 'ondocs/embed';\nmountAskDialog(${JSON.stringify({
         endpoint: 'https://api.example.com/ask',
         shortcut: 'j',
         theme: 'light',
@@ -335,10 +335,10 @@ describe('ask-my-site/starlight', () => {
     expect(updateConfig).toHaveBeenCalledWith({
       vite: {
         plugins: [
-          expect.objectContaining({ name: 'ask-my-site:quiet-use-client' }),
-          expect.objectContaining({ name: 'ask-my-site:virtual-module' }),
+          expect.objectContaining({ name: 'ondocs:quiet-use-client' }),
+          expect.objectContaining({ name: 'ondocs:virtual-module' }),
         ],
-        optimizeDeps: { include: ['ask-my-site/embed'] },
+        optimizeDeps: { include: ['ondocs/embed'] },
       },
     });
   });
@@ -371,7 +371,7 @@ describe('ask-my-site/starlight', () => {
     expect(existsSync(join(outDir, 'llms.txt'))).toBe(false);
     expect(existsSync(join(outDir, 'guides/setup.md'))).toBe(true);
     expect(logger.info).toHaveBeenCalledWith(
-      'starlight-llms-txt writes llms.txt, so ask-my-site does not.',
+      'starlight-llms-txt writes llms.txt, so ondocs does not.',
     );
     await rm(outDir, { recursive: true });
     const second = await build(starlightIntegration(), STARLIGHT_PAGES, {
@@ -382,7 +382,7 @@ describe('ask-my-site/starlight', () => {
   });
 
   it('gives McpInstall.astro the MCP endpoint, resolved against site', async () => {
-    const mcpModule = async (options: Parameters<typeof starlightAskMySite>[0], site?: string) => {
+    const mcpModule = async (options: Parameters<typeof starlightOndocs>[0], site?: string) => {
       const { updateConfig } = await build(starlightIntegration(options), STARLIGHT_PAGES, {
         ...(site ? { site } : {}),
       });
@@ -392,7 +392,7 @@ describe('ask-my-site/starlight', () => {
         resolveId: (id: string) => string | null;
         load: (id: string) => string | null;
       };
-      const id = plugin.resolveId('virtual:ask-my-site/mcp');
+      const id = plugin.resolveId('virtual:ondocs/mcp');
       expect(plugin.resolveId('other')).toBeNull();
       return id === null ? null : plugin.load(id);
     };
@@ -408,7 +408,7 @@ describe('ask-my-site/starlight', () => {
       join(import.meta.dirname, '..', 'src/astro/McpInstall.astro'),
       'utf8',
     );
-    expect(source).toContain("from 'virtual:ask-my-site/mcp'");
+    expect(source).toContain("from 'virtual:ondocs/mcp'");
     // Resolved from dist/astro/, where the build copies it: dist/index.js is the root entry.
     expect(source).toContain("import { mcpInstallLinks } from '../index.js';");
     const manifest = JSON.parse(
@@ -420,7 +420,7 @@ describe('ask-my-site/starlight', () => {
   });
 });
 
-describe('ask-my-site/astro', () => {
+describe('ondocs/astro', () => {
   /** A page of a plain Astro site: chrome around <main>. */
   const page = (title: string, main: string, head = '') =>
     `<!DOCTYPE html><html lang="en"><head><title>${title} | Acme</title>${head}</head><body><header><nav><a href="/">Home</a></nav><p>Site header</p></header><main>${main}</main><footer>Site footer</footer></body></html>`;
@@ -443,7 +443,7 @@ describe('ask-my-site/astro', () => {
   };
 
   it('indexes each page’s <main>, without noindex, 404 and 500 pages', async () => {
-    const integration = askMySite({ embeddingModel: mockEmbeddingModel(), ignore: '.toc' });
+    const integration = ondocs({ embeddingModel: mockEmbeddingModel(), ignore: '.toc' });
     const { read, injected } = await build(integration, PAGES);
     const index = await read();
     expect(index.documents.map((d) => [d.url, d.title])).toEqual([
@@ -468,7 +468,7 @@ describe('ask-my-site/astro', () => {
   });
 
   it('reads the part of the page `content` selects, and skips pages without it', async () => {
-    const integration = askMySite({ embeddingModel: mockEmbeddingModel(), content: '.prose' });
+    const integration = ondocs({ embeddingModel: mockEmbeddingModel(), content: '.prose' });
     const pages = {
       a: page('A', '<h1>A</h1><div class="prose"><p>Prose A.</p></div><p>Not prose.</p>'),
       b: page('B', '<h1>B</h1><p>No prose here.</p>'),
@@ -481,7 +481,7 @@ describe('ask-my-site/astro', () => {
   });
 
   it('writes nothing, with a warning, when no page has content', async () => {
-    const integration = askMySite({ embeddingModel: mockEmbeddingModel(), content: '#missing' });
+    const integration = ondocs({ embeddingModel: mockEmbeddingModel(), content: '#missing' });
     const { logger, outDir } = await build(integration, PAGES);
     expect(logger.warn).toHaveBeenCalledWith(
       'None of the 6 pages Astro built has content to index in #missing, so there is no ask-index.json.',
@@ -500,7 +500,7 @@ describe('ask-my-site/astro', () => {
       locales: ['en', 'es', { path: 'pt', codes: ['pt-BR', 'pt'] }],
       routing: { prefixDefaultLocale: false },
     };
-    const integration = askMySite({ embeddingModel: mockEmbeddingModel(), indexFile: '/ask.json' });
+    const integration = ondocs({ embeddingModel: mockEmbeddingModel(), indexFile: '/ask.json' });
     const { read } = await build(integration, pages, { i18n });
     expect((await read('ask.json')).documents.map((d) => d.url)).toEqual(['/']);
     expect((await read('es/ask.json')).documents.map((d) => d.url)).toEqual(['/es/']);
@@ -510,7 +510,7 @@ describe('ask-my-site/astro', () => {
     await rm(join(root, 'dist'), { recursive: true });
     const prefixed = { ...i18n, routing: { prefixDefaultLocale: true } };
     const { outDir } = await build(
-      askMySite({ embeddingModel: mockEmbeddingModel() }),
+      ondocs({ embeddingModel: mockEmbeddingModel() }),
       { 'en/start': page('Start', '<h1>Start</h1><p>English.</p>') },
       { i18n: prefixed },
     );
@@ -520,7 +520,7 @@ describe('ask-my-site/astro', () => {
 
   it('posts to ASK_ENDPOINT when set, and says how to get answers in astro dev', async () => {
     // The hint shows once per process.
-    Reflect.deleteProperty(globalThis, Symbol.for('ask-my-site.devEndpointHint'));
+    Reflect.deleteProperty(globalThis, Symbol.for('ondocs.devEndpointHint'));
     const logger = { info: vi.fn(), warn: vi.fn() };
     /** Runs the hooks of `astro dev`, with the routes the site has. */
     const dev = async (
@@ -542,24 +542,24 @@ describe('ask-my-site/astro', () => {
     };
 
     // An SSR site that serves the endpoint itself needs no hint.
-    await dev(askMySite({ embeddingModel: null }), [
+    await dev(ondocs({ embeddingModel: null }), [
       { type: 'endpoint', patternRegex: /^\/api\/ask\/?$/ },
     ]);
     expect(logger.info).not.toHaveBeenCalled();
     // A static site does not serve it, though Starlight's `[...slug]` page matches any path.
-    await dev(askMySite({ embeddingModel: null }), [
+    await dev(ondocs({ embeddingModel: null }), [
       { type: 'page', patternRegex: /^(?:\/(.*?))?\/?$/ },
     ]);
     expect(logger.info).toHaveBeenCalledWith(
-      'The dialog posts to /api/ask, which astro dev does not serve. For answers while you work, build the site once, run `npx ask-my-site dev`, and start the site with ASK_ENDPOINT=http://localhost:8787/api/ask.',
+      'The dialog posts to /api/ask, which astro dev does not serve. For answers while you work, build the site once, run `npx ondocs dev`, and start the site with ASK_ENDPOINT=http://localhost:8787/api/ask.',
     );
 
     vi.stubEnv('ASK_ENDPOINT', 'http://localhost:8787/api/ask');
-    const [, script] = await dev(askMySite({ embeddingModel: null }), []);
+    const [, script] = await dev(ondocs({ embeddingModel: null }), []);
     expect(script).toContain('mountAskDialog({"endpoint":"http://localhost:8787/api/ask"});');
     // Over a configured endpoint too, as the README's config sets one and its local-dev steps
     // start the site with ASK_ENDPOINT.
-    const [, configured] = await dev(askMySite({ embeddingModel: null, endpoint: '/api/ask' }), []);
+    const [, configured] = await dev(ondocs({ embeddingModel: null, endpoint: '/api/ask' }), []);
     expect(configured).toContain('mountAskDialog({"endpoint":"http://localhost:8787/api/ask"});');
   });
 
@@ -584,7 +584,7 @@ describe('ask-my-site/astro', () => {
     const options = { embeddingProviderOptions: { openai: { dimensions: 4 } } };
 
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
-    const { read } = await build(askMySite(options), PAGES);
+    const { read } = await build(ondocs(options), PAGES);
     expect(requests.at(-1)).toMatchObject({
       url: 'https://api.openai.com/v1/embeddings',
       body: { model: 'text-embedding-3-small', dimensions: 4 },
@@ -597,7 +597,7 @@ describe('ask-my-site/astro', () => {
     await rm(join(root, 'node_modules'), { recursive: true });
     vi.stubEnv('OPENAI_API_KEY', '');
     vi.stubEnv('AI_GATEWAY_API_KEY', 'gateway-test');
-    await build(askMySite(options), PAGES);
+    await build(ondocs(options), PAGES);
     expect(requests.at(-1)).toMatchObject({
       url: expect.stringMatching(/\/embedding-model$/) as string,
       body: { providerOptions: { openai: { dimensions: 4 } } },
@@ -605,7 +605,7 @@ describe('ask-my-site/astro', () => {
   });
 
   it('blanks "use client" in Radix and cmdk only, keeping source positions', async () => {
-    const { updateConfig } = await build(askMySite({ embeddingModel: null }), PAGES);
+    const { updateConfig } = await build(ondocs({ embeddingModel: null }), PAGES);
     const [[{ vite }]] = updateConfig.mock.calls as [
       [
         {

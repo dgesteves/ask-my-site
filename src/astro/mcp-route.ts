@@ -1,4 +1,4 @@
-// The MCP endpoint (/api/mcp by default), injected by ask-my-site/astro on a site with an SSR
+// The MCP endpoint (/api/mcp by default), injected by ondocs/astro on a site with an SSR
 // adapter. See route.ts.
 import { serve, type RouteContext } from './route';
 import { handlers } from './route-handlers';

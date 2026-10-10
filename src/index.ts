@@ -1,13 +1,13 @@
 /**
- * ask-my-site core. Runtime-neutral: no Node built-ins, safe to import from edge functions,
+ * ondocs core. Runtime-neutral: no Node built-ins, safe to import from edge functions,
  * workers and browsers.
  *
  * - Loaders turn Markdown/MDX, HTML or plain records into `SourceDocument`s.
  * - `buildIndex` chunks, embeds and quantizes them into a static `AskIndexFile`.
  * - `loadIndex` + `retrieve` run hybrid search over that file in memory.
  *
- * File-system helpers live in `ask-my-site/node`, the HTTP handler in `ask-my-site/server`, the
- * UI in `ask-my-site/react`.
+ * File-system helpers live in `ondocs/node`, the HTTP handler in `ondocs/server`, the
+ * UI in `ondocs/react`.
  */
 
 export type { Chunk, ChunkingOptions, SourceDocument } from './types';

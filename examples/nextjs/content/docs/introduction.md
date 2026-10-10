@@ -1,15 +1,17 @@
 ---
 title: Introduction
-description: What ask-my-site is, who it is for, and when it is the wrong tool.
+description: What ondocs is, who it is for, and when it is the wrong tool.
 section: Get started
 order: 1
 ---
 
-ask-my-site is a self-hosted "Ask AI" box for documentation sites. A visitor types a question and gets a short answer written from your own pages, with numbered citations that link to the exact section each claim came from. It is an open-source npm package under the MIT license, not a hosted service.
+ondocs is a self-hosted "Ask AI" box for documentation sites. A visitor types a question and gets a short answer written from your own pages, with numbered citations that link to the exact section each claim came from. It is an open-source npm package under the MIT license, not a hosted service.
+
+It was published as `ask-my-site` until 0.6.0: [Migrating from ask-my-site](/docs/migrating) lists what was renamed.
 
 ## How it works
 
-At build time, `ask-my-site index` (or the Docusaurus, Astro or Starlight plugin) splits your pages into chunks at every heading, embeds each chunk and writes one static JSON file, `ask-index.json`. Vectors are stored as int8, so a site of 1,000 chunks makes an index of about 1.6 MB.
+At build time, `ondocs index` (or the Docusaurus, Astro or Starlight plugin) splits your pages into chunks at every heading, embeds each chunk and writes one static JSON file, `ask-index.json`. Vectors are stored as int8, so a site of 1,000 chunks makes an index of about 1.6 MB.
 
 At request time, a function you deploy loads that file into memory once and searches it for each question: BM25 keyword search and cosine similarity over the vectors, merged with reciprocal rank fusion. A relevance gate then decides whether anything found is good enough to answer from. If it is, your model streams an answer that cites its sources as `[1]`, `[2]`. If it is not, the answer is "I don't know", and the model is never called.
 
@@ -27,11 +29,11 @@ There is no vector database, no ingestion pipeline to keep in sync, and no accou
 
 ## How it compares
 
-Hosted assistants such as Kapa, Inkeep, Algolia Ask AI, Biel.ai and Markprompt ingest your docs into their platform and answer from there. Search-only tools such as Pagefind and Orama's local index need no server, but they return links, not answers. ask-my-site sits between the two: a local index like Pagefind's, plus cited answers from a model you pick, with no cloud account. The [FAQ](/docs/faq#how-is-it-different-from-kapa-inkeep-or-algolia-ask-ai) has the longer comparison.
+Hosted assistants such as Kapa, Inkeep, Algolia Ask AI, Biel.ai and Markprompt ingest your docs into their platform and answer from there. Search-only tools such as Pagefind and Orama's local index need no server, but they return links, not answers. ondocs sits between the two: a local index like Pagefind's, plus cited answers from a model you pick, with no cloud account. The [FAQ](/docs/faq#how-is-it-different-from-kapa-inkeep-or-algolia-ask-ai) has the longer comparison.
 
 ## When it fits
 
-ask-my-site fits documentation sites, product sites, blogs and changelogs: content of up to tens of thousands of chunks that changes when you deploy. It ships a plugin for Docusaurus, a plugin for Starlight, an integration for Astro, React components for Next.js and other React apps, and a script tag for everything else, such as Hugo, Jekyll, Eleventy or MkDocs.
+ondocs fits documentation sites, product sites, blogs and changelogs: content of up to tens of thousands of chunks that changes when you deploy. It ships a plugin for Docusaurus, a plugin for Starlight, an integration for Astro, React components for Next.js and other React apps, and a script tag for everything else, such as Hugo, Jekyll, Eleventy or MkDocs.
 
 ## When it is the wrong tool
 

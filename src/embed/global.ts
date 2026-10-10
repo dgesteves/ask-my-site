@@ -3,11 +3,11 @@
 // its styles) is dist/embed-dialog.global.js, next to this file, which it loads the first time
 // the dialog is wanted.
 //
-//   <script src="https://cdn.jsdelivr.net/npm/ask-my-site@0/dist/embed.global.js"
+//   <script src="https://cdn.jsdelivr.net/npm/ondocs@0/dist/embed.global.js"
 //     data-endpoint="/api/ask" defer></script>
 //
 // Once the page has loaded it mounts with its tag's `data-*` attributes (see `scriptOptions`),
-// unless the tag has `data-manual`. `window.AskMySite.mount(options)` mounts it by hand.
+// unless the tag has `data-manual`. `window.Ondocs.mount(options)` mounts it by hand.
 // `data-dialog-src` gives the dialog's URL, for a copy hosted elsewhere.
 import launcherStyles from './launcher.css';
 import {
@@ -18,11 +18,17 @@ import {
 } from './mount';
 import { scriptOptions } from './script';
 
+interface OndocsGlobal {
+  mount: (options?: MountAskDialogOptions) => MountedAskDialog;
+}
+
 declare global {
   interface Window {
-    AskMySite?: { mount: (options?: MountAskDialogOptions) => MountedAskDialog };
+    Ondocs?: OndocsGlobal;
+    /** @deprecated `window.Ondocs`, under its name from before ask-my-site became ondocs. */
+    AskMySite?: OndocsGlobal;
     /** Set by dist/embed-dialog.global.js. */
-    AskMySiteDialog?: DialogRenderer;
+    OndocsDialog?: DialogRenderer;
   }
 }
 
@@ -37,15 +43,15 @@ let dialog: Promise<DialogRenderer> | null = null;
 /** Adds dist/embed-dialog.global.js to the page, once, and waits for it. */
 function loadDialog(): Promise<DialogRenderer> {
   dialog ??= new Promise<DialogRenderer>((resolve, reject) => {
-    if (window.AskMySiteDialog) {
-      resolve(window.AskMySiteDialog);
+    if (window.OndocsDialog) {
+      resolve(window.OndocsDialog);
       return;
     }
     const tag = document.createElement('script');
     tag.src = dialogSrc;
     tag.async = true;
     tag.addEventListener('load', () => {
-      if (window.AskMySiteDialog) resolve(window.AskMySiteDialog);
+      if (window.OndocsDialog) resolve(window.OndocsDialog);
       else reject(new Error(`${dialogSrc} did not define the dialog.`));
     });
     tag.addEventListener('error', () => {
@@ -60,9 +66,9 @@ function loadDialog(): Promise<DialogRenderer> {
 }
 
 function mount(options?: MountAskDialogOptions): MountedAskDialog {
-  if (!document.getElementById('ask-my-site-styles')) {
+  if (!document.getElementById('ondocs-styles')) {
     const style = document.createElement('style');
-    style.id = 'ask-my-site-styles';
+    style.id = 'ondocs-styles';
     style.textContent = launcherStyles;
     // First in <head>, so the site's own stylesheets override it.
     document.head.prepend(style);
@@ -70,7 +76,23 @@ function mount(options?: MountAskDialogOptions): MountedAskDialog {
   return mountWithLoader(options ?? {}, loadDialog);
 }
 
-window.AskMySite = { mount };
+const api: OndocsGlobal = { mount };
+window.Ondocs = api;
+
+// The name from before ask-my-site became ondocs still works, and says once to use the new one.
+let warned = false;
+Object.defineProperty(window, 'AskMySite', {
+  configurable: true,
+  get: () => {
+    if (!warned) {
+      warned = true;
+      console.warn(
+        '[ondocs] window.AskMySite is now window.Ondocs; the old name still works for now.',
+      );
+    }
+    return api;
+  },
+});
 
 if (script && script.dataset.manual === undefined) {
   const options = scriptOptions(script.dataset);

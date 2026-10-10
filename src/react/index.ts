@@ -1,7 +1,7 @@
 /**
- * ask-my-site/react: the ⌘K ask palette and the hook behind it.
+ * ondocs/react: the ⌘K ask palette and the hook behind it.
  *
- * Import `ask-my-site/react/styles.css` once for the default theme, or style the `ask-*`
+ * Import `ondocs/react/styles.css` once for the default theme, or style the `ask-*`
  * classes yourself.
  */
 

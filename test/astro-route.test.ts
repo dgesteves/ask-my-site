@@ -1,4 +1,4 @@
-// The endpoints ask-my-site/astro serves itself on a site with an SSR adapter: when it injects
+// The endpoints ondocs/astro serves itself on a site with an SSR adapter: when it injects
 // them, the module it generates for them, and how they answer. scripts/deploy-recipes.mjs builds
 // real sites with the Node, Vercel and Cloudflare adapters.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 import type { AstroIntegration } from 'astro';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import askMySite from '../src/astro';
+import ondocs from '../src/astro';
 import { routeModuleCode } from '../src/astro/integration';
 import { routeHandlers, serve, type RouteContext, type RouteModule } from '../src/astro/route';
 import { buildIndex, serializeIndexFile } from '../src';
@@ -18,7 +18,7 @@ import { corpus } from './helpers';
 
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'ask-my-site-astro-route-'));
+  root = await mkdtemp(join(tmpdir(), 'ondocs-astro-route-'));
   await mkdir(join(root, 'src/pages'), { recursive: true });
   vi.stubEnv('ASK_ENDPOINT', '');
 });
@@ -64,8 +64,8 @@ function setup(
     }: {
       vite: { plugins: { name: string; load?: (id: string) => unknown }[] };
     }) => {
-      const plugin = vite.plugins.find((p) => p.name === 'ask-my-site:virtual-source');
-      result.module = (plugin?.load?.('\0virtual:ask-my-site/route') as string | undefined) ?? null;
+      const plugin = vite.plugins.find((p) => p.name === 'ondocs:virtual-source');
+      result.module = (plugin?.load?.('\0virtual:ondocs/route') as string | undefined) ?? null;
     },
     logger: {
       info: (message: string) => result.info.push(message),
@@ -75,15 +75,15 @@ function setup(
   return result;
 }
 
-const integration = (options: Parameters<typeof askMySite>[0] = {}) =>
-  askMySite({ embedding: 'mock', route: { model: 'mock' }, ...options });
+const integration = (options: Parameters<typeof ondocs>[0] = {}) =>
+  ondocs({ embedding: 'mock', route: { model: 'mock' }, ...options });
 
-describe('ask-my-site/astro with an SSR adapter', () => {
+describe('ondocs/astro with an SSR adapter', () => {
   it('serves the ask and MCP endpoints itself, so the site needs no route file', () => {
     const result = setup(integration());
     expect(result.injected).toEqual([
-      { pattern: '/api/ask', entrypoint: 'ask-my-site/astro/ask-route', prerender: false },
-      { pattern: '/api/mcp', entrypoint: 'ask-my-site/astro/mcp-route', prerender: false },
+      { pattern: '/api/ask', entrypoint: 'ondocs/astro/ask-route', prerender: false },
+      { pattern: '/api/mcp', entrypoint: 'ondocs/astro/mcp-route', prerender: false },
     ]);
     expect(result.info).toContain(
       'Serving /api/ask and /api/mcp with the adapter, answering with mock; route: false turns this off.',
@@ -130,12 +130,12 @@ describe('ask-my-site/astro with an SSR adapter', () => {
       },
     );
     expect(custom.injected).toEqual([
-      { pattern: '/ask', entrypoint: 'ask-my-site/astro/ask-route', prerender: false },
+      { pattern: '/ask', entrypoint: 'ondocs/astro/ask-route', prerender: false },
     ]);
   });
 
   it('rejects a model it cannot make', () => {
-    expect(() => askMySite({ route: { model: 'gpt-5' } })).toThrow(
+    expect(() => ondocs({ route: { model: 'gpt-5' } })).toThrow(
       "route.model must be openai:<model>, an AI Gateway id <provider>/<model>, or mock (got 'gpt-5')",
     );
   });

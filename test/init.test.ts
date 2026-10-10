@@ -1,4 +1,4 @@
-// `ask-my-site init`: what it writes per site and host (snapshotted), and how it behaves when run
+// `ondocs init`: what it writes per site and host (snapshotted), and how it behaves when run
 // again, asked to overwrite, or given config it cannot edit safely. scripts/deploy-recipes.mjs
 // builds these same files with each host's own tooling.
 import { existsSync } from 'node:fs';
@@ -15,7 +15,7 @@ import { main } from '../src/cli/main';
 
 let cwd: string;
 beforeEach(async () => {
-  cwd = await mkdtemp(join(tmpdir(), 'ask-my-site-init-'));
+  cwd = await mkdtemp(join(tmpdir(), 'ondocs-init-'));
 });
 afterEach(async () => {
   await rm(cwd, { recursive: true, force: true });
@@ -67,7 +67,7 @@ const DOCUSAURUS = {
     "export default { title: 'Acme Docs', url: 'https://acme.github.io', baseUrl: '/docs/' };\n",
 };
 
-describe('ask-my-site init: what it writes per host', () => {
+describe('ondocs init: what it writes per host', () => {
   const cases: [string, Record<string, string>, string[]][] = [
     ['Docusaurus on Vercel', { ...DOCUSAURUS, 'vercel.json': '{ "cleanUrls": true }\n' }, []],
     [
@@ -181,7 +181,7 @@ describe('ask-my-site init: what it writes per host', () => {
   }
 });
 
-describe('ask-my-site init', () => {
+describe('ondocs init', () => {
   it('is idempotent: run again, it finds every file as it would write it', async () => {
     await site({ ...DOCUSAURUS, 'vercel.json': '{}' });
     expect((await run([])).code).toBe(0);
@@ -201,7 +201,7 @@ describe('ask-my-site init', () => {
     expect(result.stdout).toMatch(/would create {2}api\/ask\.ts/);
     expect(result.stdout).toContain('--- api/ask.ts');
     expect(result.stdout).toContain(
-      "import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';",
+      "import { createAskHandler, memoryRateLimit } from 'ondocs/server';",
     );
     expect(existsSync(join(cwd, 'api'))).toBe(false);
     expect(await readFile(join(cwd, 'vercel.json'), 'utf8')).toBe('{}');
@@ -289,7 +289,7 @@ describe('ask-my-site init', () => {
       'https://acme.github.io/docs/',
     ]);
     expect(given.code).toBe(0);
-    expect(await readFile(join(cwd, 'ask-my-site-worker/wrangler.jsonc'), 'utf8')).toContain(
+    expect(await readFile(join(cwd, 'ondocs-worker/wrangler.jsonc'), 'utf8')).toContain(
       '"SITE_URL": "https://acme.github.io/docs"',
     );
   });
@@ -300,17 +300,17 @@ describe('ask-my-site init', () => {
     });
     const zeroKey = await run(['--host', 'github-pages']);
     expect(zeroKey.code).toBe(0);
-    const worker = await readFile(join(cwd, 'ask-my-site-worker/src/index.ts'), 'utf8');
+    const worker = await readFile(join(cwd, 'ondocs-worker/src/index.ts'), 'utf8');
     expect(worker).toContain("import { createWorkersAI } from 'workers-ai-provider';");
     expect(worker).not.toContain('OPENAI_API_KEY');
-    expect(await readFile(join(cwd, 'ask-my-site-worker/wrangler.jsonc'), 'utf8')).toContain(
+    expect(await readFile(join(cwd, 'ondocs-worker/wrangler.jsonc'), 'utf8')).toContain(
       '"ai": { "binding": "AI" },',
     );
     expect(zeroKey.stdout).not.toContain('wrangler secret put');
 
     const openai = await run(['--host', 'github-pages', '--provider', 'openai', '--yes']);
     expect(openai.code).toBe(0);
-    expect(await readFile(join(cwd, 'ask-my-site-worker/src/index.ts'), 'utf8')).toContain(
+    expect(await readFile(join(cwd, 'ondocs-worker/src/index.ts'), 'utf8')).toContain(
       "import { createOpenAI } from '@ai-sdk/openai';",
     );
     expect(openai.stdout).toContain('npx wrangler secret put OPENAI_API_KEY');
@@ -380,7 +380,7 @@ describe('wranglerWorkerConfig', () => {
       ),
     ).toEqual({
       content:
-        'name = "docs"\nmain = "worker/ask-my-site.ts"\ncompatibility_date = "2026-09-01"\n\n[assets]\nbinding = "ASSETS"\ndirectory = "./build"\n',
+        'name = "docs"\nmain = "worker/ondocs.ts"\ncompatibility_date = "2026-09-01"\n\n[assets]\nbinding = "ASSETS"\ndirectory = "./build"\n',
     });
   });
 
@@ -389,7 +389,7 @@ describe('wranglerWorkerConfig', () => {
       '{\n  // The docs.\n  "name": "docs",\n  "assets": {\n    "directory": "./build"\n  }\n}\n';
     expect(wranglerWorkerConfig('wrangler.jsonc', source)).toEqual({
       content:
-        '{\n  // The docs.\n  "name": "docs",\n  "main": "worker/ask-my-site.ts",\n  "assets": {\n    "binding": "ASSETS",\n    "directory": "./build"\n  }\n}\n',
+        '{\n  // The docs.\n  "name": "docs",\n  "main": "worker/ondocs.ts",\n  "assets": {\n    "binding": "ASSETS",\n    "directory": "./build"\n  }\n}\n',
     });
   });
 
@@ -401,7 +401,7 @@ describe('wranglerWorkerConfig', () => {
       ),
     ).toEqual({
       error:
-        'wrangler.toml has its own entry point (main = "src/index.ts"): call askMySite(request, env) from worker/ask-my-site.ts in it',
+        'wrangler.toml has its own entry point (main = "src/index.ts"): call ondocs(request, env) from worker/ondocs.ts in it',
     });
     expect(
       wranglerWorkerConfig(

@@ -1,17 +1,18 @@
 /**
- * ask-my-site/docusaurus: a Docusaurus plugin. After `docusaurus build` it indexes the pages the
+ * ondocs/docusaurus: a Docusaurus plugin. After `docusaurus build` it indexes the pages the
  * site actually serves into `ask-index.json` in the build output, and it renders the ask dialog,
  * opened from a floating button or a shortcut, from the site's `Root`.
  *
  * The answers come from an endpoint you deploy next to the site (a Vercel, Netlify or Cloudflare
- * function running `createAskHandler` from `ask-my-site/server`); see the README.
+ * function running `createAskHandler` from `ondocs/server`); see the README.
  */
 
+import { readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { AskMySiteDialogOptions as DialogOptions } from '../embed/options';
+import type { OndocsDialogOptions as DialogOptions } from '../embed/options';
 import {
   buildEmbedding,
   checkIndexOptions,
@@ -19,10 +20,12 @@ import {
   dialogEndpoint,
   excluder,
   hintDevEndpoint,
+  indexCache,
   resolveMcp,
   warnMissingDialogPeers,
   writeSiteIndex,
   type IndexOptions,
+  type Logger,
   type McpOption,
 } from '../integrations/build';
 import {
@@ -36,13 +39,13 @@ import { attribute, fromHtml } from '../loaders/html';
 import type { SourceDocument } from '../types';
 
 /** What the dialog shows in one locale, over the dialog's own options. */
-export type AskMySiteLocaleDialogOptions = Pick<
+export type OndocsLocaleDialogOptions = Pick<
   DialogOptions,
   'labels' | 'placeholder' | 'suggestions' | 'buttonLabel'
 > & { title?: string };
 
 /** What the dialog shows; passed to `AskDialog`. */
-export interface AskMySiteDialogOptions extends DialogOptions {
+export interface OndocsDialogOptions extends DialogOptions {
   /** The dialog's accessible name. Default "Ask {site title}", or `labels.title`. */
   title?: string;
   /**
@@ -51,18 +54,18 @@ export interface AskMySiteDialogOptions extends DialogOptions {
    * own, and the dialog sends the locale with each question, so an endpoint with an index per
    * locale answers from that one.
    */
-  locales?: Record<string, AskMySiteLocaleDialogOptions>;
+  locales?: Record<string, OndocsLocaleDialogOptions>;
 }
 
 // A type, not an interface, so it fits Docusaurus's `PluginOptions` index signature in a
 // `docusaurus.config.ts` plugins entry.
-export type AskMySiteOptions = IndexOptions & {
+export type OndocsOptions = IndexOptions & {
   /** The plugin instance's id, set by Docusaurus. Default `"default"`. */
   id?: string;
   /**
    * URL the dialog posts questions to. Default `/api/ask`. The `ASK_ENDPOINT` environment
    * variable, when it is set as the site builds or starts, takes precedence over it:
-   * `ASK_ENDPOINT=http://localhost:8787/api/ask` points the dialog at `ask-my-site dev`.
+   * `ASK_ENDPOINT=http://localhost:8787/api/ask` points the dialog at `ondocs dev`.
    */
   endpoint?: string;
   /** Where the index is written in the build output, and served from. Default `ask-index.json`. */
@@ -73,11 +76,11 @@ export type AskMySiteOptions = IndexOptions & {
    * `/docs/changelog` and, in French, `/docs/fr/changelog`.
    */
   exclude?: string[];
-  dialog?: AskMySiteDialogOptions;
+  dialog?: OndocsDialogOptions;
   /**
-   * The site's MCP endpoint (`createMcpHandler` from `ask-my-site/server`), as an absolute URL or a
+   * The site's MCP endpoint (`createMcpHandler` from `ondocs/server`), as an absolute URL or a
    * path on the site such as `/api/mcp`, and optionally the name clients list it under (default:
-   * from the site title). `<AskMySiteMcp />` from `@theme/AskMySiteMcp` then shows how to add it
+   * from the site title). `<OndocsMcp />` from `@theme/OndocsMcp` then shows how to add it
    * to Cursor, VS Code, Claude and ChatGPT.
    */
   mcp?: McpOption;
@@ -91,15 +94,22 @@ export type AskMySiteOptions = IndexOptions & {
   llmsTxt?: LlmsTxtOption;
 };
 
-/** What the theme reads with `useAllPluginInstancesData('ask-my-site')`. */
-export interface AskMySiteGlobalData {
+/** What the theme reads with `useAllPluginInstancesData('ondocs')`. */
+export interface OndocsGlobalData {
   endpoint: string;
-  dialog: Omit<AskMySiteDialogOptions, 'locales'> & { title: string };
+  dialog: Omit<OndocsDialogOptions, 'locales'> & { title: string };
   /** The locale this build is for, when it is not the default one. */
   locale?: string;
   /** The MCP endpoint, absolute, when the plugin's `mcp` option names one. */
   mcp?: { url: string; name: string };
 }
+
+/** @deprecated Use `OndocsOptions`. Its name from before ask-my-site became ondocs. */
+export type AskMySiteOptions = OndocsOptions;
+/** @deprecated Use `OndocsDialogOptions`. Its name from before ask-my-site became ondocs. */
+export type AskMySiteDialogOptions = OndocsDialogOptions;
+/** @deprecated Use `OndocsGlobalData`. Its name from before ask-my-site became ondocs. */
+export type AskMySiteGlobalData = OndocsGlobalData;
 
 interface LoadContext {
   siteDir: string;
@@ -118,9 +128,10 @@ interface PostBuildProps {
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-export default function askMySite(context: LoadContext, options: AskMySiteOptions = {}) {
+export default function ondocs(context: LoadContext, options: OndocsOptions = {}) {
   checkIndexOptions(options);
   warnMissingDialogPeers(consoleLogger());
+  warnOldSwizzle(context.siteDir, consoleLogger());
   const { title: siteTitle, titleDelimiter = '|' } = context.siteConfig;
   const indexFile = (options.indexFile ?? 'ask-index.json').replace(/^\/+/, '');
   const mcp = resolveMcp(options.mcp, context.siteConfig.url, siteTitle, 'the site config');
@@ -130,7 +141,7 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
   const own = perLocale?.[currentLocale];
   const labels = { ...base.labels, ...own?.labels };
   const dialog = { ...base, ...own, ...(Object.keys(labels).length > 0 ? { labels } : {}) };
-  const data: AskMySiteGlobalData = {
+  const data: OndocsGlobalData = {
     endpoint: dialogEndpoint(options.endpoint),
     dialog: { ...dialog, title: dialog.title ?? labels.title ?? `Ask ${siteTitle}` },
     ...(defaultLocale !== undefined && currentLocale !== defaultLocale
@@ -140,15 +151,15 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
   };
 
   return {
-    name: 'ask-my-site',
+    name: 'ondocs',
 
     getThemePath() {
-      // Root, which renders AskMySite: both can be swizzled.
+      // Root, which renders Ondocs: both can be swizzled.
       return join(here, 'theme');
     },
 
     getClientModules() {
-      // The dialog's stylesheet (dist/styles.css, `ask-my-site/react/styles.css`) and the launcher's.
+      // The dialog's stylesheet (dist/styles.css, `ondocs/react/styles.css`) and the launcher's.
       return [join(here, '..', 'styles.css'), join(here, 'launcher.css')];
     },
 
@@ -176,13 +187,9 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
         embeddingProviderOptions: embedding.providerOptions,
         options,
         file: join(outDir, indexFile),
-        // One file per locale and plugin instance, in node_modules/.cache, which Netlify and
-        // Vercel keep between builds (.docusaurus is not kept).
-        cache: join(
+        // One file per locale and plugin instance (.docusaurus is not kept between builds).
+        cache: indexCache(
           context.siteDir,
-          'node_modules',
-          '.cache',
-          'ask-my-site',
           `${context.i18n.currentLocale}-${options.id ?? 'default'}.json`,
         ),
         name: indexFile,
@@ -209,6 +216,28 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
       }
     },
   };
+}
+
+/**
+ * Warns about a swizzled copy of the dialog under its name from before ask-my-site became ondocs,
+ * `src/theme/AskMySite`, which the plugin's `Root` no longer renders: it renders `@theme/Ondocs`.
+ */
+export function warnOldSwizzle(siteDir: string, log: Logger): void {
+  let entries: string[];
+  try {
+    entries = readdirSync(join(siteDir, 'src', 'theme'));
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (!/^AskMySite(?:\.[jt]sx?)?$/.test(entry)) continue;
+    const renamed = entry.replace('AskMySite', 'Ondocs');
+    log.warn(
+      `src/theme/${entry} swizzles @theme/AskMySite, which is now @theme/Ondocs, so the dialog ` +
+        `no longer uses it. Rename it: git mv src/theme/${entry} src/theme/${renamed}, and ` +
+        'change any @theme-original/AskMySite import in it to @theme-original/Ondocs.',
+    );
+  }
 }
 
 /** A plugin option, read without trusting its type. */

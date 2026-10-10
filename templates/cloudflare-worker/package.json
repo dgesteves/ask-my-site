@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "ai": "^7.0.0",
-    "ask-my-site": "^0.7.0",
+    "ondocs": "^0.7.0",
     "workers-ai-provider": "^4.0.0"
   },
   "devDependencies": {

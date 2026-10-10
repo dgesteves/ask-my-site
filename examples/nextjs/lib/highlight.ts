@@ -5,7 +5,7 @@ import { createHighlighter, type Highlighter, type ThemeRegistration } from 'shi
  * for punctuation and comments. Highlighting runs at build time; the page ships plain HTML.
  */
 const theme: ThemeRegistration = {
-  name: 'ask-my-site',
+  name: 'ondocs',
   type: 'dark',
   colors: { 'editor.background': '#14181d', 'editor.foreground': '#dfe6ee' },
   tokenColors: [
@@ -100,7 +100,7 @@ export async function highlight(code: string, lang = ''): Promise<string> {
   if (!(LANGUAGES as readonly string[]).includes(language)) {
     return `<pre class="shiki" tabindex="0"><code>${escapeHtml(code)}</code></pre>`;
   }
-  return (await getHighlighter()).codeToHtml(code, { lang: language, theme: 'ask-my-site' });
+  return (await getHighlighter()).codeToHtml(code, { lang: language, theme: 'ondocs' });
 }
 
 /**

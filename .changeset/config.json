@@ -1,10 +1,10 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
-  "changelog": ["@changesets/changelog-github", { "repo": "dgesteves/ask-my-site" }],
+  "changelog": ["@changesets/changelog-github", { "repo": "dgesteves/ondocs" }],
   "commit": false,
   "access": "public",
   "baseBranch": "main",
-  "fixed": [["ask-my-site", "docusaurus-plugin-ask-my-site", "starlight-ask-my-site"]],
+  "fixed": [["ondocs", "docusaurus-plugin-ondocs", "starlight-ondocs"]],
   "linked": [],
   "updateInternalDependencies": "patch",
   "privatePackages": { "version": true, "tag": false },

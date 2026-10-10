@@ -26,13 +26,13 @@ body:
     id: reproduction
     attributes:
       label: Reproduction
-      description: Your plugin options or `ask-my-site index` command, and the smallest content that shows it (or a link to a repository).
+      description: Your plugin options or `ondocs index` command, and the smallest content that shows it (or a link to a repository).
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: ask-my-site version
+      label: ondocs version
     validations:
       required: true
   - type: input

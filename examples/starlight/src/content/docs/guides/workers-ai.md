@@ -13,14 +13,14 @@ A docs site on GitHub Pages, S3, Read the Docs or any other host that only serve
 There are two ways to get the same Worker. In the site's folder, `init` reads the site's URL from its config:
 
 ```sh
-npx ask-my-site init --host github-pages   # writes ask-my-site-worker/
-cd ask-my-site-worker && npm install && npx wrangler deploy
+npx ondocs init --host github-pages   # writes ondocs-worker/
+cd ondocs-worker && npm install && npx wrangler deploy
 ```
 
 Or start from the template, set `SITE_URL` in its `wrangler.jsonc` to the site's URL with its base path, and deploy:
 
 ```sh
-npm create cloudflare@latest my-docs-ask -- --template=dgesteves/ask-my-site/templates/cloudflare-worker
+npm create cloudflare@latest my-docs-ask -- --template=dgesteves/ondocs/templates/cloudflare-worker
 cd my-docs-ask && npx wrangler deploy
 ```
 
@@ -34,7 +34,7 @@ An index built without an embedding model, the default when the build has no mod
 
 ```js
 // The Docusaurus or Starlight plugin
-askMySite({
+ondocs({
   endpoint: 'https://my-docs-ask.<subdomain>.workers.dev/api/ask',
   embedding: 'workers-ai:@cf/baai/bge-small-en-v1.5',
 });
@@ -42,7 +42,7 @@ askMySite({
 
 ```sh
 # Any other site
-npx ask-my-site index public -o public/ask-index.json -e workers-ai:@cf/baai/bge-small-en-v1.5
+npx ondocs index public -o public/ask-index.json -e workers-ai:@cf/baai/bge-small-en-v1.5
 ```
 
 The build calls Cloudflare's REST API with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, a token with Workers AI Read and Edit permissions, set as repository secrets for a GitHub Actions build. It sends each chunk's text, 100 at a time, and gets back BGE-small's 384-dimension vectors, at $0.020 per million tokens (1,841 neurons per million). The Worker embeds each question with the same model through its AI binding. Both send only the text, so both get the model's default pooling, as they must to compare.
@@ -90,4 +90,4 @@ The template's `npm test` runs the Worker in workerd, the Workers runtime, on yo
 
 ## With OpenAI instead
 
-`npx ask-my-site init --host github-pages --provider openai` writes the same Worker with OpenAI: set its key with `npx wrangler secret put OPENAI_API_KEY`, and it embeds questions with the OpenAI model the index records.
+`npx ondocs init --host github-pages --provider openai` writes the same Worker with OpenAI: set its key with `npx wrangler secret put OPENAI_API_KEY`, and it embeds questions with the OpenAI model the index records.

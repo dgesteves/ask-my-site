@@ -5,7 +5,7 @@ section: Reference
 order: 31
 ---
 
-`createAskHandler(options)` from `ask-my-site/server` returns the endpoint: a function that takes a Web `Request` and returns a `Promise<Response>`. It runs in Next.js route handlers, Hono, Bun, Deno, Cloudflare Workers and Vercel or Netlify Functions.
+`createAskHandler(options)` from `ondocs/server` returns the endpoint: a function that takes a Web `Request` and returns a `Promise<Response>`. It runs in Next.js route handlers, Hono, Bun, Deno, Cloudflare Workers and Vercel or Netlify Functions.
 
 ## What happens per request
 
@@ -82,7 +82,7 @@ data: {"type":"finish"}
 data: [DONE]
 ```
 
-Because sources arrive before the text, citations are clickable as soon as they appear. The same stream works with `useChat` from `@ai-sdk/react`, and `readAskStream` from `ask-my-site/react` parses it without the AI SDK.
+Because sources arrive before the text, citations are clickable as soon as they appear. The same stream works with `useChat` from `@ai-sdk/react`, and `readAskStream` from `ondocs/react` parses it without the AI SDK.
 
 ## Using it outside Next.js
 

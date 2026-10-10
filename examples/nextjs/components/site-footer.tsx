@@ -5,14 +5,14 @@ import { Spark } from './icons';
 
 const MORE = [
   {
-    name: 'agent-ui-kit',
-    href: 'https://agent-ui-kit-demo.vercel.app',
-    description: 'React components for watching, approving and reviewing what an agent does.',
+    name: 'onsystem',
+    href: 'https://design-system-mcp-demo.vercel.app',
+    description: 'Keeps coding agents on your design system.',
   },
   {
-    name: 'design-system-mcp',
-    href: 'https://design-system-mcp-demo.vercel.app',
-    description: 'Your React design system as ground truth for coding agents.',
+    name: 'signoff-ui',
+    href: 'https://agent-ui-kit-demo.vercel.app',
+    description: 'React components to review what an agent changed and control what it may do.',
   },
 ];
 
@@ -25,7 +25,7 @@ export function SiteFooter() {
             <span className="brand-mark">
               <Spark size={14} />
             </span>
-            ask-my-site
+            ondocs
           </p>
           <p>
             Docs answerable by people and by agents, from one static index. Version {VERSION}, MIT

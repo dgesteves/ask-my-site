@@ -10,7 +10,7 @@ import { parseIndexFile } from '../src';
 let cwd: string;
 
 beforeEach(async () => {
-  cwd = await mkdtemp(join(tmpdir(), 'ask-my-site-cli-'));
+  cwd = await mkdtemp(join(tmpdir(), 'ondocs-cli-'));
   await mkdir(join(cwd, 'content/guides'), { recursive: true });
   await mkdir(join(cwd, 'content/.drafts'), { recursive: true });
   await writeFile(
@@ -49,7 +49,7 @@ async function run(...args: string[]) {
 const readIndex = async (name = 'ask-index.json') =>
   parseIndexFile(await readFile(join(cwd, name), 'utf8'));
 
-describe('ask-my-site index', () => {
+describe('ondocs index', () => {
   it('builds an index from Markdown, MDX and HTML', async () => {
     const result = await run('index', 'content', '--embedding', 'mock', '--base-url', '/docs');
     expect(result.code).toBe(0);
@@ -338,8 +338,8 @@ describe('ask-my-site index', () => {
   });
 
   it.each([
-    [['--help'], /## ask-my-site index\n([\s\S]*?)\n## ask-my-site dev/],
-    [['dev', '--help'], /## ask-my-site dev\n([\s\S]*?)\n## The config file/],
+    [['--help'], /## ondocs index\n([\s\S]*?)\n## ondocs dev/],
+    [['dev', '--help'], /## ondocs dev\n([\s\S]*?)\n## The config file/],
   ])('documents every option of %j on the CLI docs page', async (args, section) => {
     const help = (await run(...args)).stdout;
     const page = await readFile(
@@ -355,7 +355,7 @@ describe('ask-my-site index', () => {
   });
 
   it('prints help and version', async () => {
-    expect((await run('--help')).stdout).toContain('Usage: ask-my-site index [dir] [options]');
+    expect((await run('--help')).stdout).toContain('Usage: ondocs index [dir] [options]');
     expect((await run('--version')).stdout).toMatch(/^\d+\.\d+\.\d+$/);
     expect((await run()).code).toBe(2);
   });

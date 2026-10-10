@@ -1,16 +1,16 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`ask-my-site init: what it writes per host > Docusaurus in three locales on Netlify 1`] = `
+exports[`ondocs init: what it writes per host > Docusaurus in three locales on Netlify 1`] = `
 {
-  "netlify.toml": "# The index the ask-my-site functions answer from, bundled with them.
+  "netlify.toml": "# The index the ondocs functions answer from, bundled with them.
 [functions.ask]
   included_files = ["build/ask-index.json", "build/fr/ask-index.json", "build/pt-BR/ask-index.json"]
 
 [functions.mcp]
   included_files = ["build/ask-index.json", "build/fr/ask-index.json", "build/pt-BR/ask-index.json"]
 ",
-  "netlify/functions/ask.mts": "// The ask endpoint, POST /api/ask, as a Netlify Function. Written by \`npx ask-my-site init\`: edit
-// it as you like, and init asks before it overwrites it.
+  "netlify/functions/ask.mts": "// The ask endpoint, POST /api/ask, as a Netlify Function. Written by \`npx ondocs init\`: edit it as
+// you like, and init asks before it overwrites it.
 //
 // It answers from build/ask-index.json, which the build writes and netlify.toml bundles with this
 // function. Set OPENAI_API_KEY in the site's environment variables: the build embeds the pages with
@@ -19,7 +19,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 export default createAskHandler({
   index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
@@ -45,15 +45,15 @@ export default createAskHandler({
 
 export const config = { path: '/api/ask' };
 ",
-  "netlify/functions/mcp.mts": "// The MCP endpoint, /api/mcp, as a Netlify Function. Written by \`npx ask-my-site init\`: edit it as
-// you like, and init asks before it overwrites it.
+  "netlify/functions/mcp.mts": "// The MCP endpoint, /api/mcp, as a Netlify Function. Written by \`npx ondocs init\`: edit it as you
+// like, and init asks before it overwrites it.
 //
 // It serves build/ask-index.json to agents as search, fetch and list_pages tools. Search is
 // keyword-only, so it calls no model: the agent brings its own.
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createMcpHandler, memoryRateLimit } from 'ondocs/server';
 
 export default createMcpHandler({
   index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
@@ -67,7 +67,7 @@ export const config = { path: '/api/mcp' };
 }
 `;
 
-exports[`ask-my-site init: what it writes per host > Docusaurus in three locales on Netlify 2`] = `
+exports[`ondocs init: what it writes per host > Docusaurus in three locales on Netlify 2`] = `
 "a Docusaurus site on Netlify.
 Its other locales, fr, pt-BR, are answered from their own indexes, as the dialog asks.
 
@@ -79,23 +79,23 @@ Set (init reads none of these):
   OPENAI_API_KEY, for the functions and the site’s build: in the site's Environment variables, or netlify env:set OPENAI_API_KEY; without it there, the index is keyword-only, which works too
 
 Next:
-  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  1. npm i ondocs ai @ai-sdk/openai @radix-ui/react-dialog cmdk
   2. npm i -D @types/node (the functions' types)
-  3. Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']
+  3. Add the plugin to docusaurus.config: plugins: ['ondocs/docusaurus']
   4. Deploy as you do now. init has deployed nothing."
 `;
 
-exports[`ask-my-site init: what it writes per host > Docusaurus on Cloudflare Pages, without a wrangler config 1`] = `
+exports[`ondocs init: what it writes per host > Docusaurus on Cloudflare Pages, without a wrangler config 1`] = `
 {
-  "functions/api/ask.ts": "// The ask endpoint, POST /api/ask, as a Cloudflare Pages Function. Written by \`npx ask-my-site
-// init\`: edit it as you like, and init asks before it overwrites it.
+  "functions/api/ask.ts": "// The ask endpoint, POST /api/ask, as a Cloudflare Pages Function. Written by \`npx ondocs init\`:
+// edit it as you like, and init asks before it overwrites it.
 //
 // It answers from /ask-index.json, which the build writes into the site's files, read through the
 // ASSETS binding. Set OPENAI_API_KEY as a secret, for production and previews: in the dashboard
 // (Settings, Variables and Secrets) or with \`npx wrangler pages secret put OPENAI_API_KEY\`. Set it
 // as a build variable too: the build embeds the pages with it.
 import { createOpenAI } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 interface Env {
   OPENAI_API_KEY: string;
@@ -133,12 +133,12 @@ export const onRequest = ({ request, env }: { request: Request; env: Env }): Pro
   return handler(request);
 };
 ",
-  "functions/api/mcp.ts": "// The MCP endpoint, /api/mcp, as a Cloudflare Pages Function. Written by \`npx ask-my-site init\`:
-// edit it as you like, and init asks before it overwrites it.
+  "functions/api/mcp.ts": "// The MCP endpoint, /api/mcp, as a Cloudflare Pages Function. Written by \`npx ondocs init\`: edit it
+// as you like, and init asks before it overwrites it.
 //
 // It serves /ask-index.json to agents as search, fetch and list_pages tools. Search is
 // keyword-only, so it calls no model: the agent brings its own.
-import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createMcpHandler, memoryRateLimit } from 'ondocs/server';
 
 interface Env {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
@@ -163,7 +163,7 @@ export const onRequest = ({ request, env }: { request: Request; env: Env }): Pro
 }
 `;
 
-exports[`ask-my-site init: what it writes per host > Docusaurus on Cloudflare Pages, without a wrangler config 2`] = `
+exports[`ondocs init: what it writes per host > Docusaurus on Cloudflare Pages, without a wrangler config 2`] = `
 "a Docusaurus site on Cloudflare.
 
   created    functions/api/ask.ts  POST /api/ask: answers questions from the index
@@ -174,14 +174,14 @@ Set (init reads none of these):
   OPENAI_API_KEY, for the site’s build: a build variable; without it there, the index is keyword-only, which works too
 
 Next:
-  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
-  2. Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']
+  1. npm i ondocs ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  2. Add the plugin to docusaurus.config: plugins: ['ondocs/docusaurus']
   3. Deploy as you do now. init has deployed nothing."
 `;
 
-exports[`ask-my-site init: what it writes per host > Docusaurus on GitHub Pages 1`] = `
+exports[`ondocs init: what it writes per host > Docusaurus on GitHub Pages 1`] = `
 {
-  "ask-my-site-worker/package.json": "{
+  "ondocs-worker/package.json": "{
   "name": "acme-docs-ask",
   "private": true,
   "type": "module",
@@ -192,7 +192,7 @@ exports[`ask-my-site init: what it writes per host > Docusaurus on GitHub Pages 
   },
   "dependencies": {
     "ai": "^7.0.0",
-    "ask-my-site": "^<version>",
+    "ondocs": "^<version>",
     "workers-ai-provider": "^4.0.0"
   },
   "devDependencies": {
@@ -202,15 +202,15 @@ exports[`ask-my-site init: what it writes per host > Docusaurus on GitHub Pages 
   }
 }
 ",
-  "ask-my-site-worker/src/index.ts": "// The Worker that answers questions for Acme Docs, with Workers AI: no API key to set, and within
-// Workers AI's free daily allowance for a small site. Written by \`npx ask-my-site init\`: edit it as
-// you like, and init asks before it overwrites it.
+  "ondocs-worker/src/index.ts": "// The Worker that answers questions for Acme Docs, with Workers AI: no API key to set, and within
+// Workers AI's free daily allowance for a small site. Written by \`npx ondocs init\`: edit it as you
+// like, and init asks before it overwrites it.
 //
 // It fetches the index from the live site, SITE_URL/ask-index.json, and checks it again every five
 // minutes, so it follows the site's deploys. The site's pages call it across origins, so it sends
 // CORS headers for SITE_URL's origin, and only for it.
 //
-// Questions are embedded with the Workers AI model the index records, as with \`ask-my-site index -e
+// Questions are embedded with the Workers AI model the index records, as with \`ondocs index -e
 // workers-ai:@cf/baai/bge-small-en-v1.5\`, and matched on keywords for an index built without one.
 // CHAT_MODEL, in wrangler.jsonc, writes the answers.
 //
@@ -220,7 +220,7 @@ import {
   createMcpHandler,
   memoryRateLimit,
   remoteIndex,
-} from 'ask-my-site/server';
+} from 'ondocs/server';
 import { createWorkersAI } from 'workers-ai-provider';
 
 interface Env {
@@ -258,7 +258,7 @@ async function create(env: Env) {
     : undefined;
   if (embedding && !embeddingModel) {
     console.warn(
-      \`[ask-my-site] The index was embedded with \${embedding.model}, which Workers AI does not run, so questions are matched on keywords. Build it with -e workers-ai:@cf/baai/bge-small-en-v1.5, or -e none.\`,
+      \`[ondocs] The index was embedded with \${embedding.model}, which Workers AI does not run, so questions are matched on keywords. Build it with -e workers-ai:@cf/baai/bge-small-en-v1.5, or -e none.\`,
     );
   }
   const cors = corsFor(env);
@@ -305,7 +305,7 @@ export default {
       ready = await handlers;
     } catch (error) {
       // The index could not be fetched or used; the next request tries again.
-      console.error('[ask-my-site]', error);
+      console.error('[ondocs]', error);
       return Response.json(
         { error: { code: 'internal_error', message: 'The ask endpoint is misconfigured.' } },
         { status: 500, headers: corsFor(env) },
@@ -315,7 +315,7 @@ export default {
   },
 };
 ",
-  "ask-my-site-worker/tsconfig.json": "{
+  "ondocs-worker/tsconfig.json": "{
   "compilerOptions": {
     "target": "ES2022",
     "module": "ES2022",
@@ -335,7 +335,7 @@ export default {
   ]
 }
 ",
-  "ask-my-site-worker/wrangler.jsonc": "// The Worker that answers questions for Acme Docs. Written by \`npx ask-my-site init\`.
+  "ondocs-worker/wrangler.jsonc": "// The Worker that answers questions for Acme Docs. Written by \`npx ondocs init\`.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "acme-docs-ask",
@@ -347,7 +347,7 @@ export default {
     // The site the Worker answers for: it reads the index at https://acme.github.io/docs/ask-index.json.
     "SITE_URL": "https://acme.github.io/docs",
     // The Workers AI model that writes the answers. About 100 questions a day fit in Workers AI's
-    // free allowance with this one; ask-my-site's Workers AI guide compares others.
+    // free allowance with this one; the ondocs Workers AI guide compares others.
     "CHAT_MODEL": "@cf/meta/llama-4-scout-17b-16e-instruct"
   }
 }
@@ -355,38 +355,38 @@ export default {
 }
 `;
 
-exports[`ask-my-site init: what it writes per host > Docusaurus on GitHub Pages 2`] = `
+exports[`ondocs init: what it writes per host > Docusaurus on GitHub Pages 2`] = `
 "a Docusaurus site on GitHub Pages, answered by a Cloudflare Worker.
 
-  created    ask-my-site-worker/package.json    the Worker’s dependencies and scripts
-  created    ask-my-site-worker/tsconfig.json   TypeScript for the Worker, with the Workers runtime types
-  created    ask-my-site-worker/wrangler.jsonc  the Worker’s configuration, with the site’s URL
-  created    ask-my-site-worker/src/index.ts    the Worker: POST /api/ask and /api/mcp, from the live site’s index
+  created    ondocs-worker/package.json    the Worker’s dependencies and scripts
+  created    ondocs-worker/tsconfig.json   TypeScript for the Worker, with the Workers runtime types
+  created    ondocs-worker/wrangler.jsonc  the Worker’s configuration, with the site’s URL
+  created    ondocs-worker/src/index.ts    the Worker: POST /api/ask and /api/mcp, from the live site’s index
 
 Set (init reads none of these):
   CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, for the site’s build, optional: repository secrets, to embed the pages with @cf/baai/bge-small-en-v1.5 for semantic search (a token allowed to run Workers AI); without them, nothing is embedded and questions are matched on keywords
 
 Next:
-  1. npm i ask-my-site ai @radix-ui/react-dialog cmdk
-  2. cd ask-my-site-worker && npm install && npx wrangler deploy: it prints the Worker's URL, https://acme-docs-ask.<your-subdomain>.workers.dev
-  3. Add the plugin to docusaurus.config: plugins: [['ask-my-site/docusaurus', { endpoint: 'https://acme-docs-ask.<your-subdomain>.workers.dev/api/ask', embedding: 'workers-ai:@cf/baai/bge-small-en-v1.5' }]] (the embedding needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN as the site builds; leave it out for a keyword-only index)
+  1. npm i ondocs ai @radix-ui/react-dialog cmdk
+  2. cd ondocs-worker && npm install && npx wrangler deploy: it prints the Worker's URL, https://acme-docs-ask.<your-subdomain>.workers.dev
+  3. Add the plugin to docusaurus.config: plugins: [['ondocs/docusaurus', { endpoint: 'https://acme-docs-ask.<your-subdomain>.workers.dev/api/ask', embedding: 'workers-ai:@cf/baai/bge-small-en-v1.5' }]] (the embedding needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN as the site builds; leave it out for a keyword-only index)
   4. Deploy as you do now. init has deployed nothing."
 `;
 
-exports[`ask-my-site init: what it writes per host > Docusaurus on Netlify 1`] = `
+exports[`ondocs init: what it writes per host > Docusaurus on Netlify 1`] = `
 {
   "netlify.toml": "[build]
   publish = "build"
 
-# The index the ask-my-site functions answer from, bundled with them.
+# The index the ondocs functions answer from, bundled with them.
 [functions.ask]
   included_files = ["build/ask-index.json"]
 
 [functions.mcp]
   included_files = ["build/ask-index.json"]
 ",
-  "netlify/functions/ask.mts": "// The ask endpoint, POST /api/ask, as a Netlify Function. Written by \`npx ask-my-site init\`: edit
-// it as you like, and init asks before it overwrites it.
+  "netlify/functions/ask.mts": "// The ask endpoint, POST /api/ask, as a Netlify Function. Written by \`npx ondocs init\`: edit it as
+// you like, and init asks before it overwrites it.
 //
 // It answers from build/ask-index.json, which the build writes and netlify.toml bundles with this
 // function. Set OPENAI_API_KEY in the site's environment variables: the build embeds the pages with
@@ -395,7 +395,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 export default createAskHandler({
   index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
@@ -416,15 +416,15 @@ export default createAskHandler({
 
 export const config = { path: '/api/ask' };
 ",
-  "netlify/functions/mcp.mts": "// The MCP endpoint, /api/mcp, as a Netlify Function. Written by \`npx ask-my-site init\`: edit it as
-// you like, and init asks before it overwrites it.
+  "netlify/functions/mcp.mts": "// The MCP endpoint, /api/mcp, as a Netlify Function. Written by \`npx ondocs init\`: edit it as you
+// like, and init asks before it overwrites it.
 //
 // It serves build/ask-index.json to agents as search, fetch and list_pages tools. Search is
 // keyword-only, so it calls no model: the agent brings its own.
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createMcpHandler, memoryRateLimit } from 'ondocs/server';
 
 export default createMcpHandler({
   index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
@@ -438,7 +438,7 @@ export const config = { path: '/api/mcp' };
 }
 `;
 
-exports[`ask-my-site init: what it writes per host > Docusaurus on Netlify 2`] = `
+exports[`ondocs init: what it writes per host > Docusaurus on Netlify 2`] = `
 "a Docusaurus site on Netlify.
 
   created    netlify/functions/ask.mts  POST /api/ask: answers questions from the index
@@ -449,16 +449,16 @@ Set (init reads none of these):
   OPENAI_API_KEY, for the functions and the site’s build: in the site's Environment variables, or netlify env:set OPENAI_API_KEY; without it there, the index is keyword-only, which works too
 
 Next:
-  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  1. npm i ondocs ai @ai-sdk/openai @radix-ui/react-dialog cmdk
   2. npm i -D @types/node (the functions' types)
-  3. Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']
+  3. Add the plugin to docusaurus.config: plugins: ['ondocs/docusaurus']
   4. Deploy as you do now. init has deployed nothing."
 `;
 
-exports[`ask-my-site init: what it writes per host > Docusaurus on Vercel 1`] = `
+exports[`ondocs init: what it writes per host > Docusaurus on Vercel 1`] = `
 {
-  "api/ask.ts": "// The ask endpoint, POST /api/ask, as a Vercel Function. Written by \`npx ask-my-site init\`: edit it
-// as you like, and init asks before it overwrites it.
+  "api/ask.ts": "// The ask endpoint, POST /api/ask, as a Vercel Function. Written by \`npx ondocs init\`: edit it as
+// you like, and init asks before it overwrites it.
 //
 // It answers from build/ask-index.json, which the build writes and vercel.json bundles with this
 // function. Set OPENAI_API_KEY in the project's environment variables: the build embeds the pages
@@ -467,7 +467,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 const handler = createAskHandler({
   index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
@@ -490,15 +490,15 @@ export const POST = handler;
 // CORS preflights, for a dialog on another origin (add access-control-* headers with \`headers\`).
 export const OPTIONS = handler;
 ",
-  "api/mcp.ts": "// The MCP endpoint, /api/mcp, as a Vercel Function. Written by \`npx ask-my-site init\`: edit it as
-// you like, and init asks before it overwrites it.
+  "api/mcp.ts": "// The MCP endpoint, /api/mcp, as a Vercel Function. Written by \`npx ondocs init\`: edit it as you
+// like, and init asks before it overwrites it.
 //
 // It serves build/ask-index.json to agents as search, fetch and list_pages tools. Search is
 // keyword-only, so it calls no model: the agent brings its own.
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createMcpHandler, memoryRateLimit } from 'ondocs/server';
 
 const handler = createMcpHandler({
   index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
@@ -527,7 +527,7 @@ export const OPTIONS = handler;
 }
 `;
 
-exports[`ask-my-site init: what it writes per host > Docusaurus on Vercel 2`] = `
+exports[`ondocs init: what it writes per host > Docusaurus on Vercel 2`] = `
 "a Docusaurus site on Vercel.
 
   created    api/ask.ts   POST /api/ask: answers questions from the index
@@ -538,25 +538,25 @@ Set (init reads none of these):
   OPENAI_API_KEY, for the functions and the site’s build: in the project's Settings, Environment Variables; without it there, the index is keyword-only, which works too
 
 Next:
-  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  1. npm i ondocs ai @ai-sdk/openai @radix-ui/react-dialog cmdk
   2. npm i -D @types/node (the functions' types)
-  3. Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']
+  3. Add the plugin to docusaurus.config: plugins: ['ondocs/docusaurus']
   4. Deploy as you do now. init has deployed nothing."
 `;
 
-exports[`ask-my-site init: what it writes per host > Docusaurus on a Cloudflare Worker with static assets (wrangler.toml) 1`] = `
+exports[`ondocs init: what it writes per host > Docusaurus on a Cloudflare Worker with static assets (wrangler.toml) 1`] = `
 {
-  "worker/ask-my-site.ts": "// The Worker's entry point: the ask endpoint and the MCP endpoint, then the site's files. Written
-// by \`npx ask-my-site init\`: edit it as you like, and init asks before it overwrites it.
+  "worker/ondocs.ts": "// The Worker's entry point: the ask endpoint and the MCP endpoint, then the site's files. Written
+// by \`npx ondocs init\`: edit it as you like, and init asks before it overwrites it.
 //
 // It answers from /ask-index.json, which the build writes into the static assets, read through the
 // ASSETS binding. Set OPENAI_API_KEY with \`npx wrangler secret put OPENAI_API_KEY\`, and in the
 // build's environment: the build embeds the pages with it.
 //
-// A Worker that has its own entry point already can call \`askMySite(request, env)\` from it: it
-// answers the endpoints' paths and returns null for every other request.
+// A Worker that has its own entry point already can call \`ondocs(request, env)\` from it: it answers
+// the endpoints' paths and returns null for every other request.
 import { createOpenAI } from '@ai-sdk/openai';
-import { createAskHandler, createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, createMcpHandler, memoryRateLimit } from 'ondocs/server';
 
 interface Env {
   OPENAI_API_KEY: string;
@@ -606,7 +606,7 @@ function create(request: Request, env: Env) {
 }
 
 /** Answers the endpoints' paths, or returns null for any other request. */
-export function askMySite(request: Request, env: Env): Promise<Response> | null {
+export function ondocs(request: Request, env: Env): Promise<Response> | null {
   const { pathname } = new URL(request.url);
   if (pathname !== '/api/ask' && pathname !== '/api/mcp') return null;
   handlers ??= create(request, env);
@@ -615,12 +615,12 @@ export function askMySite(request: Request, env: Env): Promise<Response> | null 
 
 export default {
   fetch(request: Request, env: Env): Promise<Response> {
-    return askMySite(request, env) ?? env.ASSETS.fetch(request);
+    return ondocs(request, env) ?? env.ASSETS.fetch(request);
   },
 };
 ",
   "wrangler.toml": "name = "acme-docs"
-main = "worker/ask-my-site.ts"
+main = "worker/ondocs.ts"
 compatibility_date = "2026-09-01"
 
 [assets]
@@ -630,25 +630,25 @@ directory = "./build"
 }
 `;
 
-exports[`ask-my-site init: what it writes per host > Docusaurus on a Cloudflare Worker with static assets (wrangler.toml) 2`] = `
+exports[`ondocs init: what it writes per host > Docusaurus on a Cloudflare Worker with static assets (wrangler.toml) 2`] = `
 "a Docusaurus site on Cloudflare.
 
-  created    worker/ask-my-site.ts  the Worker: POST /api/ask and /api/mcp; other requests get the static files
-  updated    wrangler.toml          sets main to worker/ask-my-site.ts, and the static assets' binding to ASSETS
+  created    worker/ondocs.ts  the Worker: POST /api/ask and /api/mcp; other requests get the static files
+  updated    wrangler.toml     sets main to worker/ondocs.ts, and the static assets' binding to ASSETS
 
 Set (init reads none of these):
   OPENAI_API_KEY, for the Worker: npx wrangler secret put OPENAI_API_KEY
   OPENAI_API_KEY, for the site’s build: a build variable; without it there, the index is keyword-only, which works too
 
 Next:
-  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
-  2. Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']
+  1. npm i ondocs ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  2. Add the plugin to docusaurus.config: plugins: ['ondocs/docusaurus']
   3. Deploy as you do now. init has deployed nothing."
 `;
 
-exports[`ask-my-site init: what it writes per host > Hugo on a GitHub Pages workflow 1`] = `
+exports[`ondocs init: what it writes per host > Hugo on a GitHub Pages workflow 1`] = `
 {
-  "ask-my-site-worker/package.json": "{
+  "ondocs-worker/package.json": "{
   "name": "acme-ask",
   "private": true,
   "type": "module",
@@ -659,7 +659,7 @@ exports[`ask-my-site init: what it writes per host > Hugo on a GitHub Pages work
   },
   "dependencies": {
     "ai": "^7.0.0",
-    "ask-my-site": "^<version>",
+    "ondocs": "^<version>",
     "workers-ai-provider": "^4.0.0"
   },
   "devDependencies": {
@@ -669,15 +669,15 @@ exports[`ask-my-site init: what it writes per host > Hugo on a GitHub Pages work
   }
 }
 ",
-  "ask-my-site-worker/src/index.ts": "// The Worker that answers questions for Acme, with Workers AI: no API key to set, and within
-// Workers AI's free daily allowance for a small site. Written by \`npx ask-my-site init\`: edit it as
-// you like, and init asks before it overwrites it.
+  "ondocs-worker/src/index.ts": "// The Worker that answers questions for Acme, with Workers AI: no API key to set, and within
+// Workers AI's free daily allowance for a small site. Written by \`npx ondocs init\`: edit it as you
+// like, and init asks before it overwrites it.
 //
 // It fetches the index from the live site, SITE_URL/ask-index.json, and checks it again every five
 // minutes, so it follows the site's deploys. The site's pages call it across origins, so it sends
 // CORS headers for SITE_URL's origin, and only for it.
 //
-// Questions are embedded with the Workers AI model the index records, as with \`ask-my-site index -e
+// Questions are embedded with the Workers AI model the index records, as with \`ondocs index -e
 // workers-ai:@cf/baai/bge-small-en-v1.5\`, and matched on keywords for an index built without one.
 // CHAT_MODEL, in wrangler.jsonc, writes the answers.
 //
@@ -687,7 +687,7 @@ import {
   createMcpHandler,
   memoryRateLimit,
   remoteIndex,
-} from 'ask-my-site/server';
+} from 'ondocs/server';
 import { createWorkersAI } from 'workers-ai-provider';
 
 interface Env {
@@ -725,7 +725,7 @@ async function create(env: Env) {
     : undefined;
   if (embedding && !embeddingModel) {
     console.warn(
-      \`[ask-my-site] The index was embedded with \${embedding.model}, which Workers AI does not run, so questions are matched on keywords. Build it with -e workers-ai:@cf/baai/bge-small-en-v1.5, or -e none.\`,
+      \`[ondocs] The index was embedded with \${embedding.model}, which Workers AI does not run, so questions are matched on keywords. Build it with -e workers-ai:@cf/baai/bge-small-en-v1.5, or -e none.\`,
     );
   }
   const cors = corsFor(env);
@@ -772,7 +772,7 @@ export default {
       ready = await handlers;
     } catch (error) {
       // The index could not be fetched or used; the next request tries again.
-      console.error('[ask-my-site]', error);
+      console.error('[ondocs]', error);
       return Response.json(
         { error: { code: 'internal_error', message: 'The ask endpoint is misconfigured.' } },
         { status: 500, headers: corsFor(env) },
@@ -782,7 +782,7 @@ export default {
   },
 };
 ",
-  "ask-my-site-worker/tsconfig.json": "{
+  "ondocs-worker/tsconfig.json": "{
   "compilerOptions": {
     "target": "ES2022",
     "module": "ES2022",
@@ -802,7 +802,7 @@ export default {
   ]
 }
 ",
-  "ask-my-site-worker/wrangler.jsonc": "// The Worker that answers questions for Acme. Written by \`npx ask-my-site init\`.
+  "ondocs-worker/wrangler.jsonc": "// The Worker that answers questions for Acme. Written by \`npx ondocs init\`.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "acme-ask",
@@ -814,7 +814,7 @@ export default {
     // The site the Worker answers for: it reads the index at https://acme.github.io/site/ask-index.json.
     "SITE_URL": "https://acme.github.io/site",
     // The Workers AI model that writes the answers. About 100 questions a day fit in Workers AI's
-    // free allowance with this one; ask-my-site's Workers AI guide compares others.
+    // free allowance with this one; the ondocs Workers AI guide compares others.
     "CHAT_MODEL": "@cf/meta/llama-4-scout-17b-16e-instruct"
   }
 }
@@ -822,33 +822,33 @@ export default {
 }
 `;
 
-exports[`ask-my-site init: what it writes per host > Hugo on a GitHub Pages workflow 2`] = `
+exports[`ondocs init: what it writes per host > Hugo on a GitHub Pages workflow 2`] = `
 "a Hugo site on GitHub Pages, answered by a Cloudflare Worker.
 
-  created    ask-my-site-worker/package.json    the Worker’s dependencies and scripts
-  created    ask-my-site-worker/tsconfig.json   TypeScript for the Worker, with the Workers runtime types
-  created    ask-my-site-worker/wrangler.jsonc  the Worker’s configuration, with the site’s URL
-  created    ask-my-site-worker/src/index.ts    the Worker: POST /api/ask and /api/mcp, from the live site’s index
+  created    ondocs-worker/package.json    the Worker’s dependencies and scripts
+  created    ondocs-worker/tsconfig.json   TypeScript for the Worker, with the Workers runtime types
+  created    ondocs-worker/wrangler.jsonc  the Worker’s configuration, with the site’s URL
+  created    ondocs-worker/src/index.ts    the Worker: POST /api/ask and /api/mcp, from the live site’s index
 
 Set (init reads none of these):
   CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, for the index build, optional: repository secrets, to embed the pages with @cf/baai/bge-small-en-v1.5 for semantic search (a token allowed to run Workers AI); without them, nothing is embedded and questions are matched on keywords
 
 Next:
-  1. Build the index with the site: npx ask-my-site index public -o public/ask-index.json -e workers-ai:@cf/baai/bge-small-en-v1.5 (with the two Cloudflare variables set; -e none builds a keyword-only index without them)
-  2. cd ask-my-site-worker && npm install && npx wrangler deploy: it prints the Worker's URL, https://acme-ask.<your-subdomain>.workers.dev
-  3. Add to your base template: <script src="https://cdn.jsdelivr.net/npm/ask-my-site@<minor>/dist/embed.global.js" data-endpoint="https://acme-ask.<your-subdomain>.workers.dev/api/ask" defer></script>
+  1. Build the index with the site: npx ondocs index public -o public/ask-index.json -e workers-ai:@cf/baai/bge-small-en-v1.5 (with the two Cloudflare variables set; -e none builds a keyword-only index without them)
+  2. cd ondocs-worker && npm install && npx wrangler deploy: it prints the Worker's URL, https://acme-ask.<your-subdomain>.workers.dev
+  3. Add to your base template: <script src="https://cdn.jsdelivr.net/npm/ondocs@<minor>/dist/embed.global.js" data-endpoint="https://acme-ask.<your-subdomain>.workers.dev/api/ask" defer></script>
   4. Deploy as you do now. init has deployed nothing."
 `;
 
-exports[`ask-my-site init: what it writes per host > Next.js on Netlify 1`] = `
+exports[`ondocs init: what it writes per host > Next.js on Netlify 1`] = `
 {
-  "src/app/api/ask/route.ts": "// The ask endpoint, POST /api/ask, as a Next.js route handler. Written by \`npx ask-my-site init\`:
-// edit it as you like, and init asks before it overwrites it.
+  "src/app/api/ask/route.ts": "// The ask endpoint, POST /api/ask, as a Next.js route handler. Written by \`npx ondocs init\`: edit
+// it as you like, and init asks before it overwrites it.
 //
-// It answers from ask-index.json, which \`ask-my-site index\` writes before the build, imported so it
-// is bundled with the route. Set OPENAI_API_KEY where the app builds and runs.
+// It answers from ask-index.json, which \`ondocs index\` writes before the build, imported so it is
+// bundled with the route. Set OPENAI_API_KEY where the app builds and runs.
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 import index from '../../../../ask-index.json';
 
@@ -871,13 +871,13 @@ const handler = createAskHandler({
 
 export { handler as OPTIONS, handler as POST };
 ",
-  "src/app/api/mcp/route.ts": "// The MCP endpoint, /api/mcp, as a Next.js route handler. Written by \`npx ask-my-site init\`: edit
-// it as you like, and init asks before it overwrites it.
+  "src/app/api/mcp/route.ts": "// The MCP endpoint, /api/mcp, as a Next.js route handler. Written by \`npx ondocs init\`: edit it as
+// you like, and init asks before it overwrites it.
 //
 // It serves ask-index.json to agents as search, fetch and list_pages tools. Search is keyword-only,
 // so it calls no model: the agent brings its own. Importing the same file as the ask route keeps
 // one copy of the index in memory.
-import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createMcpHandler, memoryRateLimit } from 'ondocs/server';
 
 import index from '../../../../ask-index.json';
 
@@ -893,7 +893,7 @@ export { handler as DELETE, handler as GET, handler as OPTIONS, handler as POST 
 }
 `;
 
-exports[`ask-my-site init: what it writes per host > Next.js on Netlify 2`] = `
+exports[`ondocs init: what it writes per host > Next.js on Netlify 2`] = `
 "a Next.js site on Netlify.
 
   created    src/app/api/ask/route.ts  POST /api/ask: answers questions from the index
@@ -903,25 +903,25 @@ Set (init reads none of these):
   OPENAI_API_KEY, for the app and the index build: in Netlify's environment variables; without it there, the index is keyword-only, which works too
 
 Next:
-  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
-  2. Build the index before the app, as a "prebuild" script: npx ask-my-site index content --base-url /docs (it embeds with OPENAI_API_KEY; -e none builds a keyword-only index without it)
-  3. Render <AskDialog launcher /> from 'ask-my-site/react' in your layout, with 'ask-my-site/react/styles.css' and 'ask-my-site/embed/launcher.css'
+  1. npm i ondocs ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  2. Build the index before the app, as a "prebuild" script: npx ondocs index content --base-url /docs (it embeds with OPENAI_API_KEY; -e none builds a keyword-only index without it)
+  3. Render <AskDialog launcher /> from 'ondocs/react' in your layout, with 'ondocs/react/styles.css' and 'ondocs/embed/launcher.css'
   4. Deploy as you do now. init has deployed nothing."
 `;
 
-exports[`ask-my-site init: what it writes per host > Starlight in two locales on a Cloudflare Worker 1`] = `
+exports[`ondocs init: what it writes per host > Starlight in two locales on a Cloudflare Worker 1`] = `
 {
-  "worker/ask-my-site.ts": "// The Worker's entry point: the ask endpoint and the MCP endpoint, then the site's files. Written
-// by \`npx ask-my-site init\`: edit it as you like, and init asks before it overwrites it.
+  "worker/ondocs.ts": "// The Worker's entry point: the ask endpoint and the MCP endpoint, then the site's files. Written
+// by \`npx ondocs init\`: edit it as you like, and init asks before it overwrites it.
 //
 // It answers from /ask-index.json, which the build writes into the static assets, read through the
 // ASSETS binding. Set OPENAI_API_KEY with \`npx wrangler secret put OPENAI_API_KEY\`, and in the
 // build's environment: the build embeds the pages with it.
 //
-// A Worker that has its own entry point already can call \`askMySite(request, env)\` from it: it
-// answers the endpoints' paths and returns null for every other request.
+// A Worker that has its own entry point already can call \`ondocs(request, env)\` from it: it answers
+// the endpoints' paths and returns null for every other request.
 import { createOpenAI } from '@ai-sdk/openai';
-import { createAskHandler, createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, createMcpHandler, memoryRateLimit } from 'ondocs/server';
 
 interface Env {
   OPENAI_API_KEY: string;
@@ -981,7 +981,7 @@ function create(request: Request, env: Env) {
 }
 
 /** Answers the endpoints' paths, or returns null for any other request. */
-export function askMySite(request: Request, env: Env): Promise<Response> | null {
+export function ondocs(request: Request, env: Env): Promise<Response> | null {
   const { pathname } = new URL(request.url);
   if (pathname !== '/api/ask' && pathname !== '/api/mcp') return null;
   handlers ??= create(request, env);
@@ -990,40 +990,40 @@ export function askMySite(request: Request, env: Env): Promise<Response> | null 
 
 export default {
   fetch(request: Request, env: Env): Promise<Response> {
-    return askMySite(request, env) ?? env.ASSETS.fetch(request);
+    return ondocs(request, env) ?? env.ASSETS.fetch(request);
   },
 };
 ",
   "wrangler.jsonc": "{
   "name": "acme",
-  "main": "worker/ask-my-site.ts",
+  "main": "worker/ondocs.ts",
   "assets": { "binding": "ASSETS", "directory": "./dist" }
 }
 ",
 }
 `;
 
-exports[`ask-my-site init: what it writes per host > Starlight in two locales on a Cloudflare Worker 2`] = `
+exports[`ondocs init: what it writes per host > Starlight in two locales on a Cloudflare Worker 2`] = `
 "a Starlight site on Cloudflare.
 Its other locales, fr, are answered from their own indexes, as the dialog asks.
 
-  created    worker/ask-my-site.ts  the Worker: POST /api/ask and /api/mcp; other requests get the static files
-  updated    wrangler.jsonc         sets main to worker/ask-my-site.ts, and the static assets' binding to ASSETS
+  created    worker/ondocs.ts  the Worker: POST /api/ask and /api/mcp; other requests get the static files
+  updated    wrangler.jsonc    sets main to worker/ondocs.ts, and the static assets' binding to ASSETS
 
 Set (init reads none of these):
   OPENAI_API_KEY, for the Worker: npx wrangler secret put OPENAI_API_KEY
   OPENAI_API_KEY, for the site’s build: a build variable; without it there, the index is keyword-only, which works too
 
 Next:
-  1. npm i ask-my-site ai @ai-sdk/openai react react-dom @radix-ui/react-dialog cmdk
-  2. Add the plugin to Starlight in astro.config: plugins: [askMySite()], from 'ask-my-site/starlight'
+  1. npm i ondocs ai @ai-sdk/openai react react-dom @radix-ui/react-dialog cmdk
+  2. Add the plugin to Starlight in astro.config: plugins: [ondocs()], from 'ondocs/starlight'
   3. Deploy as you do now. init has deployed nothing."
 `;
 
-exports[`ask-my-site init: what it writes per host > Starlight on Vercel 1`] = `
+exports[`ondocs init: what it writes per host > Starlight on Vercel 1`] = `
 {
-  "api/ask.ts": "// The ask endpoint, POST /api/ask, as a Vercel Function. Written by \`npx ask-my-site init\`: edit it
-// as you like, and init asks before it overwrites it.
+  "api/ask.ts": "// The ask endpoint, POST /api/ask, as a Vercel Function. Written by \`npx ondocs init\`: edit it as
+// you like, and init asks before it overwrites it.
 //
 // It answers from dist/ask-index.json, which the build writes and vercel.json bundles with this
 // function. Set OPENAI_API_KEY in the project's environment variables: the build embeds the pages
@@ -1032,7 +1032,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 const handler = createAskHandler({
   index: () => readFile(join(process.cwd(), 'dist/ask-index.json'), 'utf8'),
@@ -1055,15 +1055,15 @@ export const POST = handler;
 // CORS preflights, for a dialog on another origin (add access-control-* headers with \`headers\`).
 export const OPTIONS = handler;
 ",
-  "api/mcp.ts": "// The MCP endpoint, /api/mcp, as a Vercel Function. Written by \`npx ask-my-site init\`: edit it as
-// you like, and init asks before it overwrites it.
+  "api/mcp.ts": "// The MCP endpoint, /api/mcp, as a Vercel Function. Written by \`npx ondocs init\`: edit it as you
+// like, and init asks before it overwrites it.
 //
 // It serves dist/ask-index.json to agents as search, fetch and list_pages tools. Search is
 // keyword-only, so it calls no model: the agent brings its own.
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createMcpHandler, memoryRateLimit } from 'ondocs/server';
 
 const handler = createMcpHandler({
   index: () => readFile(join(process.cwd(), 'dist/ask-index.json'), 'utf8'),
@@ -1091,7 +1091,7 @@ export const OPTIONS = handler;
 }
 `;
 
-exports[`ask-my-site init: what it writes per host > Starlight on Vercel 2`] = `
+exports[`ondocs init: what it writes per host > Starlight on Vercel 2`] = `
 "a Starlight site on Vercel.
 
   created    api/ask.ts   POST /api/ask: answers questions from the index
@@ -1102,8 +1102,8 @@ Set (init reads none of these):
   OPENAI_API_KEY, for the functions and the site’s build: in the project's Settings, Environment Variables; without it there, the index is keyword-only, which works too
 
 Next:
-  1. npm i ask-my-site ai @ai-sdk/openai react react-dom @radix-ui/react-dialog cmdk
+  1. npm i ondocs ai @ai-sdk/openai react react-dom @radix-ui/react-dialog cmdk
   2. npm i -D @types/node (the functions' types)
-  3. Add the plugin to Starlight in astro.config: plugins: [askMySite()], from 'ask-my-site/starlight'
+  3. Add the plugin to Starlight in astro.config: plugins: [ondocs()], from 'ondocs/starlight'
   4. Deploy as you do now. init has deployed nothing."
 `;

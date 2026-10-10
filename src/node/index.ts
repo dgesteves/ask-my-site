@@ -1,5 +1,5 @@
 /**
- * ask-my-site/node: file-system helpers for build scripts and the CLI. Node.js only.
+ * ondocs/node: file-system helpers for build scripts and the CLI. Node.js only.
  */
 
 import { mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises';
@@ -312,7 +312,7 @@ export interface AskConfig {
   /** Documents from elsewhere (a CMS, an API), indexed alongside the directory. */
   documents?: SourceDocument[] | (() => SourceDocument[] | Promise<SourceDocument[]>);
   /**
-   * What `ask-my-site index --llms-txt <dir>` writes and how it names the site: `title` and
+   * What `ondocs index --llms-txt <dir>` writes and how it names the site: `title` and
    * `description` head `llms.txt`, `siteUrl` makes its links absolute, `mcp` points agents at the
    * MCP endpoint, and `index`, `full` and `markdown` set to `false` leave out `llms.txt`,
    * `llms-full.txt` or the pages' `.md` copies. The flags of the same names win.

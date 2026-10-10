@@ -1,4 +1,4 @@
-// Writes templates/cloudflare-worker from what `ask-my-site init --host github-pages` writes, so the
+// Writes templates/cloudflare-worker from what `ondocs init --host github-pages` writes, so the
 // template that `npm create cloudflare` copies and the Worker init writes are the same code. The
 // template's README, its tests and their config are its own, and left alone.
 //
@@ -6,7 +6,7 @@
 //   pnpm build && node scripts/sync-template.mjs --check   # exit 1 if it is out of date
 //
 // The files are kept as init writes them, byte for byte (.prettierignore leaves them alone). The
-// template's package.json adds what its tests need, and its ask-my-site version is left as it is:
+// template's package.json adds what its tests need, and its ondocs version is left as it is:
 // init writes the version it is, which a release changes.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -19,7 +19,7 @@ const TEMPLATE = join(root, 'templates/cloudflare-worker');
 const GENERATED = ['package.json', 'tsconfig.json', 'wrangler.jsonc', 'src/index.ts'];
 const check = process.argv.includes('--check');
 
-const site = mkdtempSync(join(tmpdir(), 'ask-my-site-template-'));
+const site = mkdtempSync(join(tmpdir(), 'ondocs-template-'));
 try {
   writeFileSync(join(site, 'docusaurus.config.ts'), "export default { title: 'your docs' };\n");
   execFileSync(
@@ -37,7 +37,7 @@ try {
   );
   const changed = [];
   for (const file of GENERATED) {
-    let text = readFileSync(join(site, 'ask-my-site-worker', file), 'utf8');
+    let text = readFileSync(join(site, 'ondocs-worker', file), 'utf8');
     const target = join(TEMPLATE, file);
     let current = null;
     try {
@@ -54,8 +54,8 @@ try {
         '@cloudflare/vitest-plugin': '^1.4.0',
         vitest: '^5.0.0',
       };
-      const version = own.dependencies?.['ask-my-site'];
-      if (version) pkg.dependencies['ask-my-site'] = version;
+      const version = own.dependencies?.ondocs;
+      if (version) pkg.dependencies.ondocs = version;
       text = `${JSON.stringify(pkg, null, 2)}\n`;
     }
     if (current !== text) changed.push([file, text]);
@@ -63,11 +63,11 @@ try {
   const show = (file) => `templates/cloudflare-worker/${file}`;
   if (check) {
     if (changed.length === 0) {
-      console.log('✓ templates/cloudflare-worker matches what ask-my-site init writes.');
+      console.log('✓ templates/cloudflare-worker matches what ondocs init writes.');
     } else {
       console.error(
         [
-          '✗ templates/cloudflare-worker is out of date with what ask-my-site init writes:',
+          '✗ templates/cloudflare-worker is out of date with what ondocs init writes:',
           ...changed.map(([file]) => `  changed: ${show(file)}`),
           'Run `pnpm build && node scripts/sync-template.mjs` and commit the result.',
         ].join('\n'),

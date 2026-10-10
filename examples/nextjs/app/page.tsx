@@ -14,7 +14,7 @@ import { GITHUB_URL, INSTALL, SUGGESTIONS, VERSION } from '../lib/site';
 import './landing.css';
 
 export const metadata: Metadata = {
-  title: { absolute: 'ask-my-site: make your docs answerable by people and by agents' },
+  title: { absolute: 'ondocs: make your docs answerable by people and by agents' },
   alternates: { canonical: '/', types: { 'text/plain': '/llms.txt' } },
 };
 
@@ -23,11 +23,11 @@ async function setupTabs(): Promise<SetupTab[]> {
     title: 'Write the endpoint',
     text: 'One function on your host answers from the index, with your model key, rate-limited and on a daily budget. init writes it for Vercel, Netlify, Cloudflare, or GitHub Pages with Workers AI and no API key, and deploys nothing.',
     link: { href: '/docs/deployment', label: 'What it writes for each host' },
-    code: await codeBlock('npx ask-my-site init', 'sh'),
+    code: await codeBlock('npx ondocs init', 'sh'),
   };
   const ASTRO_STEP = {
     title: 'Deploy as you do now',
-    text: 'With an SSR adapter, the integration serves the ask and MCP endpoints itself: there is no file to write. A static site writes its endpoint with npx ask-my-site init.',
+    text: 'With an SSR adapter, the integration serves the ask and MCP endpoints itself: there is no file to write. A static site writes its endpoint with npx ondocs init.',
     link: { href: '/docs/deployment#astro-with-an-adapter', label: 'Astro with an adapter' },
   };
   return [
@@ -40,15 +40,12 @@ async function setupTabs(): Promise<SetupTab[]> {
       steps: [
         {
           title: 'Install',
-          code: await codeBlock(
-            'npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk',
-            'sh',
-          ),
+          code: await codeBlock('npm i ondocs ai @ai-sdk/openai @radix-ui/react-dialog cmdk', 'sh'),
         },
         {
           title: 'Add the plugin',
           code: await codeBlock(
-            "// docusaurus.config.ts\nexport default {\n  plugins: [['ask-my-site/docusaurus', { endpoint: '/api/ask' }]],\n};",
+            "// docusaurus.config.ts\nexport default {\n  plugins: [['ondocs/docusaurus', { endpoint: '/api/ask' }]],\n};",
             'ts',
           ),
         },
@@ -65,14 +62,14 @@ async function setupTabs(): Promise<SetupTab[]> {
         {
           title: 'Install',
           code: await codeBlock(
-            'npm i ask-my-site ai @ai-sdk/openai react react-dom @radix-ui/react-dialog cmdk',
+            'npm i ondocs ai @ai-sdk/openai react react-dom @radix-ui/react-dialog cmdk',
             'sh',
           ),
         },
         {
           title: 'Add the plugin',
           code: await codeBlock(
-            "// astro.config.mjs\nimport starlight from '@astrojs/starlight';\nimport askMySite from 'ask-my-site/starlight';\nimport { defineConfig } from 'astro/config';\n\nexport default defineConfig({\n  integrations: [starlight({ title: 'Acme Docs', plugins: [askMySite()] })],\n});",
+            "// astro.config.mjs\nimport starlight from '@astrojs/starlight';\nimport ondocs from 'ondocs/starlight';\nimport { defineConfig } from 'astro/config';\n\nexport default defineConfig({\n  integrations: [starlight({ title: 'Acme Docs', plugins: [ondocs()] })],\n});",
             'js',
           ),
         },
@@ -89,21 +86,21 @@ async function setupTabs(): Promise<SetupTab[]> {
         {
           title: 'Index your content',
           code: await codeBlock(
-            'npx ask-my-site index content --base-url /docs -e openai:text-embedding-3-small',
+            'npx ondocs index content --base-url /docs -e openai:text-embedding-3-small',
             'sh',
           ),
         },
         {
           title: 'Mount the endpoint',
           code: await codeBlock(
-            "// app/api/ask/route.ts\nimport { openai } from '@ai-sdk/openai';\nimport { createAskHandler } from 'ask-my-site/server';\nimport index from '../../../ask-index.json';\n\nexport const POST = createAskHandler({\n  index,\n  model: openai('gpt-5.4-mini'),\n  embeddingModel: openai.embedding('text-embedding-3-small'),\n});",
+            "// app/api/ask/route.ts\nimport { openai } from '@ai-sdk/openai';\nimport { createAskHandler } from 'ondocs/server';\nimport index from '../../../ask-index.json';\n\nexport const POST = createAskHandler({\n  index,\n  model: openai('gpt-5.4-mini'),\n  embeddingModel: openai.embedding('text-embedding-3-small'),\n});",
             'ts',
           ),
         },
         {
           title: 'Render the dialog',
           code: await codeBlock(
-            "'use client';\nimport { AskDialog } from 'ask-my-site/react';\nimport 'ask-my-site/react/styles.css';\nimport 'ask-my-site/embed/launcher.css';\n\nexport const Ask = () => <AskDialog launcher />;",
+            "'use client';\nimport { AskDialog } from 'ondocs/react';\nimport 'ondocs/react/styles.css';\nimport 'ondocs/embed/launcher.css';\n\nexport const Ask = () => <AskDialog launcher />;",
             'tsx',
           ),
         },
@@ -118,16 +115,13 @@ async function setupTabs(): Promise<SetupTab[]> {
       steps: [
         {
           title: 'Index the built site',
-          code: await codeBlock(
-            'npx ask-my-site index public -e openai:text-embedding-3-small',
-            'sh',
-          ),
+          code: await codeBlock('npx ondocs index public -e openai:text-embedding-3-small', 'sh'),
         },
         DEPLOY_STEP,
         {
           title: 'Add the script tag',
           code: await codeBlock(
-            '<script\n  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.6/dist/embed.global.js"\n  data-endpoint="/api/ask"\n  defer\n></script>',
+            '<script\n  src="https://cdn.jsdelivr.net/npm/ondocs@0.7/dist/embed.global.js"\n  data-endpoint="/api/ask"\n  defer\n></script>',
             'html',
           ),
         },
@@ -310,7 +304,7 @@ export default async function Home() {
             className="agents-code"
             dangerouslySetInnerHTML={{
               __html: await codeBlock(
-                'claude mcp add --transport http ask-my-site https://ask-my-site-demo.vercel.app/api/mcp',
+                'claude mcp add --transport http ondocs https://ask-my-site-demo.vercel.app/api/mcp',
                 'sh',
               ),
             }}
@@ -420,7 +414,7 @@ export default async function Home() {
           <div className="compare-scroll">
             <table className="compare">
               <caption className="sr-only">
-                Hosted assistants, ask-my-site and search-only tools compared
+                Hosted assistants, ondocs and search-only tools compared
               </caption>
               <thead>
                 <tr>
@@ -430,7 +424,7 @@ export default async function Home() {
                     <span>Kapa, Inkeep, Algolia Ask AI, Biel.ai, Markprompt</span>
                   </th>
                   <th scope="col" className="compare-ours">
-                    ask-my-site
+                    ondocs
                     <span>A library, on your infrastructure</span>
                   </th>
                   <th scope="col">
@@ -446,7 +440,7 @@ export default async function Home() {
                     <td data-label="Hosted assistants">
                       <CellText cell={row.hosted} />
                     </td>
-                    <td data-label="ask-my-site" className="compare-ours">
+                    <td data-label="ondocs" className="compare-ours">
                       <CellText cell={row.ours} />
                     </td>
                     <td data-label="Search only">
@@ -491,7 +485,7 @@ export default async function Home() {
           </h2>
           <p className="section-lead">
             Try it on your own content in two minutes, without an API key: index with the mock model
-            and run <code>npx ask-my-site dev</code>.
+            and run <code>npx ondocs dev</code>.
           </p>
           <Install large />
           <div className="cta-actions">

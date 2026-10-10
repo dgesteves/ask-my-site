@@ -1,18 +1,18 @@
 // The part of the embed every page runs: the "Ask AI" button and the shortcut, in plain DOM, with
 // no React. The dialog (React, Radix, cmdk) loads on first use: a pointer over or focus on the
 // button, the shortcut, or `open()`. A shortcut pressed while it loads opens it once it has.
-import type { AskMySiteDialogOptions, AskMySiteTheme } from './options';
+import type { OndocsDialogOptions, OndocsTheme } from './options';
 
-export interface MountAskDialogOptions extends AskMySiteDialogOptions {
+export interface MountAskDialogOptions extends OndocsDialogOptions {
   /** URL the dialog posts questions to. Default `/api/ask`. */
   endpoint?: string;
   /** The page's locale, sent with each question, for an endpoint with an index per locale. */
   locale?: string;
   /** Default `auto`: the page's `data-theme` on `<html>` if it has one, else the system's. */
-  theme?: AskMySiteTheme;
+  theme?: OndocsTheme;
   /** Extra request headers, e.g. an auth token. */
   headers?: Record<string, string>;
-  /** Where to render. Default: a new `<div class="ask-my-site">` at the end of `<body>`. */
+  /** Where to render. Default: a new `<div class="ondocs">` at the end of `<body>`. */
   container?: Element;
   /**
    * Called when a citation or source is clicked. Call `event.preventDefault()` to route with
@@ -28,7 +28,7 @@ export interface MountedAskDialog {
   unmount: () => void;
 }
 
-/** The dialog, rendered once its code has loaded: what `ask-my-site/embed`'s dialog module does. */
+/** The dialog, rendered once its code has loaded: what `ondocs/embed`'s dialog module does. */
 export interface DialogRenderer {
   render: (
     element: Element,
@@ -64,7 +64,7 @@ function isEditable(target: EventTarget | null): boolean {
 
 /**
  * Mounts the launcher, and the dialog through `load` when it is first wanted. What
- * `mountAskDialog` from `ask-my-site/embed` and the script tag share; they differ in how the
+ * `mountAskDialog` from `ondocs/embed` and the script tag share; they differ in how the
  * dialog's code arrives (a dynamic import, or a second script).
  */
 export function mountWithLoader(
@@ -84,7 +84,7 @@ export function mountWithLoader(
     if (!container.isConnected) document.body.append(container);
   };
   if (!given) {
-    container.className = 'ask-my-site';
+    container.className = 'ondocs';
     document.body.append(container);
     document.addEventListener('astro:after-swap', reattach);
   }
@@ -99,7 +99,7 @@ export function mountWithLoader(
   if (buttonLabel !== false) {
     button = document.createElement('button');
     button.type = 'button';
-    button.className = 'ask-my-site-launcher';
+    button.className = 'ondocs-launcher';
     button.setAttribute('aria-haspopup', 'dialog');
     button.setAttribute('aria-expanded', 'false');
     if (key) button.setAttribute('aria-keyshortcuts', `Meta+${key} Control+${key}`);
@@ -151,7 +151,7 @@ export function mountWithLoader(
       })
       .catch((error: unknown) => {
         loading = null;
-        console.error('[ask-my-site] The dialog could not load.', error);
+        console.error('[ondocs] The dialog could not load.', error);
       });
     return loading;
   };

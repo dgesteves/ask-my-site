@@ -1,11 +1,11 @@
 // The dialog with its floating "Ask AI" button, and the site's color scheme: what the Docusaurus
-// theme and ask-my-site/embed render. Not part of the public `ask-my-site/react` API.
+// theme and ondocs/embed render. Not part of the public `ondocs/react` API.
 import { useSyncExternalStore, type ReactNode } from 'react';
 
-import type { AskMySiteDialogOptions, AskMySiteTheme } from '../embed/options';
+import type { OndocsDialogOptions, OndocsTheme } from '../embed/options';
 import { AskDialog, type AskDialogProps } from './ask-dialog';
 
-export interface AskWithLauncherProps extends AskMySiteDialogOptions {
+export interface AskWithLauncherProps extends OndocsDialogOptions {
   endpoint: string;
   locale?: string;
   theme: 'light' | 'dark';
@@ -17,7 +17,7 @@ export interface AskWithLauncherProps extends AskMySiteDialogOptions {
 
 /**
  * `AskDialog` opened by ⌘/Ctrl+I (by default) and by its floating launcher button, with the
- * `ask-my-site-launcher` class, which the integration's stylesheet places and colors.
+ * `ondocs-launcher` class, which the integration's stylesheet places and colors.
  */
 export function AskWithLauncher({
   shortcut = 'i',
@@ -56,7 +56,7 @@ function subscribeToScheme(onChange: () => void): () => void {
 const noSubscription = () => () => undefined;
 
 /** The color scheme to render in: `theme` itself, or with `auto`, the page's, kept up to date. */
-export function useColorScheme(theme: AskMySiteTheme = 'auto'): 'light' | 'dark' {
+export function useColorScheme(theme: OndocsTheme = 'auto'): 'light' | 'dark' {
   const auto = theme === 'auto';
   return useSyncExternalStore(
     auto ? subscribeToScheme : noSubscription,

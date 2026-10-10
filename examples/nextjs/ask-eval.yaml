@@ -1,5 +1,5 @@
 # Questions about these docs, with the pages that answer them, and a few they do not answer.
-# CI runs `ask-my-site eval ask-eval.yaml` against the index the build writes (mock embeddings
+# CI runs `ondocs eval ask-eval.yaml` against the index the build writes (mock embeddings
 # without a key), so a change that sends a question to the wrong page fails the build.
 
 index: ask-index.json
@@ -9,7 +9,7 @@ thresholds:
   refusalRecall: 1
 
 questions:
-  - question: How do I add ask-my-site to a Docusaurus site?
+  - question: How do I add ondocs to a Docusaurus site?
     expect: /docs/docusaurus
   - question: How do I add the Ask box to Starlight?
     expect: /docs/astro
@@ -25,10 +25,12 @@ questions:
     expect: /docs/retrieval
   - question: How do I answer without an API key on GitHub Pages?
     expect: [/docs/workers-ai, /docs/deployment]
-  - question: Which flags does ask-my-site index take?
+  - question: Which flags does ondocs index take?
     expect: /docs/cli
   - question: How do I add the dialog with a script tag?
     expect: /docs/script-tag
+  - question: How do I move a site from ask-my-site to ondocs?
+    expect: /docs/migrating
 
   - question: What is the capital of France?
     unanswerable: true

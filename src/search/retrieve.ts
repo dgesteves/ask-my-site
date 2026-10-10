@@ -151,7 +151,7 @@ export function loadIndex(input: unknown): LoadedIndex {
         vector = decodeVector(chunk.vector ?? '', dimensions);
       } catch (error) {
         throw new AskIndexError(
-          `Invalid ask-my-site index: chunks[${String(i)}].vector: ${(error as Error).message}`,
+          `Invalid ondocs index: chunks[${String(i)}].vector: ${(error as Error).message}`,
         );
       }
       matrix.set(vector, i * dimensions);

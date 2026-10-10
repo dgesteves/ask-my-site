@@ -49,14 +49,14 @@ Each chunk is embedded together with its page title and heading path, as in `Dep
 
 ## Incremental rebuilds
 
-Every chunk records a hash of exactly the text it was embedded from. On a rebuild, unchanged chunks reuse their previous vectors, so only edited sections are sent to the embedding model. The plugins keep the previous vectors in `node_modules/.cache/ask-my-site` between builds.
+Every chunk records a hash of exactly the text it was embedded from. On a rebuild, unchanged chunks reuse their previous vectors, so only edited sections are sent to the embedding model. The plugins keep the previous vectors in `node_modules/.cache/ondocs` between builds.
 
 ## Checking the index in CI
 
 To fail CI when the index is stale, run the same command with `--check`. It exits with code 1 when the committed index no longer matches the content, and lists which chunks were added, changed or removed:
 
 ```sh
-npx ask-my-site index ./docs --base-url /docs --check
+npx ondocs index ./docs --base-url /docs --check
 ```
 
 The check re-chunks the content and compares content hashes. It never calls an embedding model and needs no API key. The plugins rebuild the index with the site, so they need no check.

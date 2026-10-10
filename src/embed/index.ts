@@ -1,18 +1,24 @@
 /**
- * ask-my-site/embed: the ask dialog on any page, without writing React. `mountAskDialog` adds a
+ * ondocs/embed: the ask dialog on any page, without writing React. `mountAskDialog` adds a
  * floating "Ask AI" button and the shortcut to the page, and loads the dialog (React, Radix and
  * cmdk, in a chunk of their own) the first time it is wanted: a pointer over or focus on the
  * button, the shortcut, or `open()`. The prebuilt `dist/embed.global.js` does the same from a
  * `<script>` tag.
  *
- * Import `ask-my-site/react/styles.css` and `ask-my-site/embed/launcher.css` for the default look.
+ * Import `ondocs/react/styles.css` and `ondocs/embed/launcher.css` for the default look.
  */
 
 import { mountWithLoader, type MountAskDialogOptions, type MountedAskDialog } from './mount';
+import type { OndocsDialogOptions, OndocsTheme } from './options';
 
-export type { AskMySiteDialogOptions, AskMySiteTheme } from './options';
+export type { OndocsDialogOptions, OndocsTheme } from './options';
 export type { AskDialogLabels } from '../react/labels';
 export type { MountAskDialogOptions, MountedAskDialog } from './mount';
+
+/** @deprecated Use `OndocsDialogOptions`. Its name from before ask-my-site became ondocs. */
+export type AskMySiteDialogOptions = OndocsDialogOptions;
+/** @deprecated Use `OndocsTheme`. Its name from before ask-my-site became ondocs. */
+export type AskMySiteTheme = OndocsTheme;
 
 /**
  * Renders the ask dialog's launcher into the page (a container of its own at the end of
@@ -20,9 +26,9 @@ export type { MountAskDialogOptions, MountedAskDialog } from './mount';
  * use. In the browser only.
  *
  * ```ts
- * import { mountAskDialog } from 'ask-my-site/embed';
- * import 'ask-my-site/react/styles.css';
- * import 'ask-my-site/embed/launcher.css';
+ * import { mountAskDialog } from 'ondocs/embed';
+ * import 'ondocs/react/styles.css';
+ * import 'ondocs/embed/launcher.css';
  *
  * const ask = mountAskDialog({ endpoint: '/api/ask', suggestions: ['How do I install it?'] });
  * ```

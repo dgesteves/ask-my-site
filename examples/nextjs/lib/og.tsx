@@ -62,7 +62,7 @@ export function Brand({ suffix }: { suffix?: string }) {
         <Spark size={26} />
       </div>
       <div style={{ display: 'flex', fontSize: 30, fontWeight: 600, color: COLORS.fg }}>
-        ask-my-site
+        ondocs
         {suffix ? (
           <span style={{ marginLeft: 14, color: COLORS.subtle, fontWeight: 400 }}>{suffix}</span>
         ) : null}

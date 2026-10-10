@@ -36,7 +36,7 @@ describe.each(MODES)('the official MCP client, %s', (_, mode, negotiated) => {
     try {
       expect(client.getNegotiatedProtocolVersion()).toBe(negotiated);
       expect(client.getServerVersion()).toMatchObject({
-        name: 'ask-my-site',
+        name: 'ondocs',
         title: 'Search the Acme docs',
       });
       expect(client.getInstructions()).toMatch(/search .* then fetch/);

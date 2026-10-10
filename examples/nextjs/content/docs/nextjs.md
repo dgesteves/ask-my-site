@@ -5,12 +5,12 @@ section: Integrations
 order: 12
 ---
 
-In a Next.js app, or any React app with a server, ask-my-site is three pieces: an index built by the CLI, a route handler made with `createAskHandler`, and the `<AskDialog />` component. The ask-my-site website is built exactly this way.
+In a Next.js app, or any React app with a server, ondocs is three pieces: an index built by the CLI, a route handler made with `createAskHandler`, and the `<AskDialog />` component. The ondocs website is built exactly this way.
 
 ## Install for Next.js
 
 ```sh
-npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+npm i ondocs ai @ai-sdk/openai @radix-ui/react-dialog cmdk
 ```
 
 `@radix-ui/react-dialog` and `cmdk` work with React 18.3 and 19.
@@ -22,7 +22,7 @@ Build the index from the folder that holds your pages, and commit `ask-index.jso
 ```json
 {
   "scripts": {
-    "index": "ask-my-site index content --base-url /docs -e openai:text-embedding-3-small --dimensions 512",
+    "index": "ondocs index content --base-url /docs -e openai:text-embedding-3-small --dimensions 512",
     "prebuild": "npm run index"
   }
 }
@@ -37,7 +37,7 @@ To add the endpoint to Next.js, export the handler as `POST` from a route handle
 ```ts
 // app/api/ask/route.ts
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 import index from '../../../ask-index.json';
 
 export const POST = createAskHandler({
@@ -58,9 +58,9 @@ Render the dialog once, near the root, from a client component. `onNavigate` sen
 ```tsx
 // app/ask.tsx
 'use client';
-import { AskDialog } from 'ask-my-site/react';
-import 'ask-my-site/react/styles.css';
-import 'ask-my-site/embed/launcher.css';
+import { AskDialog } from 'ondocs/react';
+import 'ondocs/react/styles.css';
+import 'ondocs/embed/launcher.css';
 import { useRouter } from 'next/navigation';
 
 export function Ask() {
@@ -90,14 +90,14 @@ Leave `launcher` out and pass `trigger` to open the dialog from an element of yo
 
 ## Build your own interface
 
-`useAsk()` from `ask-my-site/react` is the hook behind the dialog. It returns `ask`, `stop` and `reset`, plus the streaming `answer`, its `sources` and a `status`, so you can render answers inline on a page instead of in a dialog. `AskAnswer` renders an answer with clickable citations. See [The ask dialog](/docs/ask-dialog#the-useask-hook).
+`useAsk()` from `ondocs/react` is the hook behind the dialog. It returns `ask`, `stop` and `reset`, plus the streaming `answer`, its `sources` and a `status`, so you can render answers inline on a page instead of in a dialog. `AskAnswer` renders an answer with clickable citations. See [The ask dialog](/docs/ask-dialog#the-useask-hook).
 
 ## Keep the index fresh in CI
 
 Add the check to CI so a pull request that changes content without rebuilding the index fails:
 
 ```sh
-npx ask-my-site index content --base-url /docs --check   # exit 1 if stale
+npx ondocs index content --base-url /docs --check   # exit 1 if stale
 ```
 
 The check never calls a model and needs no API key.

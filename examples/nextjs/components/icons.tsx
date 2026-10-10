@@ -1,4 +1,4 @@
-/** The ask-my-site spark: the four-point star the dialog uses. */
+/** The ondocs spark: the four-point star the dialog uses. */
 export function Spark({ size = 18 }: { size?: number }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">

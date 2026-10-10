@@ -2,7 +2,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { cache } from 'react';
 
-import { createSlugger, decodeEntities, parseFrontmatter } from 'ask-my-site';
+import { createSlugger, decodeEntities, parseFrontmatter } from 'ondocs';
 import { Marked, type Tokens } from 'marked';
 
 import { codeBlock } from './highlight';
@@ -88,7 +88,7 @@ export const getSections = cache(async (): Promise<DocSection[]> => {
 });
 
 /**
- * Renders a page with heading ids from ask-my-site's own slugger, the one the chunker uses, so
+ * Renders a page with heading ids from ondocs's own slugger, the one the chunker uses, so
  * every citation anchor in an answer lands on a heading that exists.
  */
 export const getDoc = cache(async (slug: string): Promise<Doc | null> => {

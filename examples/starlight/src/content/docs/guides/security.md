@@ -14,7 +14,7 @@ The handler rate-limits by default: 10 questions a minute per client IP, read fr
 
 ```ts
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 import index from './ask-index.json';
 
 export const POST = createAskHandler({
@@ -25,7 +25,7 @@ export const POST = createAskHandler({
 });
 ```
 
-A rejected request gets a 429 with `Retry-After` and `RateLimit-*` headers before any model is called, and the dialog shows "Too many questions. Try again shortly." On serverless platforms each instance counts on its own, so treat the memory limiter as a guard against one noisy client. For a limit shared by every instance and region, wrap an `@upstash/ratelimit` instance with `upstashRateLimit(new Ratelimit({ … }))`; ask-my-site does not depend on Upstash. Any `(request) => { success }` function works too.
+A rejected request gets a 429 with `Retry-After` and `RateLimit-*` headers before any model is called, and the dialog shows "Too many questions. Try again shortly." On serverless platforms each instance counts on its own, so treat the memory limiter as a guard against one noisy client. For a limit shared by every instance and region, wrap an `@upstash/ratelimit` instance with `upstashRateLimit(new Ratelimit({ … }))`; ondocs does not depend on Upstash. Any `(request) => { success }` function works too.
 
 ## Which client IP header to trust
 
@@ -85,4 +85,4 @@ The answer is rendered from a small Markdown subset into React nodes, never as H
 
 ## Privacy: what leaves your servers
 
-ask-my-site has no service of its own and sends no telemetry, so no third party sees your docs or your visitors' questions except the model provider you choose. The browser talks only to your endpoint. Your endpoint sends the question to your embedding provider, and the question with the retrieved excerpts to your language model provider, under your own API keys and their terms. Nothing else is sent anywhere. `onFinish` gives you each question and answer, and `onFeedback` each rating, if you want to log them; nothing is stored by default, and the dialog offers ratings only when `onFeedback` is set. See [Measure and improve answers](/guides/quality/).
+ondocs has no service of its own and sends no telemetry, so no third party sees your docs or your visitors' questions except the model provider you choose. The browser talks only to your endpoint. Your endpoint sends the question to your embedding provider, and the question with the retrieved excerpts to your language model provider, under your own API keys and their terms. Nothing else is sent anywhere. `onFinish` gives you each question and answer, and `onFeedback` each rating, if you want to log them; nothing is stored by default, and the dialog offers ratings only when `onFeedback` is set. See [Measure and improve answers](/guides/quality/).

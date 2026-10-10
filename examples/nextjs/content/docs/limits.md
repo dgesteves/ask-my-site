@@ -1,11 +1,11 @@
 ---
 title: Limits and trade-offs
-description: Where ask-my-site stops being the right tool, and what it gives up for simplicity.
+description: Where ondocs stops being the right tool, and what it gives up for simplicity.
 section: Reference
 order: 35
 ---
 
-ask-my-site trades scale and freshness for having no infrastructure. The trade has edges, and this page lists them.
+ondocs trades scale and freshness for having no infrastructure. The trade has edges, and this page lists them.
 
 ## Corpus size
 

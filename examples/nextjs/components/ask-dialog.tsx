@@ -1,6 +1,6 @@
 'use client';
 
-import { AskDialog } from 'ask-my-site/react';
+import { AskDialog } from 'ondocs/react';
 import { useRouter } from 'next/navigation';
 
 import { SUGGESTIONS } from '../lib/site';
@@ -24,7 +24,7 @@ export function SiteAskDialog({
       // The site handles ⌘K itself, so it works before this component has loaded.
       shortcut={false}
       theme="dark"
-      title="Ask the ask-my-site docs"
+      title="Ask the ondocs documentation"
       placeholder="Ask the docs a question…"
       suggestions={SUGGESTIONS}
       onNavigate={(url, event) => {

@@ -1,39 +1,48 @@
 /**
- * ask-my-site/starlight: a Starlight plugin. After `astro build` it indexes what Starlight's own
+ * ondocs/starlight: a Starlight plugin. After `astro build` it indexes what Starlight's own
  * search indexes, the region Starlight marks `data-pagefind-body` on each page, into
  * `ask-index.json` in the build output (one per locale), and it adds the ask dialog to every
  * page, opened from a floating button or ⌘/Ctrl+I.
  *
  * The answers come from an endpoint you deploy next to the site (a function running
- * `createAskHandler` from `ask-my-site/server`); see the README.
+ * `createAskHandler` from `ondocs/server`); see the README.
  */
 
 import type { StarlightPlugin, StarlightUserConfig } from '@astrojs/starlight/types';
 
-import { createIntegration, type AskMySiteOptions } from '../astro/integration';
+import {
+  createIntegration,
+  type OndocsDialogOptions,
+  type OndocsOptions,
+} from '../astro/integration';
 
-export type { AskMySiteDialogOptions } from '../astro/integration';
+export type { OndocsDialogOptions } from '../astro/integration';
 
 /**
  * The Astro integration's options, without `content` and `ignore`: the plugin indexes what
  * Starlight's search does. Leave anything else out by marking it `data-pagefind-ignore`.
  */
-export type AskMySiteStarlightOptions = Omit<AskMySiteOptions, 'content' | 'ignore'>;
+export type OndocsStarlightOptions = Omit<OndocsOptions, 'content' | 'ignore'>;
+
+/** @deprecated Use `OndocsStarlightOptions`. Its name from before ask-my-site became ondocs. */
+export type AskMySiteStarlightOptions = OndocsStarlightOptions;
+/** @deprecated Use `OndocsDialogOptions`. Its name from before ask-my-site became ondocs. */
+export type AskMySiteDialogOptions = OndocsDialogOptions;
 
 /**
  * ```ts
  * // astro.config.mjs
  * import starlight from '@astrojs/starlight';
- * import askMySite from 'ask-my-site/starlight';
+ * import ondocs from 'ondocs/starlight';
  *
  * export default defineConfig({
- *   integrations: [starlight({ title: 'Docs', plugins: [askMySite({ endpoint: '/api/ask' })] })],
+ *   integrations: [starlight({ title: 'Docs', plugins: [ondocs({ endpoint: '/api/ask' })] })],
  * });
  * ```
  */
-export default function askMySite(options: AskMySiteStarlightOptions = {}): StarlightPlugin {
+export default function ondocs(options: OndocsStarlightOptions = {}): StarlightPlugin {
   return {
-    name: 'ask-my-site',
+    name: 'ondocs',
     hooks: {
       'config:setup'({ config, addIntegration }) {
         addIntegration(
@@ -45,7 +54,7 @@ export default function askMySite(options: AskMySiteStarlightOptions = {}): Star
             // a code block's "Terminal window".
             content: '[data-pagefind-body]',
             ignore: '[data-pagefind-ignore], .sr-only',
-            stylesheets: ['ask-my-site/starlight/launcher.css'],
+            stylesheets: ['ondocs/starlight/launcher.css'],
             title: `Ask ${siteTitle(config)}`,
             siteTitle: siteTitle(config),
             localeTitles: localeTitles(config),

@@ -1,4 +1,4 @@
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 import index from '../ask-index.json';
 import { chatModel, embeddingModel, embeddingProviderOptions, minSimilarity } from './ai';
@@ -9,12 +9,12 @@ export const askHandler = createAskHandler({
   model: chatModel,
   embeddingModel,
   ...(embeddingProviderOptions ? { embeddingProviderOptions } : {}),
-  siteName: 'the ask-my-site docs',
+  siteName: 'the ondocs documentation',
   ...(minSimilarity ? { retrieval: { minSimilarity } } : {}),
   // Five questions a minute per visitor: in production every answer is a paid model call. A
   // token bucket, so a burst of five, then one more every 12 seconds. Keyed by the last
   // X-Forwarded-For entry, which Vercel sets, and by the /64 for IPv6. On Netlify, Cloudflare or
-  // Fly, pass `trustedHeader` (see "Rate limits and client IPs" in the ask-my-site README).
+  // Fly, pass `trustedHeader` (see "Rate limits and client IPs" in the ondocs README).
   rateLimit: memoryRateLimit({ limit: 5, windowMs: 60_000 }),
   // A daily cap for the whole site, so rotating IPs cannot run up the bill: 300 questions and
   // 1M model tokens a day (an answer is about 3k). The counts live in memory, so each Vercel

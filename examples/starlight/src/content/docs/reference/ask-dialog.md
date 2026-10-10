@@ -6,7 +6,7 @@ sidebar:
   order: 32
 ---
 
-`AskDialog` from `ask-my-site/react` is a command palette built on Radix Dialog and cmdk. The Docusaurus, Astro and Starlight plugins and the script tag render the same component, so everything here applies to them too, through their `dialog` options or `data-*` attributes.
+`AskDialog` from `ondocs/react` is a command palette built on Radix Dialog and cmdk. The Docusaurus, Astro and Starlight plugins and the script tag render the same component, so everything here applies to them too, through their `dialog` options or `data-*` attributes.
 
 ## AskDialog props
 
@@ -37,13 +37,13 @@ To change the keyboard shortcut, pass another key, as in `shortcut="j"`, or turn
 
 ## When the dialog's code loads
 
-A page carries only the dialog's shortcut and, with `launcher` or `trigger`, its button. The dialog itself, Radix Dialog, cmdk and the answer, is a separate chunk that your bundler splits off, and it loads the first time the dialog is wanted: a pointer over or focus on its button or trigger, the shortcut, or `open`. A shortcut pressed while it loads is kept, so the dialog opens, with focus in its input, once it arrives; Escape before then cancels it. Focus goes back to where it was when the dialog closes, or to the button that opened it. Call `loadAskDialog()` from `ask-my-site/react` to load it sooner, such as when the page is idle.
+A page carries only the dialog's shortcut and, with `launcher` or `trigger`, its button. The dialog itself, Radix Dialog, cmdk and the answer, is a separate chunk that your bundler splits off, and it loads the first time the dialog is wanted: a pointer over or focus on its button or trigger, the shortcut, or `open`. A shortcut pressed while it loads is kept, so the dialog opens, with focus in its input, once it arrives; Escape before then cancels it. Focus goes back to where it was when the dialog closes, or to the button that opened it. Call `loadAskDialog()` from `ondocs/react` to load it sooner, such as when the page is idle.
 
-In the plugins' sites this takes ask-my-site's share of each page from about 22 KB of JavaScript to about 3 KB with Docusaurus, and from about 88 KB to under 2 KB with Starlight, which has no React of its own; see [Benchmarks](/reference/benchmarks/#bundle-size).
+In the plugins' sites this takes the JavaScript ondocs adds to each page from about 22 KB to about 3 KB with Docusaurus, and from about 88 KB to under 2 KB with Starlight, which has no React of its own; see [Benchmarks](/reference/benchmarks/#bundle-size).
 
 ## The launcher button
 
-`launcher` adds a floating "Ask AI" button in the corner of the page, with the shortcut on it. Pass a string to change its label, as in `launcher="Ask the docs"`, and import `ask-my-site/embed/launcher.css` for its look, or style `.ask-my-site-launcher` yourself.
+`launcher` adds a floating "Ask AI" button in the corner of the page, with the shortcut on it. Pass a string to change its label, as in `launcher="Ask the docs"`, and import `ondocs/embed/launcher.css` for its look, or style `.ondocs-launcher` yourself.
 
 ## Citations and navigation
 
@@ -126,7 +126,7 @@ The endpoint's own words, its "I don't know" answer, its rate limit and budget m
 
 ## Theming the dialog
 
-Import `ask-my-site/react/styles.css` for the default theme, which follows the system's light or dark setting. To change the dialog's colors, set its CSS custom properties: every color, radius and font is one, so `.ask-dialog { --ask-accent: #7c3aed; --ask-radius: 8px; }` is a complete rebrand. To style it from scratch, skip the stylesheet: every part has a stable `ask-*` class, and `classNames` adds your own, which suits Tailwind.
+Import `ondocs/react/styles.css` for the default theme, which follows the system's light or dark setting. To change the dialog's colors, set its CSS custom properties: every color, radius and font is one, so `.ask-dialog { --ask-accent: #7c3aed; --ask-radius: 8px; }` is a complete rebrand. To style it from scratch, skip the stylesheet: every part has a stable `ask-*` class, and `classNames` adds your own, which suits Tailwind.
 
 ## Accessibility
 

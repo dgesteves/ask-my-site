@@ -18,7 +18,7 @@ function scriptLabels(data: DOMStringMap): Partial<AskDialogLabels> | undefined 
       }
     } catch {
       console.warn(
-        `[ask-my-site] data-labels must be a JSON object of strings, such as {"launcher":"Demander"}; ignoring ${data.labels}`,
+        `[ondocs] data-labels must be a JSON object of strings, such as {"launcher":"Demander"}; ignoring ${data.labels}`,
       );
     }
   }
@@ -55,7 +55,7 @@ export function scriptOptions(data: DOMStringMap): MountAskDialogOptions {
       options.suggestions = suggestions;
     } catch {
       console.warn(
-        `[ask-my-site] data-suggestions must be a JSON array of strings, such as ["How do I install it?"]; ignoring ${data.suggestions}`,
+        `[ondocs] data-suggestions must be a JSON array of strings, such as ["How do I install it?"]; ignoring ${data.suggestions}`,
       );
     }
   }

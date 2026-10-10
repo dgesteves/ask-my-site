@@ -4,7 +4,7 @@ title: 'llms.txt and Markdown pages'
 description: 'Write llms.txt, llms-full.txt and a Markdown copy of every page at build time, from the pages the index is built from.'
 ---
 
-Agents read docs as Markdown. With the same pages it indexes, ask-my-site writes three files that agents look for:
+Agents read docs as Markdown. With the same pages it indexes, ondocs writes three files that agents look for:
 
 - **`llms.txt`**, as [llmstxt.org](https://llmstxt.org) describes it: the site's name, its summary, and a section of links per part of the site, each to the page's Markdown copy. It also names the [MCP server](./mcp.md) when there is one.
 - **`llms-full.txt`**: every page in one file, for a model to read in one request.
@@ -21,7 +21,7 @@ The plugins write all three after the build, into the build output next to `ask-
 Turn them off with `llmsTxt: false`, or one at a time:
 
 ```ts
-plugins: [['ask-my-site/docusaurus', { llmsTxt: { full: false, markdown: false } }]],
+plugins: [['ondocs/docusaurus', { llmsTxt: { full: false, markdown: false } }]],
 ```
 
 `llmsTxt` takes `index`, `full` and `markdown` (each on by default), and `title` and `description` to name the site.
@@ -43,7 +43,7 @@ A site that already uses an llms plugin keeps it. The plugins never replace a fi
 `--llms-txt <dir>` writes the three files into `dir`, the folder your site serves at its root, such as `public/` in Next.js. A page's copy goes at its URL there: `/docs/intro` is `public/docs/intro.md`. Unlike the plugins, the CLI replaces what is there, since you named the folder.
 
 ```sh
-npx ask-my-site index content/docs --base-url /docs --llms-txt public \
+npx ondocs index content/docs --base-url /docs --llms-txt public \
   --llms-title "Acme Docs" --llms-description "Docs for Acme." \
   --site-url https://docs.acme.dev --mcp-url https://docs.acme.dev/api/mcp
 ```

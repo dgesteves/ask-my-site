@@ -1,5 +1,5 @@
 /**
- * The wire contract between `ask-my-site/server` and `ask-my-site/react`. Types only, so the
+ * The wire contract between `ondocs/server` and `ondocs/react`. Types only, so the
  * client bundle never pulls in server code.
  *
  * The response is an AI SDK UI message stream (Server-Sent Events), so `useChat` from
@@ -33,7 +33,11 @@ export interface AskMetadata {
   feedback?: boolean;
 }
 
-/** Key under `providerMetadata` on `source-url` parts that carries the title and heading. */
+/**
+ * Key under `providerMetadata` on `source-url` parts that carries the title and heading. It keeps
+ * the name from before ondocs, so a dialog and an endpoint on either side of the rename still
+ * show each other's citations.
+ */
 export const SOURCE_METADATA_KEY = 'askMySite';
 
 /** Body of a request to the handler. `{ messages }` from `useChat` is also accepted. */

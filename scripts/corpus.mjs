@@ -3,7 +3,7 @@
 // checked out (a sparse, blobless clone of a few MB). The docs are CC BY 4.0, by Meta Platforms.
 //
 //   node scripts/corpus.mjs            # into .corpus/ (git-ignored), once
-//   ASK_MY_SITE_CORPUS=.corpus pnpm vitest run test/corpus.test.ts
+//   ONDOCS_CORPUS=.corpus pnpm vitest run test/corpus.test.ts
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';

@@ -1,10 +1,10 @@
 ---
 # Generated from examples/nextjs/content/docs/quality.md by scripts/sync-example-docs.mjs. Edit that file instead.
 title: 'Measure and improve answers'
-description: "Score retrieval in CI with ask-my-site eval, collect readers' feedback, and keep a log of the questions your docs do not answer."
+description: "Score retrieval in CI with ondocs eval, collect readers' feedback, and keep a log of the questions your docs do not answer."
 ---
 
-Three tools tell you how well your docs answer: `ask-my-site eval`, which scores retrieval against questions whose answers you know, in CI; readers' thumbs up and down in the dialog; and a log of the questions the docs did not answer, the content gaps to write next. None of them sends anything anywhere unless you wire it to.
+Three tools tell you how well your docs answer: `ondocs eval`, which scores retrieval against questions whose answers you know, in CI; readers' thumbs up and down in the dialog; and a log of the questions the docs did not answer, the content gaps to write next. None of them sends anything anywhere unless you wire it to.
 
 ## Score retrieval with eval
 
@@ -30,7 +30,7 @@ questions:
 Then run it against the index your build wrote:
 
 ```sh
-npx ask-my-site eval ask-eval.yaml --index build/ask-index.json
+npx ondocs eval ask-eval.yaml --index build/ask-index.json
 ```
 
 For each question it prints where the first expected page came among the pages found, or that the gate refused it, with the best keyword coverage and similarity it saw. Then come the scores:
@@ -108,4 +108,4 @@ onFinish: async ({ question, refused, lowConfidence }) => {
 
 ## What leaves your site
 
-Nothing, unless you send it. The questions and ratings reach your endpoint, and go no further than the code you write in `onFinish` and `onFeedback`; ask-my-site sends no telemetry and keeps no store. A question is what a reader typed, so it can hold personal details: log only what you need, with no IP address, and keep it only as long as you use it. See [Rate limits and security](./security.md#privacy-what-leaves-your-servers).
+Nothing, unless you send it. The questions and ratings reach your endpoint, and go no further than the code you write in `onFinish` and `onFeedback`; ondocs sends no telemetry and keeps no store. A question is what a reader typed, so it can hold personal details: log only what you need, with no IP address, and keep it only as long as you use it. See [Rate limits and security](./security.md#privacy-what-leaves-your-servers).

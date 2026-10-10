@@ -1,12 +1,12 @@
 // Creates a fresh site the way a new user would, with each framework's own scaffolder, installs
-// ask-my-site into it from a packed tarball, builds it with embeddings from OpenAI, and checks the
+// ondocs into it from a packed tarball, builds it with embeddings from OpenAI, and checks the
 // index came out embedded. OPENAI_BASE_URL points at a local stub (./openai-stub.mjs), the only
 // thing the index build calls; the API key is fake, so a request to the real API would fail.
 //
-//   npm pack && node scripts/consumer-site.mjs <site> ask-my-site-x.y.z.tgz [dir]
+//   npm pack && node scripts/consumer-site.mjs <site> ondocs-x.y.z.tgz [dir]
 //
-// The sites are next, docusaurus and starlight, and docusaurus-plugin-ask-my-site and
-// starlight-ask-my-site, which install the plugin under its own package's name (packages/).
+// The sites are next, docusaurus and starlight, and docusaurus-plugin-ondocs and
+// starlight-ondocs, which install the plugin under its own package's name (packages/).
 //
 // The workspace examples link the package from source, so they cannot catch what only an
 // installed package meets: how Docusaurus loads plugins, the published files, peer resolution.
@@ -32,7 +32,7 @@ const PEERS = ['ai', '@ai-sdk/openai', '@radix-ui/react-dialog', 'cmdk'];
 
 /**
  * Per site: how to create it, what to add, what to install and run, where the index lands and
- * the vector size it must have, and the package under packages/ it installs ask-my-site through,
+ * the vector size it must have, and the package under packages/ it installs ondocs through,
  * if any (packed here, and installed with the tarball, so it resolves to that and not to npm). Scaffolders are pinned to a major version, so a new major is a
  * deliberate upgrade here rather than a surprise in an unrelated pull request.
  *
@@ -78,7 +78,7 @@ const SITES = {
         dir,
         'app/api/ask/route.ts',
         `import { createOpenAI } from '@ai-sdk/openai';
-import { createAskHandler } from 'ask-my-site/server';
+import { createAskHandler } from 'ondocs/server';
 
 import index from '../../../ask-index.json';
 
@@ -96,7 +96,7 @@ export const POST = createAskHandler({
         dir,
         'app/ask.tsx',
         `'use client';
-import { AskDialog } from 'ask-my-site/react';
+import { AskDialog } from 'ondocs/react';
 
 export function Ask() {
   return <AskDialog suggestions={['How do I install it?']} />;
@@ -107,7 +107,7 @@ export function Ask() {
         layout
           .replace(
             'import "./globals.css";',
-            'import "./globals.css";\nimport "ask-my-site/react/styles.css";\nimport { Ask } from "./ask";',
+            'import "./globals.css";\nimport "ondocs/react/styles.css";\nimport { Ask } from "./ask";',
           )
           .replace('{children}', '{children}<Ask />'),
       );
@@ -116,7 +116,7 @@ export function Ask() {
     build: [
       [
         'npx',
-        'ask-my-site',
+        'ondocs',
         'index',
         'content',
         '--base-url',
@@ -135,18 +135,18 @@ export function Ask() {
     dimensions: 512,
   },
   // The plugin with no options: the default model, from OPENAI_API_KEY, loaded under jiti.
-  docusaurus: docusaurus("['ask-my-site/docusaurus', {}]"),
+  docusaurus: docusaurus("['ondocs/docusaurus', {}]"),
   // The same plugin under its own package's name, the one Docusaurus users search for.
-  'docusaurus-plugin-ask-my-site': {
-    ...docusaurus("'docusaurus-plugin-ask-my-site'"),
-    package: 'docusaurus-plugin-ask-my-site',
+  'docusaurus-plugin-ondocs': {
+    ...docusaurus("'docusaurus-plugin-ondocs'"),
+    package: 'docusaurus-plugin-ondocs',
   },
   // The plugin with the model named as a string, as the CLI's --embedding names it.
-  starlight: starlight('ask-my-site/starlight'),
+  starlight: starlight('ondocs/starlight'),
   // The same plugin under its own package's name, the one Starlight users search for.
-  'starlight-ask-my-site': {
-    ...starlight('starlight-ask-my-site'),
-    package: 'starlight-ask-my-site',
+  'starlight-ondocs': {
+    ...starlight('starlight-ondocs'),
+    package: 'starlight-ondocs',
   },
 };
 
@@ -184,11 +184,11 @@ function starlight(entry) {
         config
           .replace(
             "import starlight from '@astrojs/starlight';",
-            `import starlight from '@astrojs/starlight';\nimport askMySite from '${entry}';`,
+            `import starlight from '@astrojs/starlight';\nimport ondocs from '${entry}';`,
           )
           .replace(
             'starlight({',
-            `starlight({\n\t\t\tplugins: [askMySite({ embedding: 'openai:${MODEL}', dimensions: 512 })],`,
+            `starlight({\n\t\t\tplugins: [ondocs({ embedding: 'openai:${MODEL}', dimensions: 512 })],`,
           ),
       );
     },
@@ -209,8 +209,8 @@ function write(dir, file, content) {
 function edit(dir, file, change) {
   const before = readFileSync(join(dir, file), 'utf8');
   const after = change(before);
-  if (after === before || !after.includes('ask-my-site')) {
-    throw new Error(`Could not add ask-my-site to ${file}; did the template change?`);
+  if (after === before || !after.includes('ondocs')) {
+    throw new Error(`Could not add ondocs to ${file}; did the template change?`);
   }
   writeFileSync(join(dir, file), after);
 }
@@ -231,7 +231,7 @@ if (!site || !tarball) {
   );
   process.exit(2);
 }
-const dir = resolve(target ?? join(tmpdir(), `ask-my-site-consumer-${name}`));
+const dir = resolve(target ?? join(tmpdir(), `ondocs-consumer-${name}`));
 rmSync(dir, { recursive: true, force: true });
 mkdirSync(dirname(dir), { recursive: true });
 
@@ -242,7 +242,7 @@ const tarballs = [resolve(tarball)];
 if (site.package) {
   const packed = join(dirname(dir), `${name}-pack`);
   rmSync(packed, { recursive: true, force: true });
-  // pnpm pack writes ask-my-site's version where the manifest says workspace:*.
+  // pnpm pack writes ondocs's version where the manifest says workspace:*.
   await run('pnpm', ['pack', '--pack-destination', packed], {
     cwd: fileURLToPath(new URL(`../packages/${site.package}`, import.meta.url)),
   });
@@ -251,11 +251,8 @@ if (site.package) {
 await run('npm', ['install', '--no-audit', '--no-fund', ...tarballs, ...site.install], {
   cwd: dir,
 });
-if (
-  site.package &&
-  existsSync(join(dir, 'node_modules', site.package, 'node_modules/ask-my-site'))
-) {
-  throw new Error(`${site.package} installed its own ask-my-site rather than the packed one.`);
+if (site.package && existsSync(join(dir, 'node_modules', site.package, 'node_modules/ondocs'))) {
+  throw new Error(`${site.package} installed its own ondocs rather than the packed one.`);
 }
 
 const stub = await startOpenAIStub();

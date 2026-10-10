@@ -1,4 +1,4 @@
-// The ask and MCP endpoints that ask-my-site/astro serves itself on a site with an SSR adapter, so
+// The ask and MCP endpoints that ondocs/astro serves itself on a site with an SSR adapter, so
 // the site needs no route file: the integration injects `ask-route.ts` and `mcp-route.ts`, which
 // call these. They answer from the index the build wrote, fetched from the site's own static files
 // (through the ASSETS binding on Cloudflare) and checked again after a deploy.
@@ -10,7 +10,7 @@ import { createMcpHandler } from '../server/mcp';
 import { memoryRateLimit, type RateLimiter } from '../server/rate-limit';
 import { remoteIndex, type RemoteIndex } from '../server/remote-index';
 
-/** What the integration passes to the route, as JSON, through `virtual:ask-my-site/route`. */
+/** What the integration passes to the route, as JSON, through `virtual:ondocs/route`. */
 export interface RouteSettings {
   siteName: string;
   /** The site's origin, from Astro's `site`, for the MCP results' links. */
@@ -185,7 +185,7 @@ export async function serve(
   try {
     ready = await handlers(context);
   } catch (error) {
-    console.error('[ask-my-site]', error);
+    console.error('[ondocs]', error);
     return Response.json(
       { error: { code: 'internal_error', message: 'The ask endpoint is misconfigured.' } },
       { status: 500, headers: { 'cache-control': 'no-store' } },
