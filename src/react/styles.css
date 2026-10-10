@@ -398,6 +398,41 @@
   border-radius: 1px;
 }
 
+/* An earlier question and answer in the thread, above the current one. */
+.ask-turn {
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--ask-border);
+}
+
+.ask-turn-question {
+  margin: 0 0 8px;
+  font-weight: 600;
+  color: var(--ask-fg);
+}
+
+.ask-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.ask-new {
+  height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ask-fg);
+  cursor: pointer;
+  background: var(--ask-raised);
+  border: 1px solid var(--ask-border-strong);
+  border-radius: 6px;
+}
+
+.ask-new:hover {
+  border-color: var(--ask-accent-line);
+}
+
 .ask-truncated {
   margin: 12px 0 0;
   font-size: 13px;

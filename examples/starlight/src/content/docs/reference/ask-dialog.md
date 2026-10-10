@@ -25,6 +25,7 @@ sidebar:
 | `placeholder`                         | "Ask a question…"               | The input's placeholder.                                                                              |
 | `footer`                              | a disclaimer and keyboard hints | Replaces the footer.                                                                                  |
 | `links`                               | `"all"`                         | `"sources"` keeps only the answer's links to its source pages; citations always link.                 |
+| `followUps`                           | `true`                          | Send the thread with each question, so the endpoint can answer follow-ups; `false` asks each alone.   |
 
 ## Opening the dialog
 
@@ -46,6 +47,10 @@ In the plugins' sites this takes ask-my-site's share of each page from about 22 
 
 Citations in the answer and the entries in the sources list link to the exact section they came from. Pass `onNavigate` to route with your framework's client router, for example `router.push(url)` in Next.js. The dialog closes after a click either way.
 
+## Follow-up questions
+
+The dialog keeps the thread. Once an answer is on screen, typing another question offers "Follow up", and the answer stays in view while you type. The new question goes to the endpoint with the last three questions and their answers, so it can lean on them, as in "and on Netlify?": the endpoint rewrites it into one that stands on its own before it searches (see [Follow-up questions](/reference/ask-endpoint/#follow-up-questions)). Earlier questions and answers stay above the current one, each with its own citations, which open its own sources. "New question" starts a new thread, with an empty input. `followUps={false}` asks every question on its own.
+
 ## Theming the dialog
 
 Import `ask-my-site/react/styles.css` for the default theme, which follows the system's light or dark setting. To change the dialog's colors, set its CSS custom properties: every color, radius and font is one, so `.ask-dialog { --ask-accent: #7c3aed; --ask-radius: 8px; }` is a complete rebrand. To style it from scratch, skip the stylesheet: every part has a stable `ask-*` class, and `classNames` adds your own, which suits Tailwind.
@@ -60,6 +65,6 @@ Sources arrive before the first word, and the answer renders as it streams, batc
 
 ## The useAsk hook
 
-`useAsk({ endpoint })` is the hook behind the dialog, for building your own interface. It returns `ask`, `stop` and `reset`, plus `status` (`idle`, `loading`, `streaming`, `done` or `error`), `question`, `answer`, `sources`, `refused`, `truncated`, `retrieval` and `error`. `error.kind` is `rate-limited`, `http`, `network` or `stream`, with `retryAfter` for rate limits. `stop()` keeps the partial answer.
+`useAsk({ endpoint })` is the hook behind the dialog, for building your own interface. It returns `ask`, `stop` and `reset`, plus `status` (`idle`, `loading`, `streaming`, `done` or `error`), `question`, `answer`, `sources`, `refused`, `truncated`, `retrieval`, `error` and `turns`, the thread's earlier questions with their answers and sources. `ask` adds the answer on screen to `turns` and sends the thread with the next question, and `reset` starts a new thread; `followUps: false` keeps no thread. `error.kind` is `rate-limited`, `http`, `network` or `stream`, with `retryAfter` for rate limits. `stop()` keeps the partial answer.
 
 `AskAnswer` renders an answer with clickable citations from `answer` and `sources`. It renders a small Markdown subset, never HTML, and only turns `[n]` into a link when source `n` exists.
