@@ -2,6 +2,12 @@
 
 Until 0.6.0 this package was published as `ask-my-site`. Its entries below keep the links and names of that time.
 
+## 0.7.1
+
+### Patch Changes
+
+- [#67](https://github.com/dgesteves/ondocs/pull/67) [`98d1021`](https://github.com/dgesteves/ondocs/commit/98d10215b7b852ab598b9416b2e11b6bda61e8d3) Thanks [@dgesteves](https://github.com/dgesteves)! - The Cloudflare Worker that `ondocs init` writes, and `templates/cloudflare-worker`, now allow the install scripts of esbuild and workerd in `package.json` (`allowScripts`) and decline fsevents. npm 12 runs no install scripts unless they are allowed, so a fresh install no longer warns that Wrangler's binaries were blocked.
+
 ## 0.7.0
 
 ### Minor Changes
