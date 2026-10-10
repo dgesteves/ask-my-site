@@ -14,7 +14,7 @@ import { GITHUB_URL, INSTALL, SUGGESTIONS, VERSION } from '../lib/site';
 import './landing.css';
 
 export const metadata: Metadata = {
-  title: { absolute: 'ask-my-site: a self-hosted Ask AI box for docs sites' },
+  title: { absolute: 'ask-my-site: make your docs answerable by people and by agents' },
   alternates: { canonical: '/', types: { 'text/plain': '/llms.txt' } },
 };
 
@@ -143,9 +143,9 @@ const NUMBERS = [
     note: 'BM25, cosine scan and fusion, in memory. 6.96 ms at 10,000 chunks.',
   },
   {
-    value: '32 ms',
-    label: 'cold load per server instance',
-    note: 'Parse, decode and build the inverted index, once. 339 ms at 10,000 chunks.',
+    value: '22 / 22',
+    label: 'agent searches with the right page in the top three',
+    note: 'On docusaurus.io’s own docs, keyword-only: no model call. Checked in CI.',
   },
   {
     value: '2.4 KB',
@@ -198,6 +198,12 @@ const COMPARISON: { label: string; hosted: Cell; ours: Cell; search: Cell }[] = 
     search: 'None',
   },
   {
+    label: 'For agents',
+    hosted: 'Varies by vendor',
+    ours: { text: 'An MCP server and llms.txt from the same index', good: true },
+    search: 'No',
+  },
+  {
     label: 'Dashboards and multi-turn chat',
     hosted: 'Typically included',
     ours: 'No. Single-turn answers; log questions with onFinish',
@@ -247,19 +253,19 @@ export default async function Home() {
               Open source · MIT · v{VERSION}
             </p>
             <h1 id="hero-title" className="hero-title">
-              Self-hosted “Ask&nbsp;AI” for your docs.
+              Make your docs answerable, by people and by agents.
             </h1>
             <p className="hero-lead">
-              ask-my-site indexes your docs at build time into one static file. A function you
-              deploy searches it in memory and streams answers from the model you choose, citing the
-              exact section each one came from. When nothing matches, it says so without calling the
-              model.
+              One static index, built with your site, serves a cited Ask box for people, and an MCP
+              server and llms.txt for agents. A function you deploy searches it in memory and
+              answers with your own model key, citing the exact section. Agents bring their own
+              model, so their traffic costs you no model tokens.
             </p>
             <ul className="hero-facts" aria-label="What it does without">
               <li>No vector database</li>
-              <li>No hosted service</li>
-              <li>No account</li>
-              <li>Your own model key</li>
+              <li>No vendor</li>
+              <li>Your own function and key</li>
+              <li>MCP and llms.txt included</li>
             </ul>
             <div className="hero-actions">
               <AskButton className="button button-primary">Try it: ask these docs</AskButton>
@@ -281,6 +287,56 @@ export default async function Home() {
             that answers from it. The plugins do the first half for you.
           </p>
           <SetupTabs tabs={tabs} />
+        </div>
+      </section>
+
+      <section className="section" aria-labelledby="agents-title">
+        <div className="container">
+          <p className="eyebrow">For agents</p>
+          <h2 id="agents-title" className="section-title">
+            The same index, for the agents that read your docs.
+          </h2>
+          <p className="section-lead">
+            Coding agents and AI apps search and read your docs over MCP, with their own model.
+            Search is keyword-only by default, so it calls no model at all. These docs do it at{' '}
+            <code>/api/mcp</code>:
+          </p>
+          <div
+            className="agents-code"
+            dangerouslySetInnerHTML={{
+              __html: await codeBlock(
+                'claude mcp add --transport http ask-my-site https://ask-my-site-demo.vercel.app/api/mcp',
+                'sh',
+              ),
+            }}
+          />
+          <div className="principles">
+            <div>
+              <h3>search and fetch</h3>
+              <p>
+                Ranked sections with a snippet and a link to the anchor, then the page or section as
+                Markdown: the shape ChatGPT’s connectors expect, over MCP 2026-07-28 and 2025-11-25.
+              </p>
+            </div>
+            <div>
+              <h3>llms.txt and .md pages</h3>
+              <p>
+                The plugins also write <code>llms.txt</code>, <code>llms-full.txt</code> and a
+                Markdown copy of every page, and leave alone what another llms plugin writes.
+              </p>
+            </div>
+            <div>
+              <h3>Add to Cursor, VS Code, Claude</h3>
+              <p>
+                With the plugins’ <code>mcp</code> option, a docs page shows the install links and
+                the Claude Code command for your endpoint.
+              </p>
+            </div>
+          </div>
+          <Link href="/docs/mcp" className="text-link">
+            The MCP server
+            <ArrowRight />
+          </Link>
         </div>
       </section>
 

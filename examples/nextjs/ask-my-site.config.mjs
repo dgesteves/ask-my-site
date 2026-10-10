@@ -16,6 +16,8 @@ const shared = {
   // its sidebar's order, so --no-llms-index leaves that one out.
   llmsTxt: {
     title: 'ask-my-site',
+    description:
+      'Make your docs answerable by people and by agents, from one static index: a cited Ask box, an MCP server and llms.txt, on your own function and key, with no vector database and no vendor.',
     siteUrl: 'https://ask-my-site-demo.vercel.app',
     mcp: 'https://ask-my-site-demo.vercel.app/api/mcp',
   },

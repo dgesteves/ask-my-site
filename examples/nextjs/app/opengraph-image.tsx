@@ -3,7 +3,7 @@ import { ImageResponse } from 'next/og';
 import { Brand, COLORS, OG_SIZE, Spark, ogFonts } from '../lib/og';
 
 export const alt =
-  'ask-my-site: a self-hosted Ask AI box for docs. Beside the headline, the dialog answers “How do I add it to Docusaurus?” with the plugin config and a citation.';
+  'ask-my-site: make your docs answerable by people and by agents. Beside the headline, the dialog answers “How do I add it to Docusaurus?” with the plugin config and a citation.';
 export const size = OG_SIZE;
 export const contentType = 'image/png';
 
@@ -42,8 +42,8 @@ export default async function Image() {
             letterSpacing: '-0.04em',
           }}
         >
-          <span>{'Self-hosted “Ask\u00a0AI”'}</span>
-          <span>for your docs.</span>
+          <span>Docs answerable by</span>
+          <span>people and agents.</span>
         </div>
         <div
           style={{
@@ -54,8 +54,8 @@ export default async function Image() {
             color: COLORS.muted,
           }}
         >
-          A build-time index, searched in memory, and answers that cite the exact section. No vector
-          database, your own model key.
+          One static index: a cited Ask box, an MCP server and llms.txt. Your own function and key,
+          no vector database.
         </div>
         <div
           style={{
