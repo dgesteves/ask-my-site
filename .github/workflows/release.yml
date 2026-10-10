@@ -26,6 +26,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # docusaurus.io's own docs at a pinned commit, which test/corpus.test.ts searches (as in ci.yml).
+      - name: Fetch the real-world docs corpus
+        run: node scripts/corpus.mjs
       - run: pnpm validate
       # With pending changesets this opens or updates the release pull request. Once that is
       # merged, it publishes to npm and creates the GitHub release.
