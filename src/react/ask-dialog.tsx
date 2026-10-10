@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { AskAnswer, citedSourceIds, safeHref } from './answer';
+import { AskAnswer, citedSourceIds, safeHref, type AnswerLinks } from './answer';
 import { useAsk, type AskState, type UseAskOptions } from './use-ask';
 
 export type AskDialogSlot =
@@ -51,6 +51,11 @@ export interface AskDialogProps extends Omit<UseAskOptions, 'onFinish'> {
   classNames?: Partial<Record<AskDialogSlot, string>>;
   /** Replaces the default footer. */
   footer?: ReactNode;
+  /**
+   * Which links in an answer stay links: `"all"` (the default) or `"sources"`, only links to the
+   * pages the answer's sources are on. See `AskAnswer`.
+   */
+  links?: AnswerLinks;
   onFinish?: (state: AskState) => void;
 }
 
@@ -122,6 +127,7 @@ export function AskDialog({
   theme = 'system',
   classNames = {},
   footer,
+  links = 'all',
   ...askOptions
 }: AskDialogProps): ReactNode {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
@@ -309,7 +315,12 @@ export function AskDialog({
               ) : null}
             </Command.List>
             {showList ? null : (
-              <AnswerPanel state={state} onNavigate={navigate} classNames={classNames} />
+              <AnswerPanel
+                state={state}
+                onNavigate={navigate}
+                classNames={classNames}
+                links={links}
+              />
             )}
           </Command>
 
@@ -334,10 +345,12 @@ function AnswerPanel({
   state,
   onNavigate,
   classNames,
+  links,
 }: {
   state: ReturnType<typeof useAsk>;
   onNavigate: (url: string, event: MouseEvent<HTMLAnchorElement>) => void;
   classNames: Partial<Record<AskDialogSlot, string>>;
+  links: AnswerLinks;
 }): ReactNode {
   const streaming = state.status === 'streaming';
   // Once the answer is complete, sources it never cites are de-emphasized.
@@ -357,7 +370,12 @@ function AnswerPanel({
             Searching the site…
           </p>
         ) : (
-          <AskAnswer text={state.answer} sources={state.sources} onNavigate={onNavigate} />
+          <AskAnswer
+            text={state.answer}
+            sources={state.sources}
+            onNavigate={onNavigate}
+            links={links}
+          />
         )}
         {streaming ? <span className="ask-caret" aria-hidden="true" /> : null}
       </div>

@@ -80,7 +80,7 @@ Sources and the question reach the model verbatim, inside tags that end in a ran
 
 ## How answers are rendered
 
-The answer is rendered from a small Markdown subset into React nodes, never as HTML. Links are allow-listed to http(s), mailto and relative URLs, and `[n]` becomes a link only if the server actually sent source `n`. Model errors are masked in the stream, so provider details never reach the browser, and reported to `onError`.
+The answer is rendered from a small Markdown subset into React nodes, never as HTML. Links are allow-listed to http(s), mailto and relative URLs, and `[n]` becomes a link only if the server actually sent source `n`. If your pages could carry injected text, set the dialog's `links: 'sources'` (`data-links="sources"` on the script tag): links in an answer then stay links only when they point at one of its source pages, so a model talked into it cannot show visitors another site's login page. Model errors are masked in the stream, so provider details never reach the browser, and reported to `onError`.
 
 ## Privacy: what leaves your servers
 

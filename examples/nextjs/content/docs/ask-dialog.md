@@ -23,6 +23,7 @@ order: 32
 | `title`                               | "Ask this site"                 | The dialog's accessible name.                                                                         |
 | `placeholder`                         | "Ask a question…"               | The input's placeholder.                                                                              |
 | `footer`                              | a disclaimer and keyboard hints | Replaces the footer.                                                                                  |
+| `links`                               | `"all"`                         | `"sources"` keeps only the answer's links to its source pages; citations always link.                 |
 
 ## Opening the dialog
 

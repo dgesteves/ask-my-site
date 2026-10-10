@@ -221,6 +221,25 @@ describe('AskAnswer', () => {
     );
   });
 
+  it('keeps only links to the source pages with links="sources"', () => {
+    const text =
+      'See [the setup](/docs/a), [its section](/docs/a/#y), ' +
+      '[a login page](https://evil.example/login) and [elsewhere](/docs/b). [1]';
+    const { unmount } = render(<AskAnswer text={text} sources={sources} links="sources" />);
+    expect(screen.getByRole('link', { name: 'the setup' }).getAttribute('href')).toBe('/docs/a');
+    expect(screen.getByRole('link', { name: 'its section' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'a login page' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'elsewhere' })).toBeNull();
+    // Shown as text, and citations still link.
+    expect(document.body.textContent).toContain('a login page and elsewhere.');
+    expect(screen.getByRole('link', { name: 'Source 1: A' })).toBeTruthy();
+    unmount();
+
+    // The default keeps every safe link.
+    render(<AskAnswer text={text} sources={sources} />);
+    expect(screen.getByRole('link', { name: 'a login page' })).toBeTruthy();
+  });
+
   it('extracts cited source numbers', () => {
     expect([...citedSourceIds('A [1]. B [2][3]. C [1, 4]. Not [x].')]).toEqual([1, 2, 3, 4]);
   });
@@ -303,6 +322,48 @@ describe('AskDialog', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
     expect(document.activeElement).toBe(elsewhere);
+  });
+
+  it('shows only links to the source pages when links="sources"', async () => {
+    const injected = new MockLanguageModelV4({
+      doStream: () =>
+        Promise.resolve({
+          stream: simulateReadableStream({
+            chunks: [
+              { type: 'text-start' as const, id: 't' },
+              {
+                type: 'text-delta' as const,
+                id: 't',
+                delta:
+                  'Scale it [as shown](/docs/quantization), or [log in here](https://evil.example/login). [1]',
+              },
+              { type: 'text-end' as const, id: 't' },
+              {
+                type: 'finish' as const,
+                finishReason: { unified: 'stop' as const, raw: 'stop' },
+                usage: {
+                  inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+                  outputTokens: { total: 1, text: 1, reasoning: 0 },
+                },
+              },
+            ],
+          }),
+        }),
+    });
+    const user = userEvent.setup();
+    render(<AskDialog fetch={handlerFetch({ model: injected })} defaultOpen links="sources" />);
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByRole('combobox'), 'How is an int8 vector scaled?{Enter}');
+    const answer = await waitFor(() => {
+      const region = dialog.querySelector('[data-status="done"]');
+      expect(region).not.toBeNull();
+      return region as HTMLElement;
+    });
+    expect(within(answer).getByRole('link', { name: 'as shown' }).getAttribute('href')).toBe(
+      '/docs/quantization',
+    );
+    expect(within(answer).queryByRole('link', { name: 'log in here' })).toBeNull();
+    expect(answer.textContent).toContain('or log in here.');
   });
 
   it('passes axe before and after it answers', async () => {

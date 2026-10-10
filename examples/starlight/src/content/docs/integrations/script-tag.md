@@ -53,6 +53,7 @@ To try it first, run `npx ask-my-site dev` beside the index and set `data-endpoi
 | `data-shortcut`     | `i`               | The key used with ⌘ or Ctrl; `"false"` turns it off.                            |
 | `data-button-label` | "Ask AI"          | The floating button's label; `"false"` hides the button.                        |
 | `data-theme`        | `auto`            | `auto` follows `data-theme` on `<html>`, then the system; or `light` or `dark`. |
+| `data-links`        | `all`             | `sources` keeps only the answer's links to its source pages.                    |
 | `data-manual`       | off               | Don't mount; wait for `window.AskMySite.mount()`.                               |
 
 ## Open it from your own search box
