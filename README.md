@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square&labelColor=181c22)](./LICENSE)
 [![Types](https://img.shields.io/badge/types-included-22d3ee?style=flat-square&labelColor=181c22)](https://ask-my-site-demo.vercel.app/docs/api)
 
-**Website: [ask-my-site-demo.vercel.app](https://ask-my-site-demo.vercel.app)**, whose [docs](https://ask-my-site-demo.vercel.app/docs) answer questions about this library with OpenAI, under a rate limit and a daily budget, and serve agents at `/api/mcp`.
+**Website: [ask-my-site-demo.vercel.app](https://ask-my-site-demo.vercel.app)**, whose [docs](https://ask-my-site-demo.vercel.app/docs) answer questions about this library with OpenAI, under a rate limit and a daily budget, and serve agents at `/api/mcp`. Formerly `ask-my-site` ([what changed](https://ask-my-site-demo.vercel.app/docs/migrating)).
 
 <!-- npm-readme:video -->
 

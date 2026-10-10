@@ -29,6 +29,8 @@ questions:
     expect: /docs/cli
   - question: How do I add the dialog with a script tag?
     expect: /docs/script-tag
+  - question: How do I move a site from ask-my-site to ondocs?
+    expect: /docs/migrating
 
   - question: What is the capital of France?
     unanswerable: true

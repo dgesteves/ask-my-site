@@ -76,3 +76,7 @@ Yes. Docusaurus and Starlight sites get one index per locale, and the dialog on 
 ## How is the ondocs website built?
 
 The website is a Next.js app that uses ondocs on these docs. `ondocs index` builds the index from the Markdown pages before every build, `createAskHandler` serves `/api/ask`, and `<AskDialog />` is the dialog. In production it answers with OpenAI; its preview deployments, and the example run locally without a key, use mock mode, where answers are quotes picked from the pages rather than written by a model. The repository's Docusaurus and Starlight examples build the same pages with their plugins.
+
+## Was ondocs called ask-my-site?
+
+Yes. It was published as `ask-my-site` until 0.6.0, and 0.7.0 is its first release as `ondocs`. The options, the endpoints and the index file are the same; the package, the command and the import paths are renamed. [Migrating from ask-my-site](/docs/migrating) lists every rename and the commands to move a site over.

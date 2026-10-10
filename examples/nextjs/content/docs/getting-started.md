@@ -22,6 +22,8 @@ Install the package with the Vercel AI SDK and a model provider. The two package
 npm i ondocs ai @ai-sdk/openai @radix-ui/react-dialog cmdk
 ```
 
+Moving a site from `ask-my-site`, its name until 0.6.0? See [Migrating from ask-my-site](/docs/migrating).
+
 ondocs needs Node.js 22.12 or later to build the index. The endpoint itself uses Web APIs only, so it also runs on Bun, Deno and Cloudflare Workers.
 
 ## Build the index

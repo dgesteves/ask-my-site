@@ -7,6 +7,8 @@ order: 1
 
 ondocs is a self-hosted "Ask AI" box for documentation sites. A visitor types a question and gets a short answer written from your own pages, with numbered citations that link to the exact section each claim came from. It is an open-source npm package under the MIT license, not a hosted service.
 
+It was published as `ask-my-site` until 0.6.0: [Migrating from ask-my-site](/docs/migrating) lists what was renamed.
+
 ## How it works
 
 At build time, `ondocs index` (or the Docusaurus, Astro or Starlight plugin) splits your pages into chunks at every heading, embeds each chunk and writes one static JSON file, `ask-index.json`. Vectors are stored as int8, so a site of 1,000 chunks makes an index of about 1.6 MB.
