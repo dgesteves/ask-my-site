@@ -1,14 +1,18 @@
 // Benchmarks the built package (dist/) on synthetic corpora: index size, cold load, and
 // retrieval latency. Run with `pnpm bench`. Pass corpus sizes as arguments to override, e.g.
-// `node --expose-gc bench/run.mjs 1000 10000 50000`. Without --expose-gc, memory is not reported.
+// `node --expose-gc bench/run.mjs 1000 10000 50000`. Without --expose-gc, heap memory is not
+// reported. Process memory (RSS) is measured in a fresh Node.js process per size, as a server
+// instance loads the index on its first question.
 //
 // The corpus is synthetic but shaped like documentation: Zipf-distributed vocabulary, chunks of
 // 600-1000 characters grouped into pages with headings, and 512-dimension embeddings drawn
 // around shared topic centroids (real embeddings of one site cluster the same way). Query
 // latency excludes the embedding API call, which is network-bound and the same for any design.
 
-import { cpus, totalmem } from 'node:os';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpus, tmpdir, totalmem } from 'node:os';
+import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { gzipSync } from 'node:zlib';
 
@@ -134,6 +138,41 @@ function time(fn, runs) {
   return samples.sort((a, b) => a - b);
 }
 
+// Run in a fresh process: how much the process grows to load the index from its JSON text, as
+// `index: () => readFile(…)` does. Peak includes the text and the parse; steady is what stays once
+// the text is collected. This is what counts against a platform's memory limit, and it is more
+// than the heap the index retains: V8 and the allocator keep pages they have used.
+const RSS_PROBE = `
+const { readFileSync } = await import('node:fs');
+const { loadIndex } = await import(process.argv[1]);
+globalThis.gc({ type: 'major', execution: 'sync' });
+const start = process.memoryUsage().rss;
+let text = readFileSync(process.argv[2], 'utf8');
+const index = loadIndex(text);
+text = null;
+globalThis.gc({ type: 'major', execution: 'sync' });
+const steady = process.memoryUsage().rss;
+const peak = process.resourceUsage().maxRSS * 1024;
+console.log(JSON.stringify({ chunks: index.chunks.length, steady: steady - start, peak: peak - start }));
+`;
+
+function rssGrowth(json) {
+  const dir = mkdtempSync(join(tmpdir(), 'ask-my-site-bench-'));
+  try {
+    const file = join(dir, 'ask-index.json');
+    writeFileSync(file, json);
+    const dist = new URL('../dist/index.js', import.meta.url).href;
+    const out = execFileSync(
+      process.execPath,
+      ['--expose-gc', '--input-type=module', '-e', RSS_PROBE, dist, file],
+      { encoding: 'utf8' },
+    );
+    return JSON.parse(out);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 const results = [];
 for (const n of SIZES) {
   process.stdout.write(`\n${n} chunks: generating… `);
@@ -161,6 +200,7 @@ for (const n of SIZES) {
   const index = loadIndex(json);
   const memory = globalThis.gc ? used() - before : Number.NaN;
   const loads = time(() => loadIndex(json), 5);
+  const rss = rssGrowth(json);
 
   process.stdout.write('querying… ');
   const queries = Array.from({ length: QUERIES + WARMUP }, () => ({
@@ -198,6 +238,8 @@ for (const n of SIZES) {
     floatJsonBytes: floatBytes,
     loadMs: percentile(loads, 0.5),
     memoryBytes: memory,
+    rssSteadyBytes: rss.steady,
+    rssPeakBytes: rss.peak,
     hybrid: {
       p50: percentile(hybrid, 0.5),
       p95: percentile(hybrid, 0.95),
@@ -215,11 +257,11 @@ const machine = `${cpus()[0]?.model ?? 'unknown CPU'}, ${String(Math.round(total
 const lines = [
   `Machine: ${machine}. ${DIMS}-dimension vectors, ${QUERIES} queries per size after ${WARMUP} warm-up.`,
   '',
-  '| Chunks | Index (raw) | Index (gzip) | Same index, float JSON | Cold load | Memory | Query p50 | Query p95 | Query p99 | Recall@10 vs float32 |',
-  '| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+  '| Chunks | Index (raw) | Index (gzip) | Same index, float JSON | Cold load | Heap retained | RSS growth (peak) | Query p50 | Query p95 | Query p99 | Recall@10 vs float32 |',
+  '| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
   ...results.map(
     (r) =>
-      `| ${r.chunks.toLocaleString('en-US')} | ${mb(r.indexBytes)} | ${mb(r.indexGzipBytes)} | ${mb(r.floatJsonBytes)} | ${ms(r.loadMs)} | ${mb(r.memoryBytes)} | ${ms(r.hybrid.p50)} | ${ms(r.hybrid.p95)} | ${ms(r.hybrid.p99)} | ${(r.recallAt10 * 100).toFixed(1)}% |`,
+      `| ${r.chunks.toLocaleString('en-US')} | ${mb(r.indexBytes)} | ${mb(r.indexGzipBytes)} | ${mb(r.floatJsonBytes)} | ${ms(r.loadMs)} | ${mb(r.memoryBytes)} | ${mb(r.rssSteadyBytes)} (${mb(r.rssPeakBytes)}) | ${ms(r.hybrid.p50)} | ${ms(r.hybrid.p95)} | ${ms(r.hybrid.p99)} | ${(r.recallAt10 * 100).toFixed(1)}% |`,
   ),
   '',
   'Query time split (p50 / p95):',
