@@ -49,6 +49,8 @@ export interface AskErrorBody {
       | 'invalid_json'
       | 'invalid_request'
       | 'rate_limited'
+      /** The handler's daily `budget` is spent; `Retry-After` says when it resets. */
+      | 'budget_exceeded'
       | 'internal_error'
       | 'service_unavailable';
     message: string;

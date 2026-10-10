@@ -113,8 +113,20 @@ describe('useAsk', () => {
     expect(result.current.status).toBe('error');
     expect(result.current.error).toMatchObject({
       kind: 'rate-limited',
+      code: 'rate_limited',
       status: 429,
       retryAfter: 12,
+    });
+
+    // The site's daily budget is spent: still a 429, told apart by its code.
+    const spent = handlerFetch({ budget: { requestsPerDay: 1 } });
+    const budget = renderHook(() => useAsk({ fetch: spent }));
+    await act(() => budget.result.current.ask('int8'));
+    await act(() => budget.result.current.ask('int8 vectors'));
+    expect(budget.result.current.error).toMatchObject({
+      kind: 'rate-limited',
+      code: 'budget_exceeded',
+      message: 'The assistant has reached its daily limit. Please try again later.',
     });
 
     const offline = renderHook(() =>

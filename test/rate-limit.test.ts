@@ -39,6 +39,41 @@ describe('clientKey', () => {
   });
 });
 
+describe('IPv6 client keys', () => {
+  it('buckets an IPv6 client by its /64, which one subscriber is usually given', () => {
+    const key = (ip: string) => clientKey(from(ip));
+    expect(key('2001:db8:1:1::1')).toBe('2001:db8:1:1::/64');
+    expect(key('2001:DB8:1:1:ffff:ffff:ffff:fffe')).toBe('2001:db8:1:1::/64');
+    expect(key('2001:0db8:0001:0001:0000:0000:0000:0042')).toBe('2001:db8:1:1::/64');
+    expect(key('2001:db8:1:2::1')).toBe('2001:db8:1:2::/64');
+    expect(key('[2001:db8:1:1::7]:443')).toBe('2001:db8:1:1::/64');
+    expect(key('fe80::1%eth0')).toBe('fe80:0:0:0::/64');
+    expect(key('::1')).toBe('0:0:0:0::/64');
+    expect(key('spoofed, 2001:db8:1:1::9')).toBe('2001:db8:1:1::/64');
+  });
+
+  it('keys IPv4 (mapped into IPv6, or with a port) as the IPv4 address', () => {
+    const key = (ip: string) => clientKey(from(ip));
+    expect(key('::ffff:198.51.100.7')).toBe('198.51.100.7');
+    expect(key('::ffff:c633:6407')).toBe('198.51.100.7');
+    expect(key('198.51.100.7:52341')).toBe('198.51.100.7');
+    // Not an address: kept as it is, so it is still one bucket.
+    expect(key('2001:db8::1::2')).toBe('2001:db8::1::2');
+    expect(key('unknown')).toBe('unknown');
+  });
+
+  it('limits a client rotating addresses within its /64 as one client', () => {
+    const limit = memoryRateLimit({ limit: 3, windowMs: 60_000, now: () => 0 });
+    const statuses = Array.from(
+      { length: 5 },
+      (_, i) => limit(from(`2001:db8:1:1::${i.toString(16)}`)).success,
+    );
+    expect(statuses).toEqual([true, true, true, false, false]);
+    // The neighbouring /64 is another subscriber.
+    expect(limit(from('2001:db8:1:2::1')).success).toBe(true);
+  });
+});
+
 describe('rate limit keys under spoofing', () => {
   it('a client rotating headers the platform does not set stays in one bucket', () => {
     const limit = memoryRateLimit({ limit: 2, windowMs: 60_000, now: () => 0 });

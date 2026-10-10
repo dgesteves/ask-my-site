@@ -13,7 +13,13 @@ export const askHandler = createAskHandler({
   ...(minSimilarity ? { retrieval: { minSimilarity } } : {}),
   // Five questions a minute per visitor: in production every answer is a paid model call. A
   // token bucket, so a burst of five, then one more every 12 seconds. Keyed by the last
-  // X-Forwarded-For entry, which Vercel sets. On Netlify, Cloudflare or Fly, pass
-  // `trustedHeader` (see "Rate limits and client IPs" in the ask-my-site README).
+  // X-Forwarded-For entry, which Vercel sets, and by the /64 for IPv6. On Netlify, Cloudflare or
+  // Fly, pass `trustedHeader` (see "Rate limits and client IPs" in the ask-my-site README).
   rateLimit: memoryRateLimit({ limit: 5, windowMs: 60_000 }),
+  // A daily cap for the whole site, so rotating IPs cannot run up the bill: 300 questions and
+  // 1M model tokens a day (an answer is about 3k). The counts live in memory, so each Vercel
+  // instance has its own; the hard cap is the spend limit on the OpenAI project.
+  budget: { requestsPerDay: 300, tokensPerDay: 1_000_000 },
+  // The suggested questions are asked over and over: answer a repeat from memory, for free.
+  answerCache: true,
 });

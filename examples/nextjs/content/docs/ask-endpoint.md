@@ -12,9 +12,11 @@ order: 31
 1. The body must be JSON (`content-type: application/json`); anything else gets a 415.
 2. The rate limiter runs, if one is configured.
 3. The body is validated: `{ "question": string }` of up to 500 characters, in at most 64 KiB.
-4. The question is embedded, and hybrid retrieval runs over the in-memory index.
-5. If nothing clears the relevance gate, the "I don't know" message streams back and the model is never called.
-6. Otherwise the top sources are numbered and sent to the model with grounding instructions, and the answer streams back with its citations.
+4. With `answerCache`, a question asked before is answered from the cache, and nothing else runs.
+5. With `budget`, the question counts against the day's questions.
+6. The question is embedded, and hybrid retrieval runs over the in-memory index.
+7. If nothing clears the relevance gate, the "I don't know" message streams back and the model is never called.
+8. Otherwise the top sources are numbered and, if the answer's worst case fits in the day's token `budget`, sent to the model with grounding instructions, and the answer streams back with its citations.
 
 ## Handler options
 
@@ -34,6 +36,8 @@ order: 31
 | `rateLimit`                | none                        | `(request) => { success, limit?, remaining?, reset? }`, sync or async.                                           |
 | `rateLimitFailure`         | `"closed"`                  | When `rateLimit` throws: `"closed"` answers 503, `"open"` answers anyway.                                        |
 | `generation`               | `{ maxOutputTokens: 800 }`  | Passed to `streamText`: `temperature`, `providerOptions`, `timeout`, `telemetry`…                                |
+| `budget`                   | none                        | `{ requestsPerDay, tokensPerDay, store }`: a daily cap, then a 429 with code `budget_exceeded`.                  |
+| `answerCache`              | off                         | `true`, or `{ store, ttlSeconds }`: repeated questions are answered from the cache.                              |
 | `headers`                  | none                        | Added to every response, such as CORS headers.                                                                   |
 | `onFinish`                 | none                        | Called after each answer with `{ question, answer, sources, refused, retrieval, usage }`.                        |
 | `onError`                  | `console.error`             | Handled errors: embedding fallbacks, model failures, a failing limiter, misconfiguration.                        |
@@ -48,7 +52,7 @@ Send `{ "question": "…" }` as `application/json`. The `{ messages }` body that
 
 ## Errors
 
-Errors are JSON, `{ "error": { "code", "message" } }`, with status 400 (invalid body or question), 405 (not a POST), 413 (body too large), 415 (not JSON), 429 (rate limited, with `Retry-After`), 500 (misconfigured, such as an embedding model that does not match the index) or 503 (the rate limiter failed). A client that disconnects before the answer starts gets a bare 499 and is not reported as an error. Model errors during an answer are masked in the stream, so provider details never reach the browser.
+Errors are JSON, `{ "error": { "code", "message" } }`, with status 400 (invalid body or question), 405 (not a POST), 413 (body too large), 415 (not JSON), 429 (rate limited, or the daily `budget` spent, with `Retry-After`), 500 (misconfigured, such as an embedding model that does not match the index) or 503 (the rate limiter or the budget store failed). A client that disconnects before the answer starts gets a bare 499 and is not reported as an error. Model errors during an answer are masked in the stream, so provider details never reach the browser.
 
 ## Streaming protocol
 

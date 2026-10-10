@@ -10,6 +10,11 @@ export interface AskError {
   kind: 'rate-limited' | 'http' | 'network' | 'stream';
   message: string;
   status?: number;
+  /**
+   * The server's error code, when it sent one: `rate_limited` or `budget_exceeded` for a 429
+   * (the second when the site's daily budget is spent), `invalid_request`, and so on.
+   */
+  code?: string;
   /** Seconds until a rate-limited client may retry, from `Retry-After`. */
   retryAfter?: number;
 }
@@ -74,9 +79,11 @@ async function errorFrom(response: Response, endpoint: string): Promise<AskError
     response.status === 404
       ? 'Answers aren’t available here right now.'
       : `Something went wrong (${String(response.status)}). Please try again.`;
+  let code: string | undefined;
   try {
     const body = (await response.json()) as Partial<AskErrorBody>;
     if (typeof body.error?.message === 'string') message = body.error.message;
+    if (typeof body.error?.code === 'string') code = body.error.code;
   } catch {
     // Not JSON; keep the generic message.
   }
@@ -94,10 +101,11 @@ async function errorFrom(response: Response, endpoint: string): Promise<AskError
       kind: 'rate-limited',
       message,
       status: 429,
+      ...(code ? { code } : {}),
       ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfter } : {}),
     };
   }
-  return { kind: 'http', message, status: response.status };
+  return { kind: 'http', message, status: response.status, ...(code ? { code } : {}) };
 }
 
 /** A development build (as the bundler defines `NODE_ENV`), or a page served from this machine. */

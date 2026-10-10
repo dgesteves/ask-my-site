@@ -29,7 +29,7 @@ A rejected request gets a 429 with `Retry-After` and `RateLimit-*` headers befor
 
 ## Which client IP header to trust
 
-A rate limit is only as strong as its key. Both limiters key each request by the client IP read from one header, and only a header your platform sets on every request can be trusted: a client can send any other. By default it is the last entry of `X-Forwarded-For`.
+A rate limit is only as strong as its key. Both limiters key each request by the client IP read from one header, and only a header your platform sets on every request can be trusted: a client can send any other. By default it is the last entry of `X-Forwarded-For`. An IPv6 address is keyed by its /64, which one subscriber is usually given whole.
 
 | Where the handler runs        | Configure                                                                                      |
 | ----------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -44,6 +44,28 @@ Requests without the header share one `"anonymous"` bucket. `key: (request) => s
 ## When the rate limiter fails
 
 If the limiter throws, for example because Redis is unreachable, the handler fails closed: it reports the error and answers 503 without calling the model. Set `rateLimitFailure: 'open'` to keep answering during an outage and rely on your provider's spend limits instead.
+
+## Cap the daily spend
+
+A rate limit is per client, so many clients, or one rotating its IPs, can still run up the bill. `budget` caps the whole endpoint per UTC day, in questions and in model tokens:
+
+```ts
+export const POST = createAskHandler({
+  index,
+  model: openai('gpt-5.4-mini'),
+  embeddingModel: openai.embedding('text-embedding-3-small'),
+  rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000 }),
+  budget: { requestsPerDay: 1_000, tokensPerDay: 3_000_000 },
+});
+```
+
+`requestsPerDay` counts the questions that go on to retrieval and the model, and `tokensPerDay` the model's input and output tokens, from each answer's `usage`. Before the model is called, the answer's worst case (its prompt plus `maxOutputTokens`) is reserved, and the answer goes ahead only if that fits; once it ends, the reservation is corrected to what it really used. So concurrent answers cannot overshoot the cap. Once the day's budget is spent, questions get a 429 with code `budget_exceeded` until midnight UTC, and the dialog says the assistant has reached its daily limit.
+
+The counts are kept in memory by default, so on a serverless platform each instance has its own budget. For one budget shared by every instance, pass `store: upstashBudgetStore(Redis.fromEnv())` with `@upstash/redis`. Either way, also set a monthly spend limit with your model provider: it is the only hard cap.
+
+## Cache repeated questions
+
+`answerCache: true` answers a question asked again from memory, without embedding it or calling the model, so the questions everyone asks cost nothing after the first time. Questions match when they are the same apart from case, spacing and trailing punctuation, and the cache starts fresh when the index is rebuilt. `{ store: upstashAnswerCache(Redis.fromEnv()) }` shares it between instances.
 
 ## Cross-origin requests
 

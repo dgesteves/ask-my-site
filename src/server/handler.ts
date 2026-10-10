@@ -12,6 +12,7 @@ import {
 import { z } from 'zod';
 
 import { embeddingModelId, sameEmbeddingModel, type EmbeddingProviderOptions } from '../build';
+import { sha256 } from '../hash';
 import {
   SOURCE_METADATA_KEY,
   type AskErrorBody,
@@ -25,6 +26,14 @@ import {
   type RetrievalOptions,
   type RetrievalResult,
 } from '../search/retrieve';
+import { createBudget, type BudgetOptions } from './budget';
+import {
+  memoryAnswerCache,
+  normalizeQuestion,
+  parseCachedAnswer,
+  type AnswerCacheOptions,
+  type CachedAnswer,
+} from './cache';
 import { buildSources, defaultInstructions, formatPrompt } from './prompt';
 import type { RateLimiter, RateLimitResult } from './rate-limit';
 
@@ -85,10 +94,23 @@ export interface AskHandlerOptions {
   /**
    * What to do when `rateLimit` throws or rejects, e.g. because Redis is unreachable. `"closed"`
    * (the default) answers 503 without calling the model; `"open"` answers as if the request were
-   * allowed. Either way the error goes to `onError`.
+   * allowed. Either way the error goes to `onError`. The `budget` store's failures are handled
+   * the same way.
    */
   rateLimitFailure?: 'closed' | 'open';
   generation?: GenerationOptions;
+  /**
+   * A daily cap on spend: `{ requestsPerDay, tokensPerDay }`, counted in `store` (memory, per
+   * instance, by default). Once it is spent, questions get a 429 with code `budget_exceeded`
+   * until the next UTC day, without a model call.
+   */
+  budget?: BudgetOptions;
+  /**
+   * Answers a question asked again from a cache, without embedding it or calling the model:
+   * `true` for the memory store, or `{ store, ttlSeconds }`. Keyed by the index's content hash
+   * and the normalized question, so a rebuilt index starts fresh.
+   */
+  answerCache?: boolean | AnswerCacheOptions;
   /** Extra headers on every response, e.g. for CORS. */
   headers?: Record<string, string>;
   /** Called once per answered request, after the answer is complete. */
@@ -102,8 +124,14 @@ export interface AskFinishEvent {
   answer: string;
   sources: AskSource[];
   refused: boolean;
+  /**
+   * For an answer from `answerCache`, `hits` is empty (nothing was retrieved) and `best` is what
+   * the original answer saw.
+   */
   retrieval: RetrievalResult;
   usage?: LanguageModelUsage;
+  /** True when the answer came from `answerCache`, so no model was called. */
+  cached: boolean;
 }
 
 /** Status for a request the client abandoned (nginx's convention); nobody reads the body. */
@@ -224,6 +252,45 @@ export function createAskHandler(
   const json = (status: number, body: AskErrorBody, headers?: Record<string, string>): Response =>
     Response.json(body, { status, headers: { ...baseHeaders, ...headers } });
 
+  const maxOutputTokens = options.generation?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
+  const budget = options.budget ? createBudget(options.budget) : null;
+  const cache = options.answerCache
+    ? answerCache(options.answerCache, options, instructions)
+    : null;
+  const unavailable = (): Response =>
+    json(503, {
+      error: {
+        code: 'service_unavailable',
+        message: 'The service is unavailable. Try again shortly.',
+      },
+    });
+  /**
+   * Runs a budget check: `{ response }` turns the request away, with a 429 once the day's budget
+   * is spent or a 503 when the store fails; `{ result }` lets it through (`result` is `null` when
+   * the store failed and `rateLimitFailure` is `"open"`).
+   */
+  const overBudget = async <T extends { allowed: boolean; resetAt?: number }>(
+    check: () => Promise<T>,
+  ): Promise<{ response: Response } | { result: T | null }> => {
+    let result: T;
+    try {
+      result = await check();
+    } catch (error) {
+      reportError(error);
+      return options.rateLimitFailure === 'open' ? { result: null } : { response: unavailable() };
+    }
+    if (result.allowed || !budget) return { result };
+    const now = options.budget?.now ?? Date.now;
+    const seconds = Math.max(1, Math.ceil(((result.resetAt ?? 0) - now()) / 1000));
+    return {
+      response: json(
+        429,
+        { error: { code: 'budget_exceeded', message: budget.message } },
+        { 'retry-after': String(seconds) },
+      ),
+    };
+  };
+
   return async function handleAsk(request: Request): Promise<Response> {
     // CORS preflight: `useAsk` posts JSON, so cross-origin requests are always preflighted.
     // Answer with the configured headers (put the access-control-* ones in `headers`).
@@ -319,18 +386,50 @@ export function createAskHandler(
       });
     }
 
-    let index: LoadedIndex;
-    let queryVector: number[] | null;
-    try {
-      index = await getIndex();
-      queryVector = await embedQuery(question, index, options, request.signal, reportError);
-    } catch (error) {
-      // A client that hung up mid-embedding is not an error worth reporting.
+    // A client that hung up while the index loaded or the question was embedded is not an error
+    // worth reporting.
+    const misconfigured = (error: unknown): Response => {
       if (request.signal.aborted) return new Response(null, { status: CLIENT_CLOSED });
       reportError(error);
       return json(500, {
         error: { code: 'internal_error', message: 'The ask endpoint is misconfigured.' },
       });
+    };
+
+    let index: LoadedIndex;
+    try {
+      index = await getIndex();
+    } catch (error) {
+      return misconfigured(error);
+    }
+
+    const cacheKey = cache ? await cache.key(index, question) : null;
+    if (cache && cacheKey) {
+      const hit = await cache.get(cacheKey, reportError);
+      if (hit) {
+        return respond(hit, null, () =>
+          finish({
+            question,
+            answer: hit.answer,
+            sources: hit.sources,
+            refused: hit.refused,
+            retrieval: { hits: [], answerable: !hit.refused, mode: hit.retrieval, best: hit.best },
+            cached: true,
+          }),
+        );
+      }
+    }
+
+    if (budget) {
+      const admitted = await overBudget(() => budget.admit());
+      if ('response' in admitted) return admitted.response;
+    }
+
+    let queryVector: number[] | null;
+    try {
+      queryVector = await embedQuery(question, index, options, request.signal, reportError);
+    } catch (error) {
+      return misconfigured(error);
     }
 
     const retrieval = retrieve(index, { text: question, vector: queryVector }, options.retrieval);
@@ -341,12 +440,102 @@ export function createAskHandler(
       title,
       heading,
     }));
-    const metadata: AskMetadata = { refused: !retrieval.answerable, retrieval: retrieval.mode };
+    const answer: CachedAnswer = {
+      answer: retrieval.answerable ? '' : noAnswerMessage,
+      sources,
+      refused: !retrieval.answerable,
+      retrieval: retrieval.mode,
+      best: retrieval.best,
+    };
+    // An answer made while the embedding provider was down (keyword fallback) is not kept, so the
+    // cache never serves a worse answer than the next request would get.
+    const remember = (text: string): void => {
+      if (!cache || !cacheKey || retrieval.mode !== expectedMode(index, options)) return;
+      cache.set(cacheKey, { ...answer, answer: text }, reportError);
+    };
 
+    if (!retrieval.answerable) {
+      remember(noAnswerMessage);
+      return respond(answer, null, () =>
+        finish({
+          question,
+          answer: noAnswerMessage,
+          sources,
+          refused: true,
+          retrieval,
+          cached: false,
+        }),
+      );
+    }
+
+    const prompt = formatPrompt(question, promptSources);
+    let settle: ((actual: number | undefined) => Promise<void>) | null = null;
+    if (budget) {
+      // The worst case: the prompt at a pessimistic three characters a token, plus every output
+      // token allowed. Settled to the real usage when the answer ends.
+      const estimate = Math.ceil((instructions.length + prompt.length) / 3) + maxOutputTokens;
+      const reserved = await overBudget(() => budget.reserve(estimate));
+      if ('response' in reserved) return reserved.response;
+      if (reserved.result?.allowed) settle = reserved.result.settle;
+    }
+
+    return respond(answer, () => {
+      let failed = false;
+      return streamText({
+        maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS,
+        ...options.generation,
+        model: options.model,
+        instructions,
+        prompt,
+        abortSignal: request.signal,
+        onError: ({ error }) => {
+          failed = true;
+          reportError(error);
+        },
+        onEnd: async (event) => {
+          if (settle) {
+            const { totalTokens, inputTokens, outputTokens } = event.usage;
+            const used =
+              totalTokens ??
+              (inputTokens === undefined && outputTokens === undefined
+                ? undefined
+                : (inputTokens ?? 0) + (outputTokens ?? 0));
+            await settle(used).catch(reportError);
+          }
+          if (!failed && event.finishReason === 'stop') remember(event.text);
+          await finish({
+            question,
+            answer: event.text,
+            sources,
+            refused: false,
+            retrieval,
+            usage: event.usage,
+            cached: false,
+          });
+        },
+        // A client that hung up is not an error; `generation.timeout` firing is.
+        onAbort: ({ reason }) => {
+          if (request.signal.aborted) return;
+          reportError(new Error('The answer was aborted before it finished.', { cause: reason }));
+        },
+      });
+    });
+  };
+
+  /**
+   * Streams an answer: metadata, the numbered sources, then the text, either `answer.answer` as
+   * it is (a refusal or a cached answer, followed by `done`) or the model's stream from `generate`.
+   */
+  function respond(
+    answer: CachedAnswer,
+    generate: (() => ReturnType<typeof streamText>) | null,
+    done?: () => Promise<void>,
+  ): Response {
+    const metadata: AskMetadata = { refused: answer.refused, retrieval: answer.retrieval };
     const stream = createUIMessageStream({
       execute: ({ writer }) => {
         writer.write({ type: 'start', messageMetadata: metadata });
-        for (const source of sources) {
+        for (const source of answer.sources) {
           writer.write({
             type: 'source-url',
             sourceId: String(source.id),
@@ -358,49 +547,18 @@ export function createAskHandler(
           });
         }
 
-        if (!retrieval.answerable) {
+        if (!generate) {
           const id = generateId();
           writer.write({ type: 'text-start', id });
-          writer.write({ type: 'text-delta', id, delta: noAnswerMessage });
+          writer.write({ type: 'text-delta', id, delta: answer.answer });
           writer.write({ type: 'text-end', id });
           writer.write({ type: 'finish', finishReason: 'stop' });
-          return finish({
-            question,
-            answer: noAnswerMessage,
-            sources,
-            refused: true,
-            retrieval,
-          });
+          return done?.();
         }
 
-        const result = streamText({
-          maxOutputTokens: 800,
-          ...options.generation,
-          model: options.model,
-          instructions,
-          prompt: formatPrompt(question, promptSources),
-          abortSignal: request.signal,
-          onError: ({ error }) => {
-            reportError(error);
-          },
-          onEnd: (event) =>
-            finish({
-              question,
-              answer: event.text,
-              sources,
-              refused: false,
-              retrieval,
-              usage: event.usage,
-            }),
-          // A client that hung up is not an error; `generation.timeout` firing is.
-          onAbort: ({ reason }) => {
-            if (request.signal.aborted) return;
-            reportError(new Error('The answer was aborted before it finished.', { cause: reason }));
-          },
-        });
         writer.merge(
           toUIMessageStream({
-            stream: result.stream,
+            stream: generate().stream,
             sendStart: false,
             onError: () => MODEL_ERROR_MESSAGE,
           }),
@@ -417,6 +575,73 @@ export function createAskHandler(
       stream,
       headers: { ...baseHeaders, 'x-accel-buffering': 'no' },
     });
+  }
+}
+
+const DEFAULT_MAX_OUTPUT_TOKENS = 800;
+
+/** How retrieval runs when nothing fails: hybrid with an embedding model and vectors. */
+function expectedMode(index: LoadedIndex, options: AskHandlerOptions): 'hybrid' | 'keyword' {
+  return options.embeddingModel && index.vectors && index.embedding ? 'hybrid' : 'keyword';
+}
+
+const modelName = (model: LanguageModel): string =>
+  typeof model === 'string' ? model : `${model.provider}:${model.modelId}`;
+
+/**
+ * The answer cache behind `answerCache`. A key covers the index's content hash and the normalized
+ * question, and what else shapes the answer (the model, the instructions, the retrieval and
+ * generation settings), so a rebuilt index or a new prompt starts fresh even in a shared store.
+ * The store failing never fails a request: it is reported, and the question is answered anew.
+ */
+function answerCache(
+  cacheOptions: true | AnswerCacheOptions,
+  options: AskHandlerOptions,
+  instructions: string,
+) {
+  const {
+    store = memoryAnswerCache(),
+    ttlSeconds = 86_400,
+    prefix = 'ask-my-site:answer:',
+  } = cacheOptions === true ? {} : cacheOptions;
+  if (!Number.isInteger(ttlSeconds) || ttlSeconds < 1) {
+    throw new RangeError(
+      `answerCache.ttlSeconds must be a positive integer (got ${String(ttlSeconds)}).`,
+    );
+  }
+  let settings: Promise<string> | null = null;
+  return {
+    key: async (index: LoadedIndex, question: string): Promise<string> => {
+      settings ??= sha256(
+        JSON.stringify([
+          modelName(options.model),
+          instructions,
+          options.noAnswerMessage ?? null,
+          options.retrieval ?? null,
+          options.maxContextChars ?? null,
+          options.generation?.maxOutputTokens ?? null,
+        ]),
+      );
+      const digest = await sha256(
+        JSON.stringify([index.contentHash, await settings, normalizeQuestion(question)]),
+      );
+      return `${prefix}${digest}`;
+    },
+    get: async (key: string, report: (error: unknown) => void): Promise<CachedAnswer | null> => {
+      try {
+        return parseCachedAnswer(await store.get(key));
+      } catch (error) {
+        report(error);
+        return null;
+      }
+    },
+    set: (key: string, value: CachedAnswer, report: (error: unknown) => void): void => {
+      try {
+        void Promise.resolve(store.set(key, value, ttlSeconds)).catch(report);
+      } catch (error) {
+        report(error);
+      }
+    },
   };
 }
 
