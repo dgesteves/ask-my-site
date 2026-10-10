@@ -62,7 +62,7 @@ Deploy it with `cd ask-my-site-worker && npm install && npx wrangler secret put 
 
 The Worker uses `remoteIndex` from `ask-my-site/server`, which any endpoint deployed apart from its site can use: `createAskHandler({ index: remoteIndex('https://acme.github.io/docs/ask-index.json'), … })`. A check that fails keeps the index it has; only the first fetch's failure fails a request.
 
-The first request in each Worker instance loads the index. That took 4 ms for this site's docs (229 chunks) and 28 ms for docusaurus.io's (1,074 chunks), in Node.js on an Apple M1 Max, warm; a cold Worker is slower. The Workers Free plan gives a request 10 ms of CPU time, so a site the size of this one fits in it, and one the size of docusaurus.io needs the Workers Paid plan, which allows 30 seconds by default.
+The first request in each Worker instance loads the index: 11 ms for this site's docs (229 chunks) and 38 ms for 1,000 chunks, in a fresh Node.js process on an Apple M1 Max. The Workers Free plan gives a request 10 ms of CPU time, with what Cloudflare calls "some built-in flexibility" for a Worker that "infrequently runs over" it, so a small site fits; a large one needs the Workers Paid plan, which allows 30 seconds by default.
 
 ## Runtimes
 
