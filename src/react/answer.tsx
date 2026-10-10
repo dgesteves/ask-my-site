@@ -10,6 +10,32 @@ export interface AskAnswerProps {
   /** Called when a citation is clicked; call `event.preventDefault()` to handle navigation. */
   onNavigate?: (url: string, event: MouseEvent<HTMLAnchorElement>) => void;
   className?: string;
+  /**
+   * Which Markdown links in the answer stay links. `"all"` (the default): any http(s), mailto or
+   * relative URL. `"sources"`: only links to one of the pages in `sources` (at any anchor), so a
+   * model steered by injected text cannot put another site's link in front of visitors; any
+   * other link shows as its text. Citations (`[1]`) link to their source either way.
+   */
+  links?: AnswerLinks;
+}
+
+export type AnswerLinks = 'all' | 'sources';
+
+/** A URL's page, as `origin + path` without a trailing slash, resolved against the current page. */
+function pageOf(url: string): string | null {
+  try {
+    const base = typeof location === 'undefined' ? 'http://localhost/' : location.href;
+    const { origin, pathname } = new URL(url, base);
+    return `${origin}${pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether `href` opens one of the source pages. */
+function linksToSource(href: string, sources: Map<number, AskSource>): boolean {
+  const page = pageOf(href);
+  return page !== null && [...sources.values()].some((source) => pageOf(source.url) === page);
 }
 
 const INLINE =
@@ -55,7 +81,13 @@ export function safeHref(href: string): string | null {
  * or element, link targets are allow-listed, and a citation only renders as a link if its number
  * matches a source the server sent.
  */
-export function AskAnswer({ text, sources, onNavigate, className }: AskAnswerProps): ReactNode {
+export function AskAnswer({
+  text,
+  sources,
+  onNavigate,
+  className,
+  links = 'all',
+}: AskAnswerProps): ReactNode {
   const byId = new Map(sources.map((source) => [source.id, source]));
   const blocks: ReactNode[] = [];
   let key = 0;
@@ -69,7 +101,7 @@ export function AskAnswer({ text, sources, onNavigate, className }: AskAnswerPro
         </pre>,
       );
     } else {
-      blocks.push(...prose(segment.text, byId, onNavigate, () => key++));
+      blocks.push(...prose(segment.text, byId, onNavigate, links, () => key++));
     }
   }
   return <div className={className ?? 'ask-markdown'}>{blocks}</div>;
@@ -89,9 +121,10 @@ function prose(
   text: string,
   sources: Map<number, AskSource>,
   onNavigate: AskAnswerProps['onNavigate'],
+  links: AnswerLinks,
   nextKey: () => number,
 ): ReactNode[] {
-  const inline = (line: string): ReactNode[] => renderInline(line, sources, onNavigate);
+  const inline = (line: string): ReactNode[] => renderInline(line, sources, onNavigate, links);
   const out: ReactNode[] = [];
   for (const block of text.split(/\n{2,}/)) {
     const runs: { kind: LineKind; lines: string[] }[] = [];
@@ -122,6 +155,7 @@ function renderInline(
   text: string,
   sources: Map<number, AskSource>,
   onNavigate: AskAnswerProps['onNavigate'],
+  links: AnswerLinks,
 ): ReactNode[] {
   const out: ReactNode[] = [];
   let last = 0;
@@ -135,7 +169,8 @@ function renderInline(
     } else if (bold !== undefined) {
       out.push(<strong key={key++}>{bold}</strong>);
     } else if (label !== undefined && href !== undefined) {
-      const target = safeHref(href);
+      const safe = safeHref(href);
+      const target = safe && (links === 'all' || linksToSource(safe, sources)) ? safe : null;
       out.push(
         target ? (
           <a

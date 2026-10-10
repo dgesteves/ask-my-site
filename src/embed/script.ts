@@ -3,7 +3,8 @@ import type { MountAskDialogOptions } from './index';
 /**
  * The `mountAskDialog` options a `<script>` tag's `data-*` attributes describe: `data-endpoint`,
  * `data-title`, `data-placeholder`, `data-suggestions` (a JSON array of strings),
- * `data-shortcut` and `data-button-label` (`"false"` turns either off) and `data-theme`.
+ * `data-shortcut` and `data-button-label` (`"false"` turns either off), `data-theme` and
+ * `data-links` (`all` or `sources`).
  */
 export function scriptOptions(data: DOMStringMap): MountAskDialogOptions {
   const options: MountAskDialogOptions = {};
@@ -33,5 +34,6 @@ export function scriptOptions(data: DOMStringMap): MountAskDialogOptions {
   if (data.theme === 'auto' || data.theme === 'light' || data.theme === 'dark') {
     options.theme = data.theme;
   }
+  if (data.links === 'all' || data.links === 'sources') options.links = data.links;
   return options;
 }

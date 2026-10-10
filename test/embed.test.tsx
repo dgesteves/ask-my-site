@@ -61,6 +61,7 @@ describe('scriptOptions', () => {
           'data-shortcut': 'j',
           'data-button-label': 'Ask',
           'data-theme': 'dark',
+          'data-links': 'sources',
         }),
       ),
     ).toEqual({
@@ -71,8 +72,10 @@ describe('scriptOptions', () => {
       shortcut: 'j',
       buttonLabel: 'Ask',
       theme: 'dark',
+      links: 'sources',
     });
     expect(scriptOptions(data({}))).toEqual({});
+    expect(scriptOptions(data({ 'data-links': 'some' }))).toEqual({});
   });
 
   it('turns the shortcut and the button off with "false", and skips what it cannot read', () => {
