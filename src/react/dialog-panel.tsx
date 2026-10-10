@@ -3,7 +3,16 @@
 // page carries none of it until then.
 import * as Dialog from '@radix-ui/react-dialog';
 import { Command } from 'cmdk';
-import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type SyntheticEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 
 import { AskAnswer, citedSourceIds, safeHref, type AnswerLinks } from './answer';
 import type { AskDialogProps, AskDialogSlot } from './ask-dialog';
@@ -28,6 +37,124 @@ function SearchIcon(): ReactNode {
         fill="currentColor"
       />
     </svg>
+  );
+}
+
+function Thumb({ down = false }: { down?: boolean }): ReactNode {
+  return (
+    <svg
+      className="ask-icon"
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      aria-hidden="true"
+      style={down ? { transform: 'rotate(180deg)' } : undefined}
+    >
+      <path
+        d="M7 10v11H3V10h4Zm2 11V10l4.6-7.4A1.6 1.6 0 0 1 16.5 3.6L15.6 8H20a2 2 0 0 1 2 2.3l-1.3 8.6A2.5 2.5 0 0 1 18.2 21H9Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Thumbs up and down on the answer, then an optional comment, sent to the endpoint's
+ * `onFeedback`. Shown only when the endpoint says it takes feedback.
+ */
+function Feedback({ state }: { state: ReturnType<typeof useAsk> }): ReactNode {
+  const labelId = useId();
+  const [comment, setComment] = useState<'closed' | 'open' | 'sent'>('closed');
+  const [text, setText] = useState('');
+  const [failed, setFailed] = useState(false);
+  const send = async (rating: 'up' | 'down', withComment?: string): Promise<void> => {
+    const ok = await state.rate(rating, withComment);
+    setFailed(!ok);
+    if (ok && withComment !== undefined) setComment('sent');
+  };
+  // Enter sends the comment, rather than reaching the command palette around it; Escape still
+  // closes the dialog.
+  const keepKeys = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') event.stopPropagation();
+  };
+  const submit = (event: SyntheticEvent): void => {
+    event.preventDefault();
+    if (state.rating && text.trim()) void send(state.rating, text);
+  };
+  return (
+    <div className="ask-feedback">
+      {state.rating === null ? (
+        <>
+          <span id={labelId} className="ask-feedback-label">
+            Was this helpful?
+          </span>
+          <span role="group" aria-labelledby={labelId} className="ask-feedback-buttons">
+            <button
+              type="button"
+              className="ask-feedback-button"
+              aria-label="Yes, it helped"
+              onClick={() => void send('up')}
+            >
+              <Thumb />
+            </button>
+            <button
+              type="button"
+              className="ask-feedback-button"
+              aria-label="No, it did not help"
+              onClick={() => void send('down')}
+            >
+              <Thumb down />
+            </button>
+          </span>
+        </>
+      ) : comment === 'sent' ? (
+        <span className="ask-feedback-label" role="status">
+          Thanks for the comment.
+        </span>
+      ) : (
+        <>
+          <span className="ask-feedback-label" role="status">
+            Thanks for the feedback.
+          </span>
+          {comment === 'closed' ? (
+            <button
+              type="button"
+              className="ask-feedback-more"
+              onClick={() => {
+                setComment('open');
+              }}
+            >
+              Add a comment
+            </button>
+          ) : (
+            <form className="ask-feedback-form" onSubmit={submit} onKeyDown={keepKeys}>
+              <input
+                className="ask-feedback-input"
+                aria-label="Comment"
+                placeholder="What was missing or wrong?"
+                maxLength={1000}
+                value={text}
+                autoFocus
+                onChange={(event) => {
+                  setText(event.target.value);
+                }}
+              />
+              <button type="submit" className="ask-feedback-more">
+                Send
+              </button>
+            </form>
+          )}
+        </>
+      )}
+      {failed ? (
+        <span className="ask-feedback-error" role="alert">
+          The feedback could not be sent.
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -341,6 +468,9 @@ function AnswerPanel({
 
       {settled ? (
         <div className="ask-actions">
+          {state.status === 'done' && state.feedbackEnabled ? (
+            <Feedback key={state.id ?? state.question ?? ''} state={state} />
+          ) : null}
           <button type="button" className="ask-new" onClick={onNewQuestion}>
             New question
           </button>

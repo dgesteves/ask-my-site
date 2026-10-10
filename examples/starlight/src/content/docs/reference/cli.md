@@ -1,12 +1,12 @@
 ---
 # Generated from examples/nextjs/content/docs/cli.md by scripts/sync-example-docs.mjs. Edit that file instead.
 title: 'CLI and config file'
-description: 'Every flag of ask-my-site index, init and dev, and the config module.'
+description: 'Every flag of ask-my-site index, init, dev and eval, and the config module.'
 sidebar:
   order: 30
 ---
 
-The `ask-my-site` command has three subcommands: `index` builds or checks the index, `init` writes the endpoint for your host, and `dev` serves the endpoint on your machine. Run them with `npx ask-my-site`, or from a `package.json` script.
+The `ask-my-site` command has four subcommands: `index` builds or checks the index, `init` writes the endpoint for your host, `dev` serves the endpoint on your machine, and `eval` scores retrieval against questions whose answers you know. Run them with `npx ask-my-site`, or from a `package.json` script.
 
 ## ask-my-site index
 
@@ -71,6 +71,20 @@ It prints each file it created, updated or left unchanged, the environment varia
 | `-h, --help`              |                                                                      | Print the help.                                         |
 
 It embeds questions with the model the index records, answers with OpenAI when `OPENAI_API_KEY` is set and with the mock model otherwise, and reloads the index when the file changes. It only answers pages on this machine (localhost, 127.0.0.1 and [::1] origins, on any port) and requests addressed to localhost, so a site you visit cannot spend your key through it, and it caps request bodies at 64 KiB. [Try it locally](/get-started/local-development/) shows it with each integration.
+
+## ask-my-site eval
+
+`ask-my-site eval <questions.yaml> [options]` scores retrieval against a file of questions with the pages that answer them, and questions marked `unanswerable`: hit@1, hit@3, refusal precision and refusal recall, question by question. It exits 1 when a score is under its threshold. [Measure and improve answers](/guides/quality/#score-retrieval-with-eval) has the file's format.
+
+| Flag                                                                                  | Default                                                                      | What it does                                |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
+| `--index <file>`                                                                      | the file's `index`, then `ask-index.json`, `build/`, `dist/`, `dist/client/` | The index to score.                         |
+| `--min-hit-at-1`, `--min-hit-at-3`, `--min-refusal-precision`, `--min-refusal-recall` | the file's `thresholds`                                                      | Thresholds from 0 to 1.                     |
+| `--keyword-only`                                                                      | off                                                                          | Search by keywords only, embedding nothing. |
+| `--json`                                                                              | off                                                                          | Print the report as JSON.                   |
+| `-h, --help`                                                                          |                                                                              | Print the help.                             |
+
+It embeds each question with the model the index records, as `ask-my-site dev` does, and calls no language model. It loads `.env` and `.env.local` like `index`, and exits 2 on a usage error or a file it cannot read.
 
 ## The config file
 

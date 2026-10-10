@@ -42,12 +42,17 @@ sidebar:
 | `answerCache`              | off                         | `true`, or `{ store, ttlSeconds }`: repeated questions are answered from the cache.                                                                                               |
 | `followUps`                | on                          | `{ model, always, maxTurns, instructions }` for rewriting follow-ups; `false` answers every question on its own.                                                                  |
 | `headers`                  | none                        | Added to every response, such as CORS headers.                                                                                                                                    |
-| `onFinish`                 | none                        | Called after each answer with `{ question, answer, sources, refused, retrieval, usage, followUp }`.                                                                               |
+| `onFeedback`               | none                        | Called with a reader's rating of an answer; with it, the dialog offers thumbs up and down and a comment.                                                                          |
+| `onFinish`                 | none                        | Called after each answer with `{ id, question, answer, sources, refused, lowConfidence, retrieval, usage, followUp }`.                                                            |
 | `onError`                  | `console.error`             | Handled errors: embedding fallbacks, model failures, a failing limiter, misconfiguration.                                                                                         |
 
 ## Logging questions and answers
 
-`onFinish` runs once per answered request, after the answer has streamed, with the question, the answer, its sources, whether it was refused and the token usage. Use it to log questions your docs don't answer, or to send analytics. If it throws, the error goes to `onError`, and the answer the visitor got is unaffected.
+`onFinish` runs once per answered request, after the answer has streamed, with the answer's `id`, the question, the answer, its sources, whether it was refused, whether the model cited none of its sources (`lowConfidence`) and the token usage. Use it to log the questions your docs don't answer, as in [Measure and improve answers](/guides/quality/#questions-your-docs-do-not-answer), or to send analytics. If it throws, the error goes to `onError`, and the answer the visitor got is unaffected.
+
+## Feedback
+
+With `onFeedback`, the stream's metadata says `feedback: true`, and the dialog offers a rating under each answer. It posts `{ "feedback": { "rating": "up" | "down", "comment"?, "id", "question", "answer", "sources" } }` to the endpoint, which hands it to `onFeedback` and answers 204; a comment comes as a second post with the same `id`. The rating goes through the rate limit, costs no model call, and gets a 400 without `onFeedback`, or a 503 if `onFeedback` throws.
 
 ## Request body
 

@@ -3,7 +3,13 @@
  */
 
 export { createAskHandler } from './handler';
-export type { AskFinishEvent, AskHandlerOptions, GenerationOptions, IndexSource } from './handler';
+export type {
+  AskFeedbackEvent,
+  AskFinishEvent,
+  AskHandlerOptions,
+  GenerationOptions,
+  IndexSource,
+} from './handler';
 export type { FollowUpOptions } from './follow-up';
 export { createMcpHandler, MCP_PROTOCOL_VERSIONS } from './mcp';
 export type { McpHandlerOptions, McpToolCallEvent } from './mcp';
@@ -37,4 +43,10 @@ export type {
   UpstashRatelimitLike,
 } from './rate-limit';
 export { SOURCE_METADATA_KEY } from '../protocol';
-export type { AskErrorBody, AskMetadata, AskRequestBody, AskSource } from '../protocol';
+export type {
+  AskErrorBody,
+  AskFeedbackBody,
+  AskMetadata,
+  AskRequestBody,
+  AskSource,
+} from '../protocol';

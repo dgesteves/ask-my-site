@@ -151,11 +151,21 @@ export interface AskHandlerOptions {
   followUps?: false | FollowUpOptions;
   /** Called once per answered request, after the answer is complete. */
   onFinish?: (event: AskFinishEvent) => void | Promise<void>;
+  /**
+   * Called with a visitor's rating of an answer, posted to this endpoint as `{ feedback }`. With
+   * it, the stream tells the dialog to offer thumbs up and down, and a comment; without it, the
+   * dialog offers nothing and a posted rating gets a 400. Nothing is stored or sent anywhere but
+   * here: log it, or send it on, as you choose. A comment arrives as a second call with the same
+   * `id`. If it throws, the visitor is told the feedback could not be sent.
+   */
+  onFeedback?: (event: AskFeedbackEvent) => void | Promise<void>;
   /** Called with errors that were handled (embedding fallback, model errors). Default `console.error`. */
   onError?: (error: unknown) => void;
 }
 
 export interface AskFinishEvent {
+  /** The answer's id, the stream's `messageId`; feedback on the answer carries it. */
+  id: string;
   question: string;
   answer: string;
   sources: AskSource[];
@@ -169,13 +179,51 @@ export interface AskFinishEvent {
   /** True when the answer came from `answerCache`, so no model was called. */
   cached: boolean;
   /**
+   * True when the model answered but cited none of its sources: it said the sources do not cover
+   * the question, or it answered without them. With `refused`, the questions the docs do not
+   * answer well: the content gaps to look at.
+   */
+  lowConfidence: boolean;
+  /**
    * For a follow-up that was rewritten: the standalone question retrieval and the answer used,
    * and the rewrite's token usage. `question` is the question as the visitor asked it.
    */
   followUp?: { question: string; usage?: LanguageModelUsage };
 }
 
+/** A visitor's rating of an answer, as `onFeedback` gets it. */
+export interface AskFeedbackEvent {
+  rating: 'up' | 'down';
+  comment?: string;
+  /** The answer's id, as `onFinish` got it, when the client sent it. */
+  id?: string;
+  /** The question and answer as the visitor's browser has them, not as the server kept them. */
+  question: string;
+  answer: string;
+  sources: string[];
+}
+
 const MODEL_ERROR_MESSAGE = 'The answer could not be generated. Please try again.';
+
+const feedbackSchema = z.object({
+  feedback: z.object({
+    rating: z.enum(['up', 'down']),
+    comment: z.string().max(1000).optional(),
+    id: z.string().max(200).optional(),
+    question: z.string().min(1).max(2000),
+    answer: z.string().max(10_000),
+    sources: z.array(z.string().max(2000)).max(20).optional(),
+  }),
+});
+
+/** Whether an answer cites one of the sources it was given, as `[n]`. */
+function citesSources(text: string, sources: readonly AskSource[]): boolean {
+  const ids = new Set(sources.map((source) => source.id));
+  for (const match of text.matchAll(/\[(\d{1,3}(?:\s*,\s*\d{1,3})*)\]/g)) {
+    if ((match[1] ?? '').split(',').some((id) => ids.has(Number(id.trim())))) return true;
+  }
+  return false;
+}
 
 const requestSchema = z.union([
   z.object({ question: z.string() }),
@@ -341,6 +389,39 @@ export function createAskHandler(
     };
   };
 
+  /** A rating posted to the endpoint: handed to `onFeedback`, with nothing kept here. */
+  const takeFeedback = async (body: object): Promise<Response> => {
+    if (!options.onFeedback) {
+      return json(400, {
+        error: { code: 'invalid_request', message: 'This endpoint does not take feedback.' },
+      });
+    }
+    const parsed = feedbackSchema.safeParse(body);
+    if (!parsed.success) {
+      return json(400, {
+        error: {
+          code: 'invalid_request',
+          message: 'Send { "feedback": { "rating": "up" | "down", "question", "answer" } }.',
+        },
+      });
+    }
+    const { rating, comment, id, question, answer, sources } = parsed.data.feedback;
+    try {
+      await options.onFeedback({
+        rating,
+        ...(comment?.trim() ? { comment: comment.trim() } : {}),
+        ...(id ? { id } : {}),
+        question,
+        answer,
+        sources: sources ?? [],
+      });
+    } catch (error) {
+      reportError(error);
+      return unavailable();
+    }
+    return new Response(null, { status: 204, headers: baseHeaders });
+  };
+
   return async function handleAsk(request: Request): Promise<Response> {
     // CORS preflight: `useAsk` posts JSON, so cross-origin requests are always preflighted.
     // Answer with the configured headers (put the access-control-* ones in `headers`).
@@ -412,6 +493,10 @@ export function createAskHandler(
     } catch {
       return json(400, { error: { code: 'invalid_json', message: 'Body must be JSON.' } });
     }
+    if (typeof body === 'object' && body !== null && 'feedback' in body) {
+      return takeFeedback(body);
+    }
+
     const parsed = requestSchema.safeParse(body);
     const { question, history: conversation } = parsed.success
       ? conversationFrom(parsed.data)
@@ -494,8 +579,11 @@ export function createAskHandler(
     if (cache && cacheKey) {
       const hit = await cache.get(cacheKey, reportError);
       if (hit) {
-        return respond(hit, null, () =>
+        const id = generateId();
+        return respond(hit, id, null, () =>
           finish({
+            id,
+            lowConfidence: !hit.refused && !citesSources(hit.answer, hit.sources),
             question,
             answer: hit.answer,
             sources: hit.sources,
@@ -542,10 +630,13 @@ export function createAskHandler(
       cache.set(cacheKey, { ...answer, answer: text }, reportError);
     };
 
+    const id = generateId();
     if (!retrieval.answerable) {
       remember(noAnswerMessage);
-      return respond(answer, null, () =>
+      return respond(answer, id, null, () =>
         finish({
+          id,
+          lowConfidence: false,
           question,
           answer: noAnswerMessage,
           sources,
@@ -568,7 +659,7 @@ export function createAskHandler(
       if (reserved.result?.allowed) settle = reserved.result.settle;
     }
 
-    return respond(answer, () => {
+    return respond(answer, id, () => {
       let failed = false;
       return streamText({
         maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS,
@@ -585,10 +676,12 @@ export function createAskHandler(
           if (settle) await settle(totalTokens(event.usage)).catch(reportError);
           if (!failed && event.finishReason === 'stop') remember(event.text);
           await finish({
+            id,
             question,
             answer: event.text,
             sources,
             refused: false,
+            lowConfidence: !citesSources(event.text, sources),
             retrieval,
             usage: event.usage,
             cached: false,
@@ -610,13 +703,18 @@ export function createAskHandler(
    */
   function respond(
     answer: CachedAnswer,
+    id: string,
     generate: (() => ReturnType<typeof streamText>) | null,
     done?: () => Promise<void>,
   ): Response {
-    const metadata: AskMetadata = { refused: answer.refused, retrieval: answer.retrieval };
+    const metadata: AskMetadata = {
+      refused: answer.refused,
+      retrieval: answer.retrieval,
+      ...(options.onFeedback ? { feedback: true } : {}),
+    };
     const stream = createUIMessageStream({
       execute: ({ writer }) => {
-        writer.write({ type: 'start', messageMetadata: metadata });
+        writer.write({ type: 'start', messageId: id, messageMetadata: metadata });
         for (const source of answer.sources) {
           writer.write({
             type: 'source-url',

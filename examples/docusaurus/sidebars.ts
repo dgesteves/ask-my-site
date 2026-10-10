@@ -19,7 +19,15 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Guides',
       collapsible: false,
-      items: ['indexing', 'model-providers', 'deployment', 'workers-ai', 'security', 'retrieval'],
+      items: [
+        'indexing',
+        'model-providers',
+        'deployment',
+        'workers-ai',
+        'security',
+        'retrieval',
+        'quality',
+      ],
     },
     {
       type: 'category',

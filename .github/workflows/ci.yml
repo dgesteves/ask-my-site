@@ -52,6 +52,8 @@ jobs:
           # Re-link the workspace now that dist/cli.js exists, so the example gets its bin.
           pnpm install --frozen-lockfile --offline
           pnpm --filter ask-my-site-example-nextjs build
+      - name: Score the website's retrieval with ask-my-site eval
+        run: node dist/cli.js eval examples/nextjs/ask-eval.yaml
       - name: Lint the example app
         run: pnpm --filter ask-my-site-example-nextjs lint
       - name: Build the Docusaurus example; the plugin must write its index and llms files
