@@ -58,6 +58,36 @@ Set the options.`),
     expect(chunks.map((c) => c.anchor)).toEqual(['custom', 'example', 'example-1']);
   });
 
+  it('reads ids from MDX comments, as Docusaurus writes {#id} in MDX', () => {
+    const chunks = chunkDocument(
+      doc(
+        [
+          '## Global metadata {/* #global-metadata */}',
+          'A.',
+          '#### Options {/* #options-1 */}',
+          'B.',
+          '## Packed {/*#packed-id*/}',
+          'C.',
+          // Not ids: not at the end, not a #, or not one word.
+          '## Kept {/* #x */} in the middle',
+          'D.',
+          '## Note {/* editor note */}',
+          'E.',
+          '## Spaced {/* #two words */}',
+          'F.',
+        ].join('\n\n'),
+      ),
+    );
+    expect(chunks.map((c) => [c.heading, c.anchor])).toEqual([
+      ['Global metadata', 'global-metadata'],
+      ['Global metadata › Options', 'options-1'],
+      ['Packed', 'packed-id'],
+      ['Kept {/* #x */} in the middle', 'kept--x--in-the-middle'],
+      ['Note {/* editor note */}', 'note--editor-note-'],
+      ['Spaced {/* #two words */}', 'spaced--two-words-'],
+    ]);
+  });
+
   it('ignores headings inside fenced code blocks and never splits a fence mid-line', () => {
     const code = ['```md', '# not a heading', '## also not', '```'].join('\n');
     const chunks = chunkDocument(doc(`## Real\n\nText before.\n\n${code}\n\nText after.`));

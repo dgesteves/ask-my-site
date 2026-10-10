@@ -2,6 +2,7 @@ import { parse as parseYaml } from 'yaml';
 
 import {
   mapOutsideCodeSpans,
+  mdxCommentId,
   parseAtxHeading,
   removeDelimited,
   splitFenced,
@@ -80,9 +81,24 @@ function firstH1(segments: ReturnType<typeof splitFenced>): string | undefined {
 }
 
 function cleanProse(prose: string, mdx: boolean): string {
-  return mapOutsideCodeSpans(removeDelimited(prose, '<!--', '-->'), (text) =>
-    cleanText(text, mdx),
+  const text = mdx ? keepHeadingIds(prose) : prose;
+  return mapOutsideCodeSpans(removeDelimited(text, '<!--', '-->'), (part) =>
+    cleanText(part, mdx),
   ).replace(/\n{3,}/g, '\n\n');
+}
+
+// In MDX, Docusaurus reads a heading's id from an MDX comment at its end, `{/* #id */}`. MDX
+// comments are dropped below, so on heading lines that one becomes `{#id}` first, which the
+// chunker reads as the anchor.
+function keepHeadingIds(prose: string): string {
+  if (!prose.includes('{/*')) return prose;
+  return prose
+    .split('\n')
+    .map((line) => {
+      const comment = parseAtxHeading(line) ? mdxCommentId(line.trimEnd()) : null;
+      return comment ? `${comment.text} {#${comment.id}}` : line;
+    })
+    .join('\n');
 }
 
 function cleanText(input: string, mdx: boolean): string {

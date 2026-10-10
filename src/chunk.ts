@@ -1,4 +1,9 @@
-import { createFenceScanner, createFenceTracker, parseAtxHeading } from './text/markdown';
+import {
+  createFenceScanner,
+  createFenceTracker,
+  mdxCommentId,
+  parseAtxHeading,
+} from './text/markdown';
 import { createSlugger, plainHeading } from './text/slug';
 import type { Chunk, ChunkingOptions, SourceDocument } from './types';
 
@@ -12,9 +17,12 @@ const SENTENCE_END = /(?<=[.!?:;])\s+/;
 const EXPLICIT_ID = /^[^\s{}]+$/;
 const FENCE_LINE = /^ {0,3}(?:`{3,}|~{3,})/m;
 
-/** Splits `Title {#custom-id}` into the title and the id, if the id is present and valid. */
+// Splits `Title {#custom-id}`, or `Title {/* #custom-id */}` as Docusaurus writes it in MDX,
+// into the title and the id, if the id is present and valid.
 function explicitAnchor(text: string): { text: string; id?: string } {
   if (!text.endsWith('}')) return { text };
+  const comment = mdxCommentId(text);
+  if (comment && EXPLICIT_ID.test(comment.id)) return comment;
   const open = text.lastIndexOf('{#');
   const id = open === -1 ? '' : text.slice(open + 2, -1);
   return EXPLICIT_ID.test(id) ? { text: text.slice(0, open).trimEnd(), id } : { text };

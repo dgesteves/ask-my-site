@@ -14,7 +14,7 @@ For content that is not on disk, such as a CMS, pass `{ id, url, title, content 
 
 ## Frontmatter
 
-Markdown files can set `title` and `url` (or `permalink`) in YAML frontmatter. Without a title, the first `# Heading` is used, then the file name.
+Markdown files can set `title` and `url` (or `permalink`) in YAML frontmatter. A `url` must be a path or an http(s) URL: citations link to it, so a `javascript:` or `data:` URL fails the build. Without a title, the first `# Heading` is used, then the file name.
 
 ## Excluding pages
 
@@ -43,7 +43,7 @@ Docs frameworks don't all map files to URLs the same way, so the CLI looks for a
 
 Chunks never cross a heading, so every chunk has exactly one heading path and one anchor, and a citation links to the section, not just the page. Within a section, paragraphs are packed up to 1,200 characters (`--chunk-size`). Oversized blocks are split by line, then sentence, then word, and consecutive chunks of a section share up to 150 characters (`--chunk-overlap`). Code blocks are never split in the middle of a line.
 
-Each chunk is embedded together with its page title and heading path, as in `Deploying › Netlify`, so a short section keeps its context. Anchors are the slugs GitHub, rehype-slug and Docusaurus generate, or your own `{#id}`.
+Each chunk is embedded together with its page title and heading path, as in `Deploying › Netlify`, so a short section keeps its context. Anchors are the slugs GitHub, rehype-slug and Docusaurus generate, or your own `{#id}`, or `{/* #id */}` as Docusaurus writes it in MDX.
 
 ## Incremental rebuilds
 

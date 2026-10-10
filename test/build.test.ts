@@ -6,6 +6,7 @@ import {
   INDEX_FORMAT,
   buildIndex,
   checkIndex,
+  fromMarkdown,
   loadIndex,
   parseIndexFile,
   sameEmbeddingModel,
@@ -151,6 +152,47 @@ describe('buildIndex', () => {
       /dimensions/,
     );
   });
+});
+
+describe('document URLs', () => {
+  const page = (url: string) => ({ id: 'page.md', url, title: 'Page', content: 'Text.' });
+
+  it.each([
+    'javascript:alert(document.cookie)',
+    ' JavaScript:alert(1)',
+    'java\tscript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'vbscript:msgbox(1)',
+    'file:///etc/passwd',
+    'mailto:a@example.com',
+    '//evil.example/docs',
+    '/\\evil.example',
+    'javascript :alert(1)',
+    'https://',
+    '',
+  ])('refuses to index a page at %j', async (url) => {
+    await expect(buildIndex({ documents: [page(url)], embeddingModel: null })).rejects.toThrow(
+      /Document "page\.md" has the URL .*which a citation cannot link to/,
+    );
+  });
+
+  it('refuses a frontmatter url that would run script, naming the page', async () => {
+    const doc = fromMarkdown('---\ntitle: Evil\nurl: "javascript:alert(1)"\n---\n\nInstall.', {
+      id: 'evil.md',
+      url: '/evil',
+    });
+    await expect(buildIndex({ documents: [doc!], embeddingModel: null })).rejects.toThrow(
+      'Document "evil.md" has the URL "javascript:alert(1)"',
+    );
+  });
+
+  it.each(['/docs/page', 'docs/page', '../page', 'page.html?x=1#y', 'https://example.com/docs/a'])(
+    'indexes a page at %j',
+    async (url) => {
+      const { index } = await buildIndex({ documents: [page(url)], embeddingModel: null });
+      expect(index.documents[0]?.url).toBe(url);
+    },
+  );
 });
 
 describe('index file validation', () => {
