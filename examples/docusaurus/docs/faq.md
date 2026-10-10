@@ -58,7 +58,7 @@ Yes, through the embedding model: a multilingual model such as Cohere's `embed-m
 
 ## How is it different from Kapa, Inkeep or Algolia Ask AI?
 
-Those are hosted services: your docs are ingested into their platform, and answers come from their infrastructure under their pricing. ask-my-site is a library. The index is a file in your build, the endpoint is a function on your host, and the model is one you choose under your own key. You give up their dashboards, analytics and multi-turn chat; you get no account, no vendor, and nothing to keep in sync.
+Those are hosted services: your docs are ingested into their platform, and answers come from their infrastructure under their pricing. ask-my-site is a library. The index is a file in your build, the endpoint is a function on your host, and the model is one you choose under your own key. You give up their dashboards and analytics: you get `ask-my-site eval`, readers' ratings and a log of unanswered questions to wire as you like instead, and no account, no vendor, and nothing to keep in sync.
 
 ## How is it different from Pagefind?
 

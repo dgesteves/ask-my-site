@@ -1,0 +1,38 @@
+# Questions about these docs, with the pages that answer them, and a few they do not answer.
+# CI runs `ask-my-site eval ask-eval.yaml` against the index the build writes (mock embeddings
+# without a key), so a change that sends a question to the wrong page fails the build.
+
+index: ask-index.json
+
+thresholds:
+  hit@3: 0.8
+  refusalRecall: 1
+
+questions:
+  - question: How do I add ask-my-site to a Docusaurus site?
+    expect: /docs/docusaurus
+  - question: How do I add the Ask box to Starlight?
+    expect: /docs/astro
+  - question: How do I deploy the endpoint to Netlify?
+    expect: /docs/deployment
+  - question: What does a question cost?
+    expect: [/docs/deployment, /docs/faq]
+  - question: How do I connect Claude Code to the MCP server?
+    expect: /docs/mcp
+  - question: How do I rate limit the endpoint across instances?
+    expect: [/docs/security, /docs/ask-endpoint]
+  - question: How does the relevance gate decide to say I don't know?
+    expect: /docs/retrieval
+  - question: How do I answer without an API key on GitHub Pages?
+    expect: [/docs/workers-ai, /docs/deployment]
+  - question: Which flags does ask-my-site index take?
+    expect: /docs/cli
+  - question: How do I add the dialog with a script tag?
+    expect: /docs/script-tag
+
+  - question: What is the capital of France?
+    unanswerable: true
+  - question: How do I bake sourdough bread?
+    unanswerable: true
+  - question: Who won the 2022 World Cup?
+    unanswerable: true

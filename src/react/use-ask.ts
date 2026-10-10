@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { AskErrorBody, AskSource } from '../protocol';
+import type { AskErrorBody, AskFeedbackBody, AskSource } from '../protocol';
 import { readAskStream } from './stream';
 
 export type AskStatus = 'idle' | 'loading' | 'streaming' | 'done' | 'error';
@@ -51,6 +51,12 @@ export interface AskState {
    * adds the current answer here when the next question is asked; `reset` starts a new thread.
    */
   turns: AskTurn[];
+  /** The answer's id, from the server, which feedback on it carries. */
+  id: string | null;
+  /** Whether the endpoint takes feedback on its answers (its `onFeedback`). */
+  feedbackEnabled: boolean;
+  /** The rating sent for this answer, if any. */
+  rating: 'up' | 'down' | null;
 }
 
 export interface UseAskOptions {
@@ -77,6 +83,12 @@ export interface UseAsk extends AskState {
   stop: () => void;
   /** Back to idle, with a new thread. */
   reset: () => void;
+  /**
+   * Sends a rating of the current answer, and optionally a comment, to the endpoint's
+   * `onFeedback`. Resolves to whether it was taken. Only once the answer is done, and only when
+   * `feedbackEnabled`.
+   */
+  rate: (rating: 'up' | 'down', comment?: string) => Promise<boolean>;
 }
 
 /** Earlier questions sent with a follow-up, with their answers. */
@@ -92,6 +104,9 @@ const INITIAL: AskState = {
   retrieval: null,
   error: null,
   turns: [],
+  id: null,
+  feedbackEnabled: false,
+  rating: null,
 };
 
 /** The request body: the thread as `useChat` sends it, or the question alone. */
@@ -298,8 +313,8 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     const progress = { finished: false, truncated: false };
     try {
       await readAskStream(response.body, {
-        metadata: ({ refused, retrieval }) => {
-          commit({ refused, retrieval });
+        metadata: ({ refused, retrieval, feedback, id }) => {
+          commit({ refused, retrieval, feedbackEnabled: feedback === true, id: id ?? null });
         },
         source: (source) => {
           commit({ sources: [...current.sources, source] });
@@ -356,5 +371,39 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     setState(INITIAL);
   }, []);
 
-  return { ...state, ask, stop, reset };
+  const rate = useCallback(async (rating: 'up' | 'down', comment?: string): Promise<boolean> => {
+    const answered = stateRef.current;
+    if (answered.status !== 'done' || !answered.feedbackEnabled || !answered.question) return false;
+    const { endpoint = '/api/ask', headers, fetch: fetcher = fetch } = optionsRef.current;
+    const body: AskFeedbackBody = {
+      feedback: {
+        rating,
+        ...(comment?.trim() ? { comment: comment.trim().slice(0, 1000) } : {}),
+        ...(answered.id ? { id: answered.id } : {}),
+        question: answered.question,
+        answer: answered.answer,
+        sources: answered.sources.map((source) => source.url),
+      },
+    };
+    let ok: boolean;
+    try {
+      const response = await fetcher(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: JSON.stringify(body),
+      });
+      ok = response.ok;
+    } catch {
+      ok = false;
+    }
+    // A newer question may have replaced the answer meanwhile.
+    if (ok && stateRef.current === answered) {
+      const next = { ...answered, rating };
+      stateRef.current = next;
+      setState(next);
+    }
+    return ok;
+  }, []);
+
+  return { ...state, ask, stop, reset, rate };
 }

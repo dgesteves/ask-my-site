@@ -413,8 +413,66 @@
 
 .ask-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+/* Thumbs up and down, then an optional comment, on the left of the actions row. */
+.ask-feedback {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ask-muted);
+}
+
+.ask-feedback-buttons,
+.ask-feedback-form {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.ask-feedback-button,
+.ask-feedback-more {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ask-fg);
+  cursor: pointer;
+  background: var(--ask-raised);
+  border: 1px solid var(--ask-border-strong);
+  border-radius: 6px;
+}
+
+.ask-feedback-button:hover,
+.ask-feedback-more:hover {
+  border-color: var(--ask-accent-line);
+}
+
+.ask-feedback-input {
+  min-width: 0;
+  width: 220px;
+  height: 28px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ask-fg);
+  background: transparent;
+  border: 1px solid var(--ask-border-strong);
+  border-radius: 6px;
+}
+
+.ask-feedback-error {
+  color: var(--ask-danger);
 }
 
 .ask-new {

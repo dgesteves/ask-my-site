@@ -1,7 +1,8 @@
 import { SOURCE_METADATA_KEY, type AskMetadata, type AskSource } from '../protocol';
 
 export interface AskStreamHandlers {
-  metadata?: (metadata: AskMetadata) => void;
+  /** The answer's metadata, with its id (the stream's `messageId`) when the server sent one. */
+  metadata?: (metadata: AskMetadata & { id?: string }) => void;
   source?: (source: AskSource) => void;
   delta?: (text: string) => void;
   error?: (message: string) => void;
@@ -17,11 +18,13 @@ type Part = Record<string, unknown> & { type?: unknown };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-function toMetadata(value: unknown): AskMetadata | null {
+function toMetadata(value: unknown, id: unknown): (AskMetadata & { id?: string }) | null {
   if (!isRecord(value) || typeof value.refused !== 'boolean') return null;
   return {
     refused: value.refused,
     retrieval: value.retrieval === 'keyword' ? 'keyword' : 'hybrid',
+    ...(value.feedback === true ? { feedback: true } : {}),
+    ...(typeof id === 'string' && id ? { id } : {}),
   };
 }
 
@@ -38,7 +41,7 @@ function dispatch(part: Part, on: AskStreamHandlers): void {
   switch (part.type) {
     case 'start':
     case 'message-metadata': {
-      const metadata = toMetadata(part.messageMetadata);
+      const metadata = toMetadata(part.messageMetadata, part.messageId);
       if (metadata) on.metadata?.(metadata);
       break;
     }

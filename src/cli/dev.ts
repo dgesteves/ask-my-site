@@ -261,9 +261,18 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
       // Every question comes from this machine, so one bucket, roomier than a public endpoint's
       // default, still bounds what a runaway page can spend of your key.
       rateLimit: memoryRateLimit({ limit: 30, windowMs: 60_000, key: () => 'local' }),
-      onFinish: ({ question, refused, sources }) => {
+      onFinish: ({ question, refused, lowConfidence, sources, followUp }) => {
+        const outcome = refused
+          ? 'refused'
+          : `answered from ${String(sources.length)} sources${lowConfidence ? ', citing none' : ''}`;
+        const rewritten = followUp ? ` (asked as: ${followUp.question})` : '';
+        options.log(`  ${outcome}: ${question}${rewritten}`);
+      },
+      // The dialog offers thumbs and a comment when the endpoint takes them; here they are only
+      // printed, to try it.
+      onFeedback: ({ rating, comment, question }) => {
         options.log(
-          `  ${refused ? 'refused' : `answered from ${String(sources.length)} sources`}: ${question}`,
+          `  feedback ${rating === 'up' ? 'up' : 'down'}: ${question}${comment ? ` (${comment})` : ''}`,
         );
       },
       onError: (error) => {

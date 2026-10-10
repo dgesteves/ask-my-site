@@ -50,6 +50,10 @@ Citations in the answer and the entries in the sources list link to the exact se
 
 The dialog keeps the thread. Once an answer is on screen, typing another question offers "Follow up", and the answer stays in view while you type. The new question goes to the endpoint with the last three questions and their answers, so it can lean on them, as in "and on Netlify?": the endpoint rewrites it into one that stands on its own before it searches (see [Follow-up questions](/docs/ask-endpoint#follow-up-questions)). Earlier questions and answers stay above the current one, each with its own citations, which open its own sources. "New question" starts a new thread, with an empty input. `followUps={false}` asks every question on its own.
 
+## Rating answers
+
+When the endpoint takes feedback (its `onFeedback`), the dialog asks "Was this helpful?" under each answer, with thumbs up and down. After a rating it thanks the reader and offers "Add a comment", a one-line field that Enter sends. Both go to the endpoint, with the answer's id, and nowhere else. `useAsk` has the same as `rate(rating, comment?)`, with `feedbackEnabled` and `rating` in its state. See [Measure and improve answers](/docs/quality#feedback-from-readers).
+
 ## Theming the dialog
 
 Import `ask-my-site/react/styles.css` for the default theme, which follows the system's light or dark setting. To change the dialog's colors, set its CSS custom properties: every color, radius and font is one, so `.ask-dialog { --ask-accent: #7c3aed; --ask-radius: 8px; }` is a complete rebrand. To style it from scratch, skip the stylesheet: every part has a stable `ask-*` class, and `classNames` adds your own, which suits Tailwind.

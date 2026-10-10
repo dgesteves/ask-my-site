@@ -116,7 +116,7 @@ See [MCP server](https://ask-my-site-demo.vercel.app/docs/mcp) and [llms.txt and
 ## How it compares
 
 - **Algolia DocSearch Ask AI** is free for open-source and technical docs, with your own model key and one config line in Docusaurus and VitePress. Choose it if you already use DocSearch and are fine with an Algolia account and its crawler.
-- **Kapa.ai and Inkeep** are hosted. They take more sources than your docs (forums, issues, chat) and come with analytics dashboards and support tooling. ask-my-site gives you an `onFinish` hook, not a dashboard.
+- **Kapa.ai and Inkeep** are hosted. They take more sources than your docs (forums, issues, chat) and come with analytics dashboards and support tooling. ask-my-site gives you `ask-my-site eval` for CI, readers' ratings and a log of unanswered questions you wire yourself, not a dashboard.
 - **Fumadocs** has first-party AI chat and an MCP route. On a Fumadocs site, they fit its framework natively.
 - **docusaurus-plugin-mcp-server** builds the same kind of index for an MCP endpoint, more widely used today, with no Ask box for people.
 - **The llms.txt plugins** (docusaurus-plugin-llms, @signalwire/docusaurus-plugin-llms-txt, starlight-llms-txt) have more output options, such as custom sets and versions. ask-my-site writes the basics, and steps aside when one of them is installed.

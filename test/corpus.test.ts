@@ -3,12 +3,15 @@
 // first, or this file is skipped. The counts are snapshots: a change that loses a hit, or starts
 // answering an off-topic query, fails here and has to say why.
 import { existsSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { buildIndex, loadIndex } from '../src';
-import { loadDirectory } from '../src/node';
+import { main } from '../src/cli/main';
+import { loadDirectory, writeIndexFile } from '../src/node';
 import { createMcpHandler } from '../src/server';
 
 const corpus = join(
@@ -199,6 +202,43 @@ describe.skipIf(!present)(
         }),
       );
       expect(counts).toEqual(OFF_TOPIC.map(() => 0));
+    });
+
+    it('scores the sample eval file of the audit’s questions, as asked, within its thresholds', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'ask-my-site-corpus-eval-'));
+      try {
+        await writeIndexFile(join(dir, 'ask-index.json'), index);
+        const out: string[] = [];
+        const code = await main(
+          [
+            'eval',
+            join(import.meta.dirname, 'eval/docusaurus.io.yaml'),
+            '--index',
+            'ask-index.json',
+            '--json',
+          ],
+          { cwd: dir, env: {}, stdout: (line) => out.push(line), stderr: () => undefined },
+        );
+        const { scores } = JSON.parse(out.join('\n')) as {
+          scores: Record<string, { count: number; of: number }>;
+        };
+        expect(
+          Object.fromEntries(
+            Object.entries(scores).map(([name, { count, of }]) => [
+              name,
+              `${String(count)}/${String(of)}`,
+            ]),
+          ),
+        ).toEqual({
+          'hit@1': '14/22',
+          'hit@3': '18/22',
+          refusalPrecision: '6/8',
+          refusalRecall: '6/6',
+        });
+        expect(code).toBe(0);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
     });
 
     it('fetches every page and every result, and lists them all', async () => {

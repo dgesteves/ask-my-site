@@ -13,6 +13,7 @@ import { embeddingFromSpec, EmbeddingSpecError } from '../node/embedding';
 import { llmsOutputs, writeLlmsFiles } from '../integrations/llms';
 import type { LlmsPage } from '../llms';
 import { dev } from './dev';
+import { evalCommand } from './eval';
 import { init } from './init';
 import {
   detectFramework,
@@ -38,6 +39,7 @@ export interface CliIO {
 const USAGE = `Usage: ask-my-site index [dir] [options]
        ask-my-site init [options]  Write the endpoint for your host (ask-my-site init --help)
        ask-my-site dev [options]   Serve the ask endpoint locally (ask-my-site dev --help)
+       ask-my-site eval <file>     Score retrieval against known answers (ask-my-site eval --help)
 
 Builds a static retrieval index from the Markdown, MDX and HTML files in <dir>.
 
@@ -409,6 +411,10 @@ export async function main(args: string[], io: CliIO): Promise<number> {
   if (args[0] === 'dev') {
     loadEnvFiles(io);
     return dev(args.slice(1), io);
+  }
+  if (args[0] === 'eval') {
+    loadEnvFiles(io);
+    return evalCommand(args.slice(1), io);
   }
   try {
     const { command, dir, flags, help, version: showVersion } = parseFlags(args);
