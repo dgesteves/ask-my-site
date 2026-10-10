@@ -12,13 +12,13 @@ Add this tag to your base template, before `</body>` or in `<head>`:
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.5/dist/embed.global.js"
+  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.6/dist/embed.global.js"
   data-endpoint="/api/ask"
   defer
 ></script>
 ```
 
-The script mounts itself once the page has loaded. It opens the dialog from a floating "Ask AI" button and with ⌘I or Ctrl+I, so ⌘K stays with your site's search. Pin an exact version, such as `ask-my-site@0.5.0`, in production.
+The script mounts itself once the page has loaded. It opens the dialog from a floating "Ask AI" button and with ⌘I or Ctrl+I, so ⌘K stays with your site's search. Pin an exact version, such as `ask-my-site@0.6.0`, in production.
 
 ## Script size
 
@@ -63,7 +63,7 @@ With `data-manual`, the script waits for you to call `window.AskMySite.mount(opt
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.5/dist/embed.global.js"
+  src="https://cdn.jsdelivr.net/npm/ask-my-site@0.6/dist/embed.global.js"
   data-manual
 ></script>
 <script type="module">
