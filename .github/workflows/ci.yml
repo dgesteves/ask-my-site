@@ -40,10 +40,11 @@ jobs:
         run: node -e "const s=require('zlib').gzipSync(require('fs').readFileSync('dist/embed.global.js')).length;console.log('dist/embed.global.js:',Math.round(s/1024),'KB gzipped');if(s>110*1024)throw new Error('over the 110 KB budget')"
       - name: The Docusaurus and Starlight docs match the website's
         run: pnpm examples:check
-      - name: CLI smoke test, including --check
+      - name: CLI smoke test, including --check and --llms-txt
         run: |
-          node dist/cli.js index examples/nextjs/content/docs --base-url /docs -e mock -o "$RUNNER_TEMP/ask-index.json"
+          node dist/cli.js index examples/nextjs/content/docs --base-url /docs -e mock -o "$RUNNER_TEMP/ask-index.json" --llms-txt "$RUNNER_TEMP/llms"
           node dist/cli.js index examples/nextjs/content/docs --base-url /docs -e mock -o "$RUNNER_TEMP/ask-index.json" --check
+          test -s "$RUNNER_TEMP/llms/llms.txt" && test -s "$RUNNER_TEMP/llms/llms-full.txt" && test -s "$RUNNER_TEMP/llms/docs/mcp.md"
       - name: Build the example app (mock mode, no API key)
         run: |
           # Re-link the workspace now that dist/cli.js exists, so the example gets its bin.
@@ -51,14 +52,16 @@ jobs:
           pnpm --filter ask-my-site-example-nextjs build
       - name: Lint the example app
         run: pnpm --filter ask-my-site-example-nextjs lint
-      - name: Build the Docusaurus example; the plugin must write its index
+      - name: Build the Docusaurus example; the plugin must write its index and llms files
         run: |
           pnpm --filter ask-my-site-example-docusaurus build
           node -e "const i=JSON.parse(require('fs').readFileSync('examples/docusaurus/build/ask-index.json','utf8'));if(i.documents.length<5)throw new Error('only '+i.documents.length+' pages indexed');console.log(i.documents.length,'pages,',i.chunks.length,'chunks')"
-      - name: Build the Starlight example; the plugin must write its index, without pagefind:false pages
+          test -s examples/docusaurus/build/llms.txt && test -s examples/docusaurus/build/llms-full.txt && test -s examples/docusaurus/build/mcp.md
+      - name: Build the Starlight example; the plugin must write its index and llms files, without pagefind:false pages
         run: |
           pnpm --filter ask-my-site-example-starlight build
           node -e "const i=JSON.parse(require('fs').readFileSync('examples/starlight/dist/ask-index.json','utf8'));if(i.documents.length<5)throw new Error('only '+i.documents.length+' pages indexed');if(i.documents.some(d=>d.url.startsWith('/changelog')))throw new Error('indexed the pagefind: false changelog');console.log(i.documents.length,'pages,',i.chunks.length,'chunks')"
+          test -s examples/starlight/dist/llms.txt && test -s examples/starlight/dist/llms-full.txt && test -s examples/starlight/dist/integrations/mcp.md && test ! -e examples/starlight/dist/changelog.md
 
   # A site made the way a new user makes one, with the scaffolder's defaults, and ask-my-site
   # installed from the packed tarball rather than linked from the workspace. The index is built

@@ -18,6 +18,13 @@ import {
   type IndexOptions,
   type McpOption,
 } from '../integrations/build';
+import {
+  llmsOutputs,
+  writeLlmsFiles,
+  type LlmsOutput,
+  type LlmsTxtOption,
+} from '../integrations/llms';
+import type { LlmsPage } from '../llms';
 import { fromHtml } from '../loaders/html';
 import type { SourceDocument } from '../types';
 
@@ -62,6 +69,15 @@ export interface AskMySiteOptions extends IndexOptions {
    * ChatGPT.
    */
   mcp?: McpOption;
+  /**
+   * After the build, also write `llms.txt`, `llms-full.txt` and a Markdown copy of each indexed
+   * page at its URL plus `.md` (`/guides/setup.md`), into the build output, per locale as the
+   * index is. On by default; `false` turns all three off, and `{ index: false }`,
+   * `{ full: false }` or `{ markdown: false }` one of them. A file the build already has (from
+   * `public/` or another integration) is left as it is, and what starlight-llms-txt,
+   * starlight-page-actions or starlight-llm-actions writes is left to them.
+   */
+  llmsTxt?: LlmsTxtOption;
 }
 
 /** The module `McpInstall.astro` reads the `mcp` option from. */
@@ -77,8 +93,12 @@ export interface IntegrationPreset {
   locales?: string[];
   /** The dialog's title unless the site sets one. */
   title?: string;
-  /** The site's title, which names the MCP server in clients unless `mcp.name` does. */
+  /** The site's title, which names the MCP server in clients and heads `llms.txt`. */
   siteTitle?: string;
+  /** The site's description, for `llms.txt`. */
+  siteDescription?: string;
+  /** Plugins of the framework that write llms files, by name, e.g. Starlight plugins. */
+  plugins?: readonly string[];
   /** Stylesheets for the dialog, after its own and the launcher's. */
   stylesheets?: string[];
 }
@@ -90,6 +110,7 @@ export function createIntegration(
   checkIndexOptions(options);
   const endpoint = dialogEndpoint(options.endpoint);
   let config: AstroConfig | undefined;
+  let mcpUrl: string | undefined;
   // Whether this is `astro dev`, and whether a route of the site answers the endpoint.
   let dev = false;
   let served = false;
@@ -104,6 +125,7 @@ export function createIntegration(
           preset.siteTitle ?? 'docs',
           "astro.config's site",
         );
+        mcpUrl = mcp?.url;
         warnMissingDialogPeers(logger);
         // The stylesheets go into every page's CSS: a `page` script's CSS is built but not linked.
         injectScript(
@@ -140,7 +162,16 @@ export function createIntegration(
         if (!config) throw new Error('ask-my-site: astro:config:done did not run');
         const indexFile = (options.indexFile ?? 'ask-index.json').replace(/^\/+/, '');
         const outDir = fileURLToPath(dir);
-        const groups = await loadBuiltPages(outDir, pages, config, options, preset);
+        const outputs = llmsOutputs(options.llmsTxt);
+        const llms = outputs.index || outputs.full || outputs.markdown;
+        const { groups, copies } = await loadBuiltPages(
+          outDir,
+          pages,
+          config,
+          options,
+          preset,
+          llms,
+        );
         const total = [...groups.values()].reduce((sum, documents) => sum + documents.length, 0);
         if (total === 0) {
           logger.warn(
@@ -170,6 +201,31 @@ export function createIntegration(
             ),
             // With an adapter, Astro serves static files from `dist/client/`: say so.
             name: relative(fileURLToPath(config.root), join(outDir, name)) || name,
+            log: logger,
+          });
+          if (!llms) continue;
+          const named = typeof options.llmsTxt === 'object' ? options.llmsTxt : {};
+          const description = named.description ?? preset.siteDescription;
+          const base = `${config.base.replace(/\/+$/, '')}/${locale ? `${locale}/` : ''}`;
+          await writeLlmsFiles({
+            pages: copies.get(locale) ?? [],
+            site: {
+              title:
+                named.title ??
+                preset.siteTitle ??
+                (config.site ? new URL(config.site).host : 'Docs'),
+              ...(description ? { description } : {}),
+              ...(config.site ? { url: config.site } : {}),
+              base,
+              ...(mcpUrl ? { mcp: mcpUrl } : {}),
+            },
+            outputs,
+            owners: llmsOwners([
+              ...(preset.plugins ?? []),
+              ...config.integrations.map((integration) => integration.name),
+            ]),
+            dir: join(outDir, locale),
+            label: relative(fileURLToPath(config.root), join(outDir, locale)) || 'dist',
             log: logger,
           });
         }
@@ -253,10 +309,15 @@ async function loadBuiltPages(
   config: AstroConfig,
   options: AskMySiteOptions,
   preset: IntegrationPreset,
-): Promise<Map<string, SourceDocument[]>> {
+  markdown: boolean,
+): Promise<{ groups: Map<string, SourceDocument[]>; copies: Map<string, LlmsPage[]> }> {
   const locales = preset.locales ?? astroLocales(config);
   const groups = new Map<string, SourceDocument[]>([['', []]]);
-  for (const locale of locales) groups.set(locale, []);
+  const copies = new Map<string, LlmsPage[]>([['', []]]);
+  for (const locale of locales) {
+    groups.set(locale, []);
+    copies.set(locale, []);
+  }
   const excluded = excluder(options.exclude ?? []);
   const base = config.base.replace(/\/+$/, '');
   const root = preset.content ?? options.content ?? 'main';
@@ -275,10 +336,42 @@ async function loadBuiltPages(
           ? base
           : `${base}/`
         : `${base}/${pathname}`;
-    const document = fromHtml(html, { id: url, url, root, ...(ignore ? { ignore } : {}) });
-    if (document?.content.trim()) groups.get(locale)?.push(document);
+    const meta = { id: url, url, root, ...(ignore ? { ignore } : {}) };
+    const document = fromHtml(html, meta);
+    if (!document?.content.trim()) continue;
+    groups.get(locale)?.push(document);
+    if (markdown) {
+      copies.get(locale)?.push({
+        url,
+        title: document.title,
+        ...(document.description ? { description: document.description } : {}),
+        content: fromHtml(html, { ...meta, markdown: true })?.content ?? document.content,
+      });
+    }
   }
-  return groups;
+  return { groups, copies };
+}
+
+/**
+ * The llms outputs the site's other plugins and integrations write, by name: starlight-llms-txt
+ * (llms.txt and llms-full.txt), starlight-page-actions and starlight-llm-actions (the pages' .md
+ * copies). Whatever else they write is caught by the file being there already.
+ */
+function llmsOwners(names: readonly string[]): Map<LlmsOutput, string> {
+  const owners = new Map<LlmsOutput, string>();
+  for (const name of names) {
+    if (name === 'starlight-llms-txt') {
+      owners.set('index', name);
+      owners.set('full', name);
+    } else if (
+      name === 'starlight-page-actions' ||
+      name === 'starlight-page-actions-integration' ||
+      name === 'starlight-llm-actions'
+    ) {
+      owners.set('markdown', name.replace(/-integration$/, ''));
+    }
+  }
+  return owners;
 }
 
 /**

@@ -29,6 +29,7 @@ const PEERS = ['ai', '@ai-sdk/openai', '@radix-ui/react-dialog', 'cmdk'];
  *   install: string[],
  *   build: string[][],
  *   index: string,
+ *   llms: string,
  *   dimensions: number,
  * }>}
  */
@@ -110,10 +111,13 @@ export function Ask() {
         `openai:${MODEL}`,
         '--dimensions',
         '512',
+        '--llms-txt',
+        'public',
       ],
       ['npx', 'next', 'build'],
     ],
     index: 'ask-index.json',
+    llms: 'public',
     dimensions: 512,
   },
   // The plugin with no options: the default model, from OPENAI_API_KEY, loaded under jiti.
@@ -134,6 +138,7 @@ export function Ask() {
     install: PEERS,
     build: [['npx', 'docusaurus', 'build']],
     index: 'build/ask-index.json',
+    llms: 'build',
     // The plugin's default model, at its default size.
     dimensions: 512,
   },
@@ -159,6 +164,7 @@ export function Ask() {
     install: [...PEERS, 'react', 'react-dom'],
     build: [['npx', 'astro', 'build']],
     index: 'dist/ask-index.json',
+    llms: 'dist',
     dimensions: 512,
   },
 };
@@ -231,6 +237,24 @@ if (model !== MODEL || dimensions !== site.dimensions) {
 if (!index.chunks?.length || !index.chunks.every((chunk) => typeof chunk.vector === 'string')) {
   problems.push('some chunks have no vector');
 }
+// llms.txt, llms-full.txt and a .md copy of each indexed page, linked from llms.txt.
+const llmsDir = join(dir, site.llms);
+for (const file of ['llms.txt', 'llms-full.txt']) {
+  if (!existsSync(join(llmsDir, file))) problems.push(`the build wrote no ${site.llms}/${file}`);
+}
+const llmsTxt = existsSync(join(llmsDir, 'llms.txt'))
+  ? readFileSync(join(llmsDir, 'llms.txt'), 'utf8')
+  : '';
+const links = [...llmsTxt.matchAll(/^- \[[^\]]*\]\(([^)]+\.md)\)/gm)].map((match) => match[1]);
+if (links.length !== index.documents.length) {
+  problems.push(
+    `llms.txt links ${String(links.length)} .md pages, the index has ${String(index.documents.length)}`,
+  );
+}
+for (const link of links) {
+  const file = join(llmsDir, decodeURI(new URL(link, 'http://site').pathname).replace(/^\//, ''));
+  if (!existsSync(file)) problems.push(`llms.txt links ${link}, which is not in ${site.llms}`);
+}
 const strays = stub.requests.filter((request) => request !== 'POST /v1/embeddings');
 if (stub.requests.length === 0) problems.push('the stub received no embedding request');
 if (strays.length > 0) problems.push(`the stub received ${strays.join(', ')}`);
@@ -239,5 +263,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  `\n✓ ${name}: ${site.index} has ${String(index.documents.length)} pages and ${String(index.chunks.length)} chunks embedded with ${MODEL} at ${String(site.dimensions)} dimensions, from ${String(stub.requests.length)} requests to the stub.`,
+  `\n✓ ${name}: ${site.index} has ${String(index.documents.length)} pages and ${String(index.chunks.length)} chunks embedded with ${MODEL} at ${String(site.dimensions)} dimensions, from ${String(stub.requests.length)} requests to the stub; ${site.llms}/llms.txt links a .md copy of each.`,
 );

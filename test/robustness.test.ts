@@ -50,9 +50,11 @@ describe('linear-time loaders on unclosed constructs', () => {
   const html = (source: string, root?: string, ignore?: string) => () =>
     fromHtml(source, { id: 'x', url: '/x', root, ...(ignore ? { ignore } : {}) });
   const md =
-    (source: string, mdx = false) =>
+    (source: string, mdx = false, markdown = false) =>
     () =>
-      fromMarkdown(source, { id: 'x', url: '/x', mdx });
+      fromMarkdown(source, { id: 'x', url: '/x', mdx, markdown });
+  const markdown = (source: string) => () =>
+    fromHtml(source, { id: 'x', url: '/docs/x', markdown: true });
 
   it.each([
     ['unclosed dropped elements', html(`<main>${'<nav>x '.repeat(n)}</main>`)],
@@ -90,6 +92,20 @@ describe('linear-time loaders on unclosed constructs', () => {
     ['tags that never end', html(`<main>${'<a b=c '.repeat(n)}`)],
     ['attributes without values', html(`<main><p ${'a '.repeat(5 * n)}>x</p></main>`, 'p[b]')],
     ['a heading link full of spaces', html(`<main><h2><a>${' '.repeat(5 * n)}</h2></main>`)],
+    // The Markdown a page's .md copy is written as.
+    ['Markdown: nested lists', markdown(`<main>${'<ul><li>x'.repeat(n / 4)}</main>`)],
+    ['Markdown: unclosed tables', markdown(`<main>${'<table><tr><td>x'.repeat(n / 4)}</main>`)],
+    [
+      'Markdown: cells without closing tags',
+      markdown(`<main><table>${'<tr><td>x<td>y'.repeat(n)}</table></main>`),
+    ],
+    ['Markdown: unclosed quotes', markdown(`<main>${'<blockquote>x '.repeat(n / 4)}</main>`)],
+    ['Markdown: unclosed links', markdown(`<main>${'<a href=/x>y '.repeat(n)}</main>`)],
+    [
+      'Markdown: many links and images',
+      markdown(`<main>${'<a href="../a">b</a><img src=c alt=d>'.repeat(n / 2)}</main>`),
+    ],
+    ['Markdown: Markdown with unclosed link labels', md(`${'['.repeat(4 * n)}]`, false, true)],
     ['Markdown links with unclosed destinations', md('[a](('.repeat(n))],
     ['Markdown links without destinations', md('[a]('.repeat(n))],
     ['Markdown images with unclosed destinations', md('![a]('.repeat(n))],

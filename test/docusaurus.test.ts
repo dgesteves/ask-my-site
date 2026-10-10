@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import askMySite from '../src/docusaurus';
+import askMySite, { llmsOwners } from '../src/docusaurus';
 import { parseIndexFile } from '../src/index-file';
 import { consoleLogger, warnMissingDialogPeers } from '../src/integrations/build';
 import { mockEmbeddingModel } from '../src/mock';
@@ -235,11 +235,13 @@ describe('ask-my-site/docusaurus', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const en = await site();
     const fr = await site({ locale: 'fr' });
-    await build(en);
-    await build(fr);
+    // The builds share a folder, as a real one would not, so llms.txt is left out.
+    const quiet = { llmsTxt: false };
+    await build(en, quiet);
+    await build(fr, quiet);
     // Building French did not evict the English vectors, nor the reverse.
-    await build(en);
-    await build(fr);
+    await build(en, quiet);
+    await build(fr, quiet);
     for (const call of log.mock.calls.slice(-2)) {
       expect(call[0]).toMatch(
         /^\[ask-my-site\] Indexed 9 pages into \d+ chunks, 0 embedded, \d+ reused → ask-index\.json/,
@@ -249,7 +251,7 @@ describe('ask-my-site/docusaurus', () => {
     expect(existsSync(join(cache, 'en-default.json'))).toBe(true);
     expect(existsSync(join(cache, 'fr-default.json'))).toBe(true);
 
-    await askMySite(en.context, { id: 'second' }).postBuild(en);
+    await askMySite(en.context, { id: 'second', llmsTxt: false }).postBuild(en);
     expect(warn.mock.calls[0]?.[0]).toContain('No embedding model: building a keyword-only index.');
     expect(
       parseIndexFile(await readFile(join(en.outDir, 'ask-index.json'), 'utf8')).embedding,
@@ -357,6 +359,88 @@ describe('ask-my-site/docusaurus', () => {
     expect(setGlobalData).toHaveBeenLastCalledWith(
       expect.objectContaining({ endpoint: 'https://api.example.com/ask' }),
     );
+  });
+
+  it('writes llms.txt, llms-full.txt and a .md per indexed page into the build', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const s = await site({ baseUrl: '/docs/' });
+    const context = {
+      ...s.context,
+      siteConfig: { ...s.context.siteConfig, url: 'https://acme.dev', tagline: 'Docs for Acme.' },
+    };
+    await askMySite(context, { embeddingModel: mockEmbeddingModel(), mcp: '/api/mcp' }).postBuild(
+      s,
+    );
+    const llms = await readFile(join(s.outDir, 'llms.txt'), 'utf8');
+    expect(llms.split('\n').slice(0, 3)).toEqual(['# Acme Docs', '', '> Docs for Acme.']);
+    expect(llms).toContain('- [Setup](https://acme.dev/docs/guides/setup.md)');
+    expect(llms).toContain(
+      'MCP, with search, fetch and list_pages tools: https://acme.dev/api/mcp',
+    );
+    // Excluded and listing pages are no more in it than in the index.
+    expect(llms).not.toMatch(/tags|Blog list/i);
+    const setup = await readFile(join(s.outDir, 'guides/setup.md'), 'utf8');
+    expect(setup).toBe(
+      '> From Acme Docs. Every page, as Markdown: https://acme.dev/docs/llms.txt\n\n# Setup\n\n## Install\n\nRun the installer.\n',
+    );
+    expect(existsSync(join(s.outDir, 'index.md'))).toBe(true);
+    expect(await readFile(join(s.outDir, 'llms-full.txt'), 'utf8')).toContain(
+      'Source: https://acme.dev/docs/guides/setup\n',
+    );
+  });
+
+  it('leaves the llms files to docusaurus-plugin-llms, and writes none with llmsTxt: false', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const s = await site();
+    await askMySite(s.context, { embeddingModel: mockEmbeddingModel() }).postBuild({
+      ...s,
+      plugins: [
+        { name: 'docusaurus-plugin-content-docs' },
+        { name: 'docusaurus-plugin-llms', options: { generateMarkdownFiles: false } },
+      ],
+    });
+    expect(existsSync(join(s.outDir, 'llms.txt'))).toBe(false);
+    expect(existsSync(join(s.outDir, 'llms-full.txt'))).toBe(false);
+    expect(existsSync(join(s.outDir, 'guides/setup.md'))).toBe(true);
+    expect(log).toHaveBeenCalledWith(
+      '[ask-my-site] docusaurus-plugin-llms writes llms.txt, so ask-my-site does not.',
+    );
+
+    const clean = await site({ locale: 'fr' });
+    await askMySite(clean.context, {
+      embeddingModel: mockEmbeddingModel(),
+      llmsTxt: false,
+    }).postBuild(clean);
+    expect(existsSync(join(clean.outDir, 'llms.txt'))).toBe(false);
+    expect(existsSync(join(clean.outDir, 'guides/setup.md'))).toBe(false);
+  });
+
+  it('knows which llms files each llms plugin writes, from its options', () => {
+    const owners = (name: string, options?: unknown) =>
+      Object.fromEntries(llmsOwners([{ name, options }]));
+    expect(owners('docusaurus-plugin-llms')).toEqual({
+      index: 'docusaurus-plugin-llms',
+      full: 'docusaurus-plugin-llms',
+    });
+    expect(
+      owners('docusaurus-plugin-llms', { generateMarkdownFiles: true, generateLLMsFullTxt: false }),
+    ).toEqual({
+      index: 'docusaurus-plugin-llms',
+      markdown: 'docusaurus-plugin-llms',
+    });
+    expect(owners('docusaurus-plugin-llms-txt')).toEqual({
+      index: 'docusaurus-plugin-llms-txt',
+      markdown: 'docusaurus-plugin-llms-txt',
+    });
+    expect(
+      owners('docusaurus-plugin-llms-txt', {
+        content: { enableMarkdownFiles: false, enableLlmsFullTxt: true },
+      }),
+    ).toEqual({ index: 'docusaurus-plugin-llms-txt', full: 'docusaurus-plugin-llms-txt' });
+    expect(owners('copy-page-button-plugin', { generateMarkdownRoutes: true })).toEqual({
+      markdown: 'copy-page-button-plugin',
+    });
+    expect(owners('copy-page-button-plugin')).toEqual({});
   });
 
   it('resolves the MCP endpoint against the site URL, for <AskMySiteMcp />', async () => {

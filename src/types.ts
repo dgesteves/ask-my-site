@@ -12,6 +12,11 @@ export interface SourceDocument {
   /** Human-readable title, shown on citations. */
   title: string;
   /**
+   * A one-line summary: the frontmatter `description` or the page's `<meta name="description">`.
+   * Not indexed; `llms.txt` lists it after the page's link.
+   */
+  description?: string;
+  /**
    * Markdown or plain text. ATX headings (`#` to `######`) drive chunk boundaries and become the
    * anchors citations deep-link to.
    */
