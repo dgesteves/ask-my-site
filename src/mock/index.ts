@@ -1,5 +1,5 @@
 /**
- * ask-my-site/mock: deterministic stand-ins for the embedding and language models, so the whole
+ * ondocs/mock: deterministic stand-ins for the embedding and language models, so the whole
  * pipeline (index, retrieval, streaming, citations) runs without an API key.
  *
  * - `mockEmbeddingModel` hashes words and word pairs into a fixed-size vector (feature hashing).
@@ -61,7 +61,7 @@ export function hashEmbedding(text: string, dimensions: number): number[] {
 export function mockEmbeddingModel(options: MockEmbeddingModelOptions = {}): MockEmbeddingModelV4 {
   const dimensions = options.dimensions ?? 512;
   return new MockEmbeddingModelV4({
-    provider: 'ask-my-site',
+    provider: 'ondocs',
     modelId: `mock-hash-${String(dimensions)}`,
     maxEmbeddingsPerCall: 2048,
     supportsParallelCalls: true,
@@ -241,7 +241,7 @@ function cite(unit: Pick<Unit, 'text' | 'source' | 'attachment'>, withCitation: 
   return `${unit.text.replace(/[:;,]$/, '.')}${citation}`;
 }
 
-/** Whether `text` starts by defining `subject`: "ask-my-site is …". */
+/** Whether `text` starts by defining `subject`: "ondocs is …". */
 function definesSubject(text: string, subject: string): boolean {
   const start = text
     .toLowerCase()
@@ -481,7 +481,7 @@ export function mockStandaloneQuestion(prompt: string): string | null {
  */
 export function mockLanguageModel(options: MockLanguageModelOptions = {}): MockLanguageModelV4 {
   return new MockLanguageModelV4({
-    provider: 'ask-my-site',
+    provider: 'ondocs',
     modelId: 'mock-extractive',
     doGenerate: ({ prompt }) => {
       const asked = promptText(prompt);

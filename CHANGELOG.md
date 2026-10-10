@@ -1,4 +1,6 @@
-# ask-my-site
+# ondocs
+
+Until 0.6.0 this package was published as `ask-my-site`. Its entries below keep the links and names of that time.
 
 ## 0.6.0
 

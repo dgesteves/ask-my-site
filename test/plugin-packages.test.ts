@@ -1,5 +1,5 @@
-// The packages under the names people search for, docusaurus-plugin-ask-my-site and
-// starlight-ask-my-site: each re-exports one entry of ask-my-site, at its version, with the peer
+// The packages under the names people search for, docusaurus-plugin-ondocs and
+// starlight-ondocs: each re-exports one entry of ondocs, at its version, with the peer
 // dependencies that entry needs. CI builds a fresh site with each (scripts/consumer-site.mjs).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,13 +22,13 @@ const main = manifest('package.json');
 
 const PACKAGES = [
   {
-    dir: 'packages/docusaurus-plugin-ask-my-site',
-    entry: 'ask-my-site/docusaurus',
+    dir: 'packages/docusaurus-plugin-ondocs',
+    entry: 'ondocs/docusaurus',
     keywords: ['docusaurus', 'docusaurus-plugin', 'ask-ai'],
   },
   {
-    dir: 'packages/starlight-ask-my-site',
-    entry: 'ask-my-site/starlight',
+    dir: 'packages/starlight-ondocs',
+    entry: 'ondocs/starlight',
     // The Astro integrations library finds packages by withastro or astro-integration, and files
     // them by keyword: utility is Utilities, ui is CSS + UI.
     keywords: ['starlight', 'starlight-plugin', 'withastro', 'astro-integration', 'utility', 'ui'],
@@ -38,7 +38,7 @@ const PACKAGES = [
 describe.each(PACKAGES)('$dir', ({ dir, entry, keywords }) => {
   const pkg = manifest(`${dir}/package.json`);
 
-  it('re-exports its entry of ask-my-site, default and named, in JavaScript and types', () => {
+  it('re-exports its entry of ondocs, default and named, in JavaScript and types', () => {
     for (const file of ['index.js', 'index.d.ts']) {
       const text = read(`${dir}/${file}`);
       expect(text).toContain(`export { default } from '${entry}';`);
@@ -47,14 +47,14 @@ describe.each(PACKAGES)('$dir', ({ dir, entry, keywords }) => {
     expect(pkg.files).toEqual(['index.js', 'index.d.ts']);
   });
 
-  it('is at ask-my-site’s version, and depends on that exact version', () => {
+  it('is at ondocs’s version, and depends on that exact version', () => {
     expect(pkg.version).toBe(main.version);
-    expect(pkg.dependencies).toEqual({ 'ask-my-site': 'workspace:*' });
+    expect(pkg.dependencies).toEqual({ ondocs: 'workspace:*' });
     const fixed = (JSON.parse(read('.changeset/config.json')) as { fixed: string[][] }).fixed;
-    expect(fixed).toContainEqual(expect.arrayContaining(['ask-my-site', pkg.name]));
+    expect(fixed).toContainEqual(expect.arrayContaining(['ondocs', pkg.name]));
   });
 
-  it('asks for the peers its entry needs, with ask-my-site’s ranges', () => {
+  it('asks for the peers its entry needs, with ondocs’s ranges', () => {
     for (const [name, range] of Object.entries(pkg.peerDependencies)) {
       expect([name, range]).toEqual([name, main.peerDependencies[name]]);
     }
@@ -68,8 +68,8 @@ describe.each(PACKAGES)('$dir', ({ dir, entry, keywords }) => {
   });
 });
 
-it('tells Docusaurus users the plugin’s full name, as the shorthand finds ask-my-site itself', () => {
-  expect(read('packages/docusaurus-plugin-ask-my-site/README.md')).toContain(
-    "plugins: ['docusaurus-plugin-ask-my-site']",
+it('tells Docusaurus users the plugin’s full name, as the shorthand finds ondocs itself', () => {
+  expect(read('packages/docusaurus-plugin-ondocs/README.md')).toContain(
+    "plugins: ['docusaurus-plugin-ondocs']",
   );
 });

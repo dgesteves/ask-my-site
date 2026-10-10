@@ -5,11 +5,11 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import type { AstroIntegration } from 'astro';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import askMySiteAstro from '../src/astro';
+import ondocsAstro from '../src/astro';
 import { routeHandlers, serve, type RouteModule } from '../src/astro/route';
 import { buildIndex, serializeIndexFile, type SourceDocument } from '../src';
 import { configLocales } from '../src/cli/init';
-import askMySiteDocusaurus, { type AskMySiteGlobalData } from '../src/docusaurus';
+import ondocsDocusaurus, { type OndocsGlobalData } from '../src/docusaurus';
 import { mountWithLoader } from '../src/embed/mount';
 import { mockLanguageModel } from '../src/mock';
 import { useAsk } from '../src/react';
@@ -92,7 +92,7 @@ describe('useAsk', () => {
 describe('the Docusaurus plugin', () => {
   const data = (currentLocale: string) => {
     const setGlobalData = vi.fn();
-    askMySiteDocusaurus(
+    ondocsDocusaurus(
       {
         siteDir: '/site',
         siteConfig: { title: 'Acme' },
@@ -113,7 +113,7 @@ describe('the Docusaurus plugin', () => {
         },
       },
     ).contentLoaded({ actions: { setGlobalData } });
-    return setGlobalData.mock.calls[0]?.[0] as AskMySiteGlobalData;
+    return setGlobalData.mock.calls[0]?.[0] as OndocsGlobalData;
   };
 
   it('picks the build’s locale: its options over the dialog’s, and the locale to send', () => {
@@ -160,7 +160,7 @@ describe('the Astro and Starlight page script', () => {
   }
 
   const integration = () =>
-    askMySiteAstro({
+    ondocsAstro({
       embedding: 'none',
       dialog: {
         title: 'Ask Acme',
@@ -234,7 +234,7 @@ describe('the script embed’s button', () => {
       { labels: { launcher: 'Demander', controlKey: 'Strg' } },
       () => new Promise(() => undefined),
     );
-    const button = document.querySelector('.ask-my-site-launcher');
+    const button = document.querySelector('.ondocs-launcher');
     expect(button?.textContent).toMatch(/^✦ Demander(Strg I|⌘I)$/);
     mounted.unmount();
   });

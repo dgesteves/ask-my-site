@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
-import 'ask-my-site/react/styles.css';
+import 'ondocs/react/styles.css';
 import './globals.css';
 
 import { Ask } from '../components/ask';
@@ -15,13 +15,13 @@ import { SITE_URL } from '../lib/site';
 const description =
   'Make your docs answerable by people and by agents, from one static index: a cited Ask box, an MCP server and llms.txt, on your own function and key, with no vector database and no vendor. Agent traffic costs you no model tokens.';
 
-const title = 'ask-my-site: make your docs answerable by people and by agents';
+const title = 'ondocs: make your docs answerable by people and by agents';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: title, template: '%s · ask-my-site' },
+  title: { default: title, template: '%s · ondocs' },
   description,
-  applicationName: 'ask-my-site',
+  applicationName: 'ondocs',
   authors: [{ name: 'Diogo Esteves', url: 'https://github.com/dgesteves' }],
   keywords: [
     'Ask AI',
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     'BM25',
     'hybrid search',
   ],
-  openGraph: { type: 'website', siteName: 'ask-my-site', title, description, url: '/' },
+  openGraph: { type: 'website', siteName: 'ondocs', title, description, url: '/' },
   twitter: { card: 'summary_large_image', title, description },
 };
 

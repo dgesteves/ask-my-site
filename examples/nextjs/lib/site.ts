@@ -1,12 +1,12 @@
-import pkg from 'ask-my-site/package.json';
+import pkg from 'ondocs/package.json';
 
 export const SITE_URL = 'https://ask-my-site-demo.vercel.app';
 /** The docs as an MCP server for agents: app/api/mcp/route.ts. */
 export const MCP_URL = `${SITE_URL}/api/mcp`;
-export const GITHUB_URL = 'https://github.com/dgesteves/ask-my-site';
-export const NPM_URL = 'https://www.npmjs.com/package/ask-my-site';
+export const GITHUB_URL = 'https://github.com/dgesteves/ondocs';
+export const NPM_URL = 'https://www.npmjs.com/package/ondocs';
 export const VERSION: string = pkg.version;
-export const INSTALL = 'npm i ask-my-site';
+export const INSTALL = 'npm i ondocs';
 
 /**
  * Questions offered in the dialog and on the home page. Each one is checked against the mock

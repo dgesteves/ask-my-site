@@ -22,7 +22,7 @@ describe('the README on npm', () => {
         }),
       ) as { filename: string }[];
       const filename = packed[0]?.filename;
-      expect(filename).toBeTypeOf('string');
+      expect(filename).toMatch(/^ondocs-\d+\.\d+\.\d+\.tgz$/);
       execFileSync('tar', [
         '-xzf',
         path.join(dir, String(filename)),

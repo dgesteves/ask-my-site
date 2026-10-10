@@ -8,7 +8,7 @@ import { defineConfig, type UserConfig } from 'tsdown';
  * to inject itself.
  */
 const cssAsText: NonNullable<UserConfig['plugins']> = {
-  name: 'ask-my-site:css-as-text',
+  name: 'ondocs:css-as-text',
   resolveId: {
     filter: { id: /\.css$/ },
     handler: (source, importer) => (importer ? `${resolve(dirname(importer), source)}?text` : null),
@@ -38,8 +38,11 @@ export default defineConfig([
       cli: 'src/cli/bin.ts',
       'docusaurus/index': 'src/docusaurus/index.ts',
       // The plugin finds its theme next to itself, and Docusaurus resolves theme components by
-      // file name: dist/docusaurus/theme/Root.js, AskMySite.js and AskMySiteMcp.js.
+      // file name: dist/docusaurus/theme/Root.js, Ondocs.js and OndocsMcp.js, and AskMySite.js
+      // and AskMySiteMcp.js, their names from before ask-my-site became ondocs.
       'docusaurus/theme/Root': 'src/docusaurus/theme/Root.tsx',
+      'docusaurus/theme/Ondocs': 'src/docusaurus/theme/Ondocs.tsx',
+      'docusaurus/theme/OndocsMcp': 'src/docusaurus/theme/OndocsMcp.tsx',
       'docusaurus/theme/AskMySite': 'src/docusaurus/theme/AskMySite.tsx',
       'docusaurus/theme/AskMySiteMcp': 'src/docusaurus/theme/AskMySiteMcp.tsx',
       'astro/index': 'src/astro/index.ts',
@@ -51,7 +54,7 @@ export default defineConfig([
     // Provided by the Docusaurus site at build time: its modules and theme components.
     // And by the Astro site: the module the integration generates for its routes, and Astro's own.
     deps: {
-      neverBundle: [/^@docusaurus\//, /^@theme(-init|-original)?\//, /^virtual:ask-my-site\//],
+      neverBundle: [/^@docusaurus\//, /^@theme(-init|-original)?\//, /^virtual:ondocs\//],
     },
     format: 'esm',
     // `node` only governs how built-ins resolve. The core, server, react, mock and embed entries
@@ -64,7 +67,7 @@ export default defineConfig([
     banner: ({ fileName }) => {
       // React Server Components need the directive at the top of the emitted client entry.
       if (fileName === 'react.js') return { js: "'use client';" };
-      // The plugin's types bring the `@theme/AskMySite` declaration, for a site's swizzled Root.
+      // The plugin's types bring the `@theme/Ondocs` declaration, for a site's swizzled Root.
       if (fileName === 'docusaurus/index.d.ts') {
         return { dts: '/// <reference path="./theme.d.ts" />' };
       }

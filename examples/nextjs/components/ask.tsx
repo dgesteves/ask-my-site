@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 
-const OPEN_EVENT = 'ask-my-site:open';
+const OPEN_EVENT = 'ondocs:open';
 
 /** Opens the dialog from anywhere on the page. */
 export function openAsk(): void {

@@ -13,24 +13,24 @@ Every setup has the same two halves: an index built with your site, and an endpo
 - **Docusaurus.** One line in `docusaurus.config.ts`: the plugin builds the index and adds the dialog. See [Docusaurus](/integrations/docusaurus/).
 - **Astro or Starlight.** One plugin or integration in `astro.config.mjs`, which builds the index and adds the dialog. See [Astro and Starlight](/integrations/astro/).
 - **Next.js or another React app.** Index with the CLI, mount `createAskHandler` as a route, and render `<AskDialog />`. See [Next.js and React](/integrations/nextjs/).
-- **Any other site.** Index the built HTML with the CLI, write the endpoint with `npx ask-my-site init`, and add one script tag. See [Script tag](/integrations/script-tag/).
+- **Any other site.** Index the built HTML with the CLI, write the endpoint with `npx ondocs init`, and add one script tag. See [Script tag](/integrations/script-tag/).
 
 ## Install
 
 Install the package with the Vercel AI SDK and a model provider. The two packages the dialog is built on, `@radix-ui/react-dialog` and `cmdk`, are optional peer dependencies: leave them out if you only deploy the endpoint.
 
 ```sh
-npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+npm i ondocs ai @ai-sdk/openai @radix-ui/react-dialog cmdk
 ```
 
-ask-my-site needs Node.js 22.12 or later to build the index. The endpoint itself uses Web APIs only, so it also runs on Bun, Deno and Cloudflare Workers.
+ondocs needs Node.js 22.12 or later to build the index. The endpoint itself uses Web APIs only, so it also runs on Bun, Deno and Cloudflare Workers.
 
 ## Build the index
 
 Point the CLI at your content. It reads Markdown, MDX and HTML, splits pages at every heading, embeds the chunks and writes `ask-index.json`:
 
 ```sh
-npx ask-my-site index ./docs --base-url /docs -e openai:text-embedding-3-small --dimensions 512
+npx ondocs index ./docs --base-url /docs -e openai:text-embedding-3-small --dimensions 512
 ```
 
 With the Docusaurus, Astro or Starlight plugin you skip this step: the plugin indexes the built site after every build.
@@ -41,7 +41,7 @@ The endpoint is one function. It takes a Web `Request` and returns a streaming `
 
 ```ts
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler } from 'ask-my-site/server';
+import { createAskHandler } from 'ondocs/server';
 import index from './ask-index.json';
 
 export const POST = createAskHandler({
@@ -51,16 +51,16 @@ export const POST = createAskHandler({
 });
 ```
 
-`npx ask-my-site init` writes this for your host, with a rate limit and a daily budget: Vercel, Netlify, Cloudflare, or a Cloudflare Worker with Workers AI and no API key for a site on GitHub Pages. An Astro site with an SSR adapter needs nothing: the integration serves it. See [Deploying](/guides/deployment/).
+`npx ondocs init` writes this for your host, with a rate limit and a daily budget: Vercel, Netlify, Cloudflare, or a Cloudflare Worker with Workers AI and no API key for a site on GitHub Pages. An Astro site with an SSR adapter needs nothing: the integration serves it. See [Deploying](/guides/deployment/).
 
 ## Add the dialog
 
 In a React app, render the dialog once near the root and import its two stylesheets:
 
 ```tsx
-import { AskDialog } from 'ask-my-site/react';
-import 'ask-my-site/react/styles.css';
-import 'ask-my-site/embed/launcher.css';
+import { AskDialog } from 'ondocs/react';
+import 'ondocs/react/styles.css';
+import 'ondocs/embed/launcher.css';
 
 <AskDialog launcher suggestions={['How do I install it?']} />;
 ```
@@ -69,4 +69,4 @@ import 'ask-my-site/embed/launcher.css';
 
 ## Try it without an API key
 
-Mock mode runs the whole pipeline offline: a deterministic embedding model and a scripted model that answers by quoting the best-matching sentences, with citations. Build with `-e mock` and serve the endpoint locally with `npx ask-my-site dev`. [Try it locally](/get-started/local-development/) walks through it.
+Mock mode runs the whole pipeline offline: a deterministic embedding model and a scripted model that answers by quoting the best-matching sentences, with citations. Build with `-e mock` and serve the endpoint locally with `npx ondocs dev`. [Try it locally](/get-started/local-development/) walks through it.

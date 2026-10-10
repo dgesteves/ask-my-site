@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startOpenAIStub } from '../scripts/openai-stub.mjs';
 
 import { main } from '../src/cli/main';
-import askMySite from '../src/docusaurus';
+import ondocs from '../src/docusaurus';
 import { parseIndexFile } from '../src/index-file';
 import { embeddingFromSpec, EmbeddingSpecError } from '../src/node/embedding';
 import { importOptional } from '../src/node/optional';
@@ -26,7 +26,7 @@ vi.mock('../src/node/optional', async (importOriginal) => {
 
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'ask-my-site-embedding-'));
+  root = await mkdtemp(join(tmpdir(), 'ondocs-embedding-'));
   vi.stubEnv('OPENAI_API_KEY', '');
   vi.stubEnv('AI_GATEWAY_API_KEY', '');
   vi.stubEnv('OPENAI_BASE_URL', undefined);
@@ -136,8 +136,8 @@ describe('the Docusaurus plugin under jiti', () => {
       const [plugin, built] = process.argv.slice(1);
       const { outDir, routesPaths, context } = JSON.parse(built);
       const load = require('jiti')(plugin, { cache: false, requireCache: false, interopDefault: true });
-      const askMySite = load(plugin);
-      (askMySite.default ?? askMySite)(context, {})
+      const ondocs = load(plugin);
+      (ondocs.default ?? ondocs)(context, {})
         .postBuild({ outDir, routesPaths })
         .catch((error) => { console.error(String(error.stack)); process.exitCode = 1; });`;
     const stub = await startOpenAIStub();
@@ -209,7 +209,7 @@ describe('the plugins’ embedding options', () => {
     const requests = stubEmbeddings(8);
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     const s = await site();
-    await askMySite(s.context, {
+    await ondocs(s.context, {
       embedding: 'openai:text-embedding-3-large',
       dimensions: 8,
       embeddingProviderOptions: { openai: { user: 'docs-build' } },
@@ -224,12 +224,12 @@ describe('the plugins’ embedding options', () => {
       dimensions: 8,
     });
 
-    await askMySite(s.context, { embedding: 'mock:32' }).postBuild(s);
+    await ondocs(s.context, { embedding: 'mock:32' }).postBuild(s);
     expect((await readIndex()).embedding).toEqual({ model: 'mock-hash-32', dimensions: 32 });
     // An explicit keyword-only index, with the key set and no warning. (The builds share a
     // folder, as real ones do not, so the llms files the first one wrote are left out.)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    await askMySite(s.context, { embedding: 'none', llmsTxt: false }).postBuild(s);
+    await ondocs(s.context, { embedding: 'none', llmsTxt: false }).postBuild(s);
     expect((await readIndex()).embedding).toBeNull();
     expect(warn).not.toHaveBeenCalled();
   });
@@ -239,26 +239,26 @@ describe('the plugins’ embedding options', () => {
     const requests = stubEmbeddings(8);
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     const s = await site();
-    await askMySite(s.context, {}).postBuild(s);
+    await ondocs(s.context, {}).postBuild(s);
     expect(requests.at(-1)?.body).toMatchObject({
       model: 'text-embedding-3-small',
       dimensions: 512,
     });
 
-    await askMySite(s.context, { dimensions: 1536 }).postBuild(s);
+    await ondocs(s.context, { dimensions: 1536 }).postBuild(s);
     expect(requests.at(-1)?.body).toMatchObject({ dimensions: 1536 });
-    await askMySite(s.context, {
+    await ondocs(s.context, {
       embeddingProviderOptions: { openai: { dimensions: 256 } },
     }).postBuild(s);
     expect(requests.at(-1)?.body).toMatchObject({ dimensions: 256 });
     // A model you name keeps its own size unless you give one.
-    await askMySite(s.context, { embedding: 'openai:text-embedding-3-large' }).postBuild(s);
+    await ondocs(s.context, { embedding: 'openai:text-embedding-3-large' }).postBuild(s);
     expect(requests.at(-1)?.body).not.toHaveProperty('dimensions');
 
     // Through AI Gateway as well, when only its key is set.
     vi.stubEnv('OPENAI_API_KEY', '');
     vi.stubEnv('AI_GATEWAY_API_KEY', 'gateway-test');
-    await askMySite(s.context, {}).postBuild(s);
+    await ondocs(s.context, {}).postBuild(s);
     expect(requests.at(-1)?.body).toMatchObject({
       providerOptions: { openai: { dimensions: 512 } },
     });
@@ -266,15 +266,15 @@ describe('the plugins’ embedding options', () => {
 
   it('reject contradictory or unknown options when the plugin is created', async () => {
     const { context } = await site();
-    expect(() => askMySite(context, { embedding: 'mock', embeddingModel: null })).toThrow(
+    expect(() => ondocs(context, { embedding: 'mock', embeddingModel: null })).toThrow(
       'pass `embedding` or `embeddingModel`, not both',
     );
-    expect(() => askMySite(context, { embeddingModel: null, dimensions: 512 })).toThrow(
+    expect(() => ondocs(context, { embeddingModel: null, dimensions: 512 })).toThrow(
       '`dimensions` applies to `embedding` or the default model',
     );
-    expect(() =>
-      askMySite(context, { embedding: 'openai-text-embedding-3-small' as 'none' }),
-    ).toThrow("Unknown embedding: 'openai-text-embedding-3-small'. Use openai:<model>");
+    expect(() => ondocs(context, { embedding: 'openai-text-embedding-3-small' as 'none' })).toThrow(
+      "Unknown embedding: 'openai-text-embedding-3-small'. Use openai:<model>",
+    );
   });
 
   it('fail the build, with the real error, when OPENAI_API_KEY is set but the provider cannot load', async () => {
@@ -282,15 +282,15 @@ describe('the plugins’ embedding options', () => {
     const s = await site();
 
     vi.mocked(importOptional).mockResolvedValueOnce(null);
-    await expect(askMySite(s.context, {}).postBuild(s)).rejects.toThrow(
-      'ask-my-site: OPENAI_API_KEY is set, so the default embedding, openai:text-embedding-3-small, ' +
+    await expect(ondocs(s.context, {}).postBuild(s)).rejects.toThrow(
+      'ondocs: OPENAI_API_KEY is set, so the default embedding, openai:text-embedding-3-small, ' +
         "needs @ai-sdk/openai, which is not installed: npm i @ai-sdk/openai. Or set `embedding: 'none'`",
     );
 
     vi.mocked(importOptional).mockRejectedValueOnce(
       new TypeError("Cannot read properties of undefined (reading 'object')"),
     );
-    await expect(askMySite(s.context, {}).postBuild(s)).rejects.toThrow(
+    await expect(ondocs(s.context, {}).postBuild(s)).rejects.toThrow(
       "could not load @ai-sdk/openai: TypeError: Cannot read properties of undefined (reading 'object')",
     );
   });
@@ -303,13 +303,13 @@ describe('the plugins’ embedding options', () => {
     vi.stubEnv('AI_GATEWAY_API_KEY', 'gateway-test');
     vi.mocked(importOptional).mockResolvedValueOnce(null);
     const s = await site();
-    await askMySite(s.context, {}).postBuild(s);
+    await ondocs(s.context, {}).postBuild(s);
     expect(warn.mock.calls[0]?.[0]).toContain('Embedding through AI Gateway instead.');
     expect(requests.at(-1)?.url).toMatch(/\/embedding-model$/);
   });
 });
 
-describe('ask-my-site index --embedding openai:…', () => {
+describe('ondocs index --embedding openai:…', () => {
   it('exits 1 with the real error when @ai-sdk/openai fails to load', async () => {
     await write({ 'content/index.md': '# Home\n\nWelcome.\n' });
     const stderr: string[] = [];

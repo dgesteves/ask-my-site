@@ -30,7 +30,10 @@ export interface AnswerCacheOptions {
   store?: AnswerCacheStore;
   /** How long an answer is kept, in seconds. Default 86 400 (a day). */
   ttlSeconds?: number;
-  /** Prepended to the store's keys. Default `"ask-my-site:answer:"`. */
+  /**
+   * Prepended to the store's keys. Default `"ask-my-site:answer:"`, the name from before ondocs,
+   * so a shared cache keeps its answers across the upgrade.
+   */
   prefix?: string;
 }
 
@@ -118,7 +121,7 @@ export interface UpstashRedisCacheLike {
 
 /**
  * An answer cache in Redis through `@upstash/redis`, shared by every instance of your app.
- * ask-my-site does not depend on Upstash; you pass in the client you configured.
+ * ondocs does not depend on Upstash; you pass in the client you configured.
  *
  * ```ts
  * answerCache: { store: upstashAnswerCache(Redis.fromEnv()) }

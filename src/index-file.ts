@@ -3,9 +3,13 @@
  *
  * It is designed to be committed. Serialization is deterministic (sorted documents, no
  * timestamps) and writes one chunk per line, so a content edit is a small, reviewable diff and
- * `ask-my-site index --check` can fail CI when the file is stale.
+ * `ondocs index --check` can fail CI when the file is stale.
  */
 
+/**
+ * The format's id. It keeps the name from before ondocs, so an index built on either side of the
+ * rename is read by an endpoint on the other.
+ */
 export const INDEX_FORMAT = 'ask-my-site/index@1';
 
 export interface IndexDocument {
@@ -55,7 +59,7 @@ export class AskIndexError extends Error {
 }
 
 function fail(path: string, expected: string): never {
-  throw new AskIndexError(`Invalid ask-my-site index: \`${path}\` must be ${expected}.`);
+  throw new AskIndexError(`Invalid ondocs index: \`${path}\` must be ${expected}.`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -73,7 +77,7 @@ export function validateIndexFile(value: unknown): AskIndexFile {
   if (value.format !== INDEX_FORMAT) {
     throw new AskIndexError(
       `Unsupported index format ${JSON.stringify(value.format)}; expected "${INDEX_FORMAT}". ` +
-        'Rebuild it with this version of ask-my-site.',
+        'Rebuild it with this version of ondocs.',
     );
   }
   if (typeof value.contentHash !== 'string') fail('contentHash', 'a string');

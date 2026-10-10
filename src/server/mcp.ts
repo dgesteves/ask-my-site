@@ -78,7 +78,7 @@ export interface McpHandlerOptions {
    * own host. `false` keeps the URLs as the index has them.
    */
   siteUrl?: string | false;
-  /** The server's name in `initialize`, which clients show. Default `"ask-my-site"`. */
+  /** The server's name in `initialize`, which clients show. Default `"ondocs"`. */
   name?: string;
   /** Instructions for the agent, sent on `initialize`. Default: how to use the tools. */
   instructions?: string;
@@ -192,7 +192,7 @@ export function createMcpHandler(
   const reportError =
     options.onError ??
     ((error: unknown) => {
-      console.error('[ask-my-site]', error);
+      console.error('[ondocs]', error);
     });
   const rateLimit =
     options.rateLimit === undefined
@@ -209,7 +209,7 @@ export function createMcpHandler(
   const getIndex = indexLoader(options.index, options.embeddingModel);
   const tools = mcpTools(siteName, maxQueryLength);
   const serverInfo = {
-    name: options.name ?? 'ask-my-site',
+    name: options.name ?? 'ondocs',
     title: siteName === 'this site' ? 'Docs search' : `Search ${siteName}`,
     version,
   };

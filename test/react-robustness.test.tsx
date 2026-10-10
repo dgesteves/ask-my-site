@@ -58,8 +58,8 @@ describe('AskAnswer rendering', () => {
       'Before.',
       'After.',
     ]);
-    rerender(<AskAnswer text={'```sh\npnpm add ask-my-site\npnpm'} sources={[]} />);
-    expect(container.querySelector('pre')?.textContent).toBe('pnpm add ask-my-site\npnpm');
+    rerender(<AskAnswer text={'```sh\npnpm add ondocs\npnpm'} sources={[]} />);
+    expect(container.querySelector('pre')?.textContent).toBe('pnpm add ondocs\npnpm');
   });
 
   it('splits an intro line from the list that follows it', () => {

@@ -33,7 +33,10 @@ export interface BudgetOptions {
    * shared by every instance.
    */
   store?: BudgetStore;
-  /** Prepended to the store's keys. Default `"ask-my-site:budget:"`. */
+  /**
+   * Prepended to the store's keys. Default `"ask-my-site:budget:"`, the name from before ondocs,
+   * so a shared store keeps the day's counts across the upgrade.
+   */
   prefix?: string;
   /** What visitors read once the day's budget is spent. */
   message?: string;
@@ -151,7 +154,7 @@ export interface UpstashRedisCounterLike {
 
 /**
  * A budget store in Redis through `@upstash/redis` (or any client with `incrby` and `expire`), so
- * every instance of your app shares one daily budget. ask-my-site does not depend on Upstash; you
+ * every instance of your app shares one daily budget. ondocs does not depend on Upstash; you
  * pass in the client you configured.
  *
  * ```ts

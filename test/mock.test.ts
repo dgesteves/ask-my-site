@@ -92,13 +92,13 @@ describe('extractiveAnswer', () => {
 
   it('answers a "what is" question with the sentence that defines it', () => {
     const text = answer(
-      'What is ask-my-site?',
+      'What is ondocs?',
       sources(
-        ['Demo', '', 'This site uses ask-my-site to answer questions about ask-my-site.'],
-        ['FAQ', 'Why', 'ask-my-site is a self-hosted ask box for documentation sites.'],
+        ['Demo', '', 'This site uses ondocs to answer questions about ondocs.'],
+        ['FAQ', 'Why', 'ondocs is a self-hosted ask box for documentation sites.'],
       ),
     );
-    expect(text).toBe('ask-my-site is a self-hosted ask box for documentation sites. [2]');
+    expect(text).toBe('ondocs is a self-hosted ask box for documentation sites. [2]');
   });
 
   it('quotes a list after the sentence that introduces it, and each item only once', () => {

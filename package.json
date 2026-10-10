@@ -1,5 +1,5 @@
 {
-  "name": "ask-my-site",
+  "name": "ondocs",
   "version": "0.6.0",
   "description": "Make your docs answerable by people and by agents, from one static index: a cited Ask box, an MCP server and llms.txt, on your own function and key, with no vector database and no vendor. Docusaurus and Starlight plugins, Next.js, or one script tag.",
   "keywords": [
@@ -29,11 +29,11 @@
     "ui",
     "utility"
   ],
-  "homepage": "https://github.com/dgesteves/ask-my-site#readme",
-  "bugs": "https://github.com/dgesteves/ask-my-site/issues",
+  "homepage": "https://github.com/dgesteves/ondocs#readme",
+  "bugs": "https://github.com/dgesteves/ondocs/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dgesteves/ask-my-site.git"
+    "url": "git+https://github.com/dgesteves/ondocs.git"
   },
   "license": "MIT",
   "author": "Diogo Esteves (https://github.com/dgesteves)",
@@ -95,7 +95,7 @@
   "unpkg": "./dist/embed.global.js",
   "jsdelivr": "./dist/embed.global.js",
   "bin": {
-    "ask-my-site": "dist/cli.js"
+    "ondocs": "dist/cli.js"
   },
   "files": [
     "dist"

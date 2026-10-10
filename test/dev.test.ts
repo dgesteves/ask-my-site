@@ -16,7 +16,7 @@ import { corpus } from './helpers';
 let root: string;
 const servers: DevServer[] = [];
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'ask-my-site-dev-'));
+  root = await mkdtemp(join(tmpdir(), 'ondocs-dev-'));
 });
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
@@ -59,7 +59,7 @@ const answerOf = (stream: string) =>
     (match) => (JSON.parse(match[1] ?? '{}') as { delta: string }).delta,
   ).join('');
 
-describe('ask-my-site dev', () => {
+describe('ondocs dev', () => {
   it('answers questions from the index, with sources, as the handler streams them', async () => {
     await indexAt('ask-index.json');
     const { server, logs } = await serve('ask-index.json');
@@ -255,7 +255,7 @@ describe('the models dev answers with', () => {
   });
 });
 
-describe('ask-my-site dev on the command line', () => {
+describe('ondocs dev on the command line', () => {
   async function run(args: string[], env: Record<string, string | undefined> = {}) {
     const stdout: string[] = [];
     const stderr: string[] = [];
@@ -307,6 +307,6 @@ describe('ask-my-site dev on the command line', () => {
     expect(mismatch.code).toBe(1);
     expect(mismatch.stderr).toContain('set OPENAI_API_KEY or AI_GATEWAY_API_KEY');
     expect((await run(['--port', 'x'])).code).toBe(2);
-    expect((await run(['--help'])).stdout).toContain('Usage: ask-my-site dev [options]');
+    expect((await run(['--help'])).stdout).toContain('Usage: ondocs dev [options]');
   });
 });

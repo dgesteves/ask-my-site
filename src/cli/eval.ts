@@ -1,4 +1,4 @@
-// `ask-my-site eval`: scores retrieval against questions with known answers, for CI. It runs what
+// `ondocs eval`: scores retrieval against questions with known answers, for CI. It runs what
 // the endpoint runs before the model (embedding, hybrid retrieval and the relevance gate), so it
 // costs one embedding call per question at most, and no model call. Node.js only.
 import { readFile } from 'node:fs/promises';
@@ -14,7 +14,7 @@ import { loadIndex, retrieve, type LoadedIndex, type RetrievalOptions } from '..
 import { devModels, DevError, INDEX_FILES } from './dev';
 import type { CliIO } from './main';
 
-export const EVAL_USAGE = `Usage: ask-my-site eval <questions.yaml> [options]
+export const EVAL_USAGE = `Usage: ondocs eval <questions.yaml> [options]
 
 Scores retrieval against questions whose answers you know: for each question, whether the pages
 it names come first (hit@1) or in the top three (hit@3), and for questions marked unanswerable,
@@ -218,7 +218,7 @@ const LABELS: Record<Metric, string> = {
 
 function printReport(report: EvalReport, io: CliIO): void {
   io.stdout(
-    `ask-my-site eval: ${String(report.results.length)} questions against ${report.index} (${String(report.chunks)} chunks, ${report.retrieval === 'hybrid' ? 'hybrid' : 'keyword-only'} search)`,
+    `ondocs eval: ${String(report.results.length)} questions against ${report.index} (${String(report.chunks)} chunks, ${report.retrieval === 'hybrid' ? 'hybrid' : 'keyword-only'} search)`,
   );
   io.stdout('');
   const width = Math.min(64, Math.max(...report.results.map((result) => result.question.length)));
@@ -257,7 +257,7 @@ function printReport(report: EvalReport, io: CliIO): void {
   }
 }
 
-/** Runs `ask-my-site eval`. Returns the exit code: 0 at or over every threshold, 1 under one, 2 usage. */
+/** Runs `ondocs eval`. Returns the exit code: 0 at or over every threshold, 1 under one, 2 usage. */
 export async function evalCommand(args: string[], io: CliIO): Promise<number> {
   let values: Record<string, string | boolean | undefined>;
   let positionals: string[];

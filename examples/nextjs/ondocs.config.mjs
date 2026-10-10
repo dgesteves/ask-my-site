@@ -1,6 +1,6 @@
 // @ts-check
 import { createOpenAI } from '@ai-sdk/openai';
-import { mockEmbeddingModel } from 'ask-my-site/mock';
+import { mockEmbeddingModel } from 'ondocs/mock';
 
 /**
  * The embedding setup, shared by the CLI (`pnpm index`) and the route handler so the index and
@@ -15,7 +15,7 @@ const shared = {
   // every page in /llms-full.txt. The site curates /llms.txt itself (app/llms.txt/route.ts), in
   // its sidebar's order, so --no-llms-index leaves that one out.
   llmsTxt: {
-    title: 'ask-my-site',
+    title: 'ondocs',
     description:
       'Make your docs answerable by people and by agents, from one static index: a cited Ask box, an MCP server and llms.txt, on your own function and key, with no vector database and no vendor.',
     siteUrl: 'https://ask-my-site-demo.vercel.app',
@@ -23,7 +23,7 @@ const shared = {
   },
 };
 
-/** @type {import('ask-my-site/node').AskConfig} */
+/** @type {import('ondocs/node').AskConfig} */
 const config = process.env.OPENAI_API_KEY
   ? {
       ...shared,

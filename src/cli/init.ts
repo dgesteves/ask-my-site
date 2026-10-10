@@ -1,4 +1,4 @@
-// `ask-my-site init`: writes the ask endpoint, and the MCP endpoint, for a docs site and the host
+// `ondocs init`: writes the ask endpoint, and the MCP endpoint, for a docs site and the host
 // it deploys to. Node.js only. It reads the site's config files to tell the framework and the host
 // apart, never an .env file or a credential, and it deploys nothing.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -29,7 +29,7 @@ import {
 } from './init-templates';
 import type { CliIO } from './main';
 
-export const INIT_USAGE = `Usage: ask-my-site init [options]
+export const INIT_USAGE = `Usage: ondocs init [options]
 
 Writes the ask endpoint (POST /api/ask) and the MCP endpoint (/api/mcp) for your docs site and
 the host it deploys to, with a rate limit, a daily budget, CORS where the endpoint is on another
@@ -255,7 +255,7 @@ function detectSite(p: Project, flags: { out?: string; name?: string; siteUrl?: 
         indexFile: 'ask-index.json',
         indexPath: '/ask-index.json',
         appDir,
-        indexCommand: `npx ask-my-site index ${content} --base-url /docs`,
+        indexCommand: `npx ondocs index ${content} --base-url /docs`,
       },
       url(undefined),
     );
@@ -288,7 +288,7 @@ function detectSite(p: Project, flags: { out?: string; name?: string; siteUrl?: 
       ),
       indexFile: `${out}/ask-index.json`,
       indexPath: '/ask-index.json',
-      indexCommand: `npx ask-my-site index ${out} -o ${out}/ask-index.json`,
+      indexCommand: `npx ondocs index ${out} -o ${out}/ask-index.json`,
     },
     url(foundUrl?.replace(/\/+$/, '')),
   );
@@ -359,7 +359,7 @@ export function wranglerWorkerConfig(
     const mainLine = top.find((line) => /^\s*main\s*=/.test(line));
     if (mainLine && !mainLine.includes(main)) {
       return {
-        error: `${file} has its own entry point (${mainLine.trim()}): call askMySite(request, env) from ${main} in it`,
+        error: `${file} has its own entry point (${mainLine.trim()}): call ondocs(request, env) from ${main} in it`,
       };
     }
     const assets = lines.findIndex((line) => /^\s*\[\s*assets\s*\]\s*$/.test(line));
@@ -390,7 +390,7 @@ export function wranglerWorkerConfig(
   const mainMatch = /"main"\s*:\s*"([^"]*)"/.exec(source);
   if (mainMatch && mainMatch[1] !== main) {
     return {
-      error: `${file} has its own entry point ("main": "${String(mainMatch[1])}"): call askMySite(request, env) from ${main} in it`,
+      error: `${file} has its own entry point ("main": "${String(mainMatch[1])}"): call ondocs(request, env) from ${main} in it`,
     };
   }
   const assets = /"assets"\s*:\s*\{/.exec(source);
@@ -454,7 +454,7 @@ const WITHOUT_KEY =
 
 /** The dependency ranges init writes into a standalone Worker's package.json. */
 const WORKER_VERSIONS: WorkerVersions = {
-  askMySite: `^${version}`,
+  ondocs: `^${version}`,
   ai: '^7.0.0',
   openai: '^4.0.0',
   workersAi: '^4.0.0',
@@ -487,7 +487,7 @@ function sitePackages(site: Site, openai = true): string[] {
   // The plugins embed the pages with OpenAI when OPENAI_API_KEY is set as the site builds; a
   // static site is indexed with npx, and the standalone Worker has a package.json of its own.
   const models = site.kind === 'static' ? [] : openai ? ['ai', '@ai-sdk/openai'] : ['ai'];
-  return ['ask-my-site', ...models, ...dialog];
+  return ['ondocs', ...models, ...dialog];
 }
 
 /**
@@ -506,16 +506,16 @@ function dialogStep(site: Site, endpoint: string | null, embedding?: string): st
   switch (site.kind) {
     case 'docusaurus':
       return option
-        ? `Add the plugin to docusaurus.config: plugins: [['ask-my-site/docusaurus', ${option}]]${withEmbedding}`
-        : "Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']";
+        ? `Add the plugin to docusaurus.config: plugins: [['ondocs/docusaurus', ${option}]]${withEmbedding}`
+        : "Add the plugin to docusaurus.config: plugins: ['ondocs/docusaurus']";
     case 'starlight':
-      return `Add the plugin to Starlight in astro.config: plugins: [askMySite(${option})], from 'ask-my-site/starlight'${withEmbedding}`;
+      return `Add the plugin to Starlight in astro.config: plugins: [ondocs(${option})], from 'ondocs/starlight'${withEmbedding}`;
     case 'astro':
-      return `Add the integration to astro.config: integrations: [askMySite(${option})], from 'ask-my-site/astro'${withEmbedding}`;
+      return `Add the integration to astro.config: integrations: [ondocs(${option})], from 'ondocs/astro'${withEmbedding}`;
     case 'next':
-      return `Render <AskDialog launcher${endpoint ? ` endpoint="${endpoint}"` : ''} /> from 'ask-my-site/react' in your layout, with 'ask-my-site/react/styles.css' and 'ask-my-site/embed/launcher.css'`;
+      return `Render <AskDialog launcher${endpoint ? ` endpoint="${endpoint}"` : ''} /> from 'ondocs/react' in your layout, with 'ondocs/react/styles.css' and 'ondocs/embed/launcher.css'`;
     case 'static':
-      return `Add to your base template: <script src="https://cdn.jsdelivr.net/npm/ask-my-site@${version.split('.').slice(0, 2).join('.')}/dist/embed.global.js" data-endpoint="${endpoint ?? '/api/ask'}" defer></script>`;
+      return `Add to your base template: <script src="https://cdn.jsdelivr.net/npm/ondocs@${version.split('.').slice(0, 2).join('.')}/dist/embed.global.js" data-endpoint="${endpoint ?? '/api/ask'}" defer></script>`;
   }
 }
 
@@ -534,7 +534,7 @@ function planFor(
   const env: Plan['env'] = [];
   const next: string[] = [];
   const key = 'OPENAI_API_KEY';
-  // Where the pages are embedded: by the plugin as the site builds, or by `ask-my-site index`.
+  // Where the pages are embedded: by the plugin as the site builds, or by `ondocs index`.
   const build =
     site.kind === 'next' || site.kind === 'static' ? 'the index build' : 'the site\u2019s build';
   const keyless = 'without it there, the index is keyword-only, which works too';
@@ -757,7 +757,7 @@ async function confirm(io: CliIO, question: string): Promise<boolean> {
   return /^y(es)?$/i.test((await io.prompt(`${question} [y/N] `)).trim());
 }
 
-/** Runs `ask-my-site init`. Returns the exit code: 0 done, 1 something left undone, 2 usage. */
+/** Runs `ondocs init`. Returns the exit code: 0 done, 1 something left undone, 2 usage. */
 export async function init(args: string[], io: CliIO): Promise<number> {
   let flags: ReturnType<typeof parseInitFlags>;
   try {
@@ -781,9 +781,9 @@ export async function init(args: string[], io: CliIO): Promise<number> {
       const packages = install(p, sitePackages(site));
       io.stdout(
         [
-          `${site.label} with ${site.adapter}: nothing to write. The ask-my-site integration serves POST /api/ask and /api/mcp itself, through the adapter, from the index it builds.`,
+          `${site.label} with ${site.adapter}: nothing to write. The ondocs integration serves POST /api/ask and /api/mcp itself, through the adapter, from the index it builds.`,
           '',
-          'Set OPENAI_API_KEY where the site builds and where it runs. Pass route: { model, rateLimit, budget } to askMySite() to change the model or the limits; route: false turns it off.',
+          'Set OPENAI_API_KEY where the site builds and where it runs. Pass route: { model, rateLimit, budget } to ondocs() to change the model or the limits; route: false turns it off.',
           ...(packages ? ['', `Install: ${packages}`] : []),
         ].join('\n'),
       );

@@ -145,7 +145,7 @@ describe('workers-ai:@cf/<model> embeddings', () => {
   describe('from the CLI', () => {
     let cwd: string;
     beforeEach(async () => {
-      cwd = await mkdtemp(join(tmpdir(), 'ask-my-site-workers-ai-'));
+      cwd = await mkdtemp(join(tmpdir(), 'ondocs-workers-ai-'));
       await mkdir(join(cwd, 'docs'));
       await writeFile(join(cwd, 'docs/deploy.md'), '# Deploy\n\nDeploy it to GitHub Pages.\n');
     });
@@ -174,7 +174,7 @@ describe('workers-ai:@cf/<model> embeddings', () => {
     });
   });
 
-  it('are what ask-my-site dev embeds questions with, given the account', async () => {
+  it('are what ondocs dev embeds questions with, given the account', async () => {
     const { index } = await buildIndex({ documents: corpus, embeddingModel: bgeStandIn() });
     const models = await devModels(index, {
       CLOUDFLARE_ACCOUNT_ID: 'a',

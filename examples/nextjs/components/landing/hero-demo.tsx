@@ -1,6 +1,6 @@
 'use client';
 
-import { AskAnswer, citedSourceIds, useAsk, type AskSource } from 'ask-my-site/react';
+import { AskAnswer, citedSourceIds, useAsk, type AskSource } from 'ondocs/react';
 import { useRouter } from 'next/navigation';
 import { useId, useState, type MouseEvent } from 'react';
 
@@ -15,7 +15,7 @@ interface HeroDemoProps {
 }
 
 /**
- * The ask endpoint, inline: `useAsk` and `AskAnswer` from ask-my-site/react, the same pieces the
+ * The ask endpoint, inline: `useAsk` and `AskAnswer` from ondocs/react, the same pieces the
  * dialog is made of, posting to this site's own `/api/ask`.
  */
 export function HeroDemo({ suggestions, initial, mode }: HeroDemoProps) {
@@ -62,7 +62,7 @@ export function HeroDemo({ suggestions, initial, mode }: HeroDemoProps) {
           <Spark size={16} />
         </span>
         <label htmlFor={inputId} className="sr-only">
-          Ask the ask-my-site docs a question
+          Ask the ondocs documentation a question
         </label>
         <input
           id={inputId}

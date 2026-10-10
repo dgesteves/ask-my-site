@@ -23,16 +23,16 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 /**
  * Per site: where its build is, the page to load, the key that opens the dialog, and the budget
  * for the JavaScript the page loads before any interaction, in gzipped KB. The budgets are the
- * framework's own JavaScript plus ask-my-site's launcher, with a little room; the dialog itself
+ * framework's own JavaScript plus ondocs's launcher, with a little room; the dialog itself
  * loads on first use and is not counted. A framework update that grows its own JavaScript can
- * need a budget raised: measure the site without ask-my-site (`docusaurus=<another build>`).
+ * need a budget raised: measure the site without ondocs (`docusaurus=<another build>`).
  */
 const SITES = {
   docusaurus: {
     dir: 'examples/docusaurus/build',
     page: '/getting-started',
     key: 'i',
-    // Docusaurus's own 170 KB, and ask-my-site's launcher (3 KB).
+    // Docusaurus's own 170 KB, and ondocs's launcher (3 KB).
     budget: 178,
   },
   starlight: {
@@ -169,7 +169,7 @@ async function measure(name, dir, baseline) {
         .map((script) => script.textContent ?? ''),
     );
     const inlineBytes = inline.reduce((sum, code) => sum + gzipSync(code, { level: 9 }).length, 0);
-    const launcher = await page.locator('.ask-my-site-launcher').count();
+    const launcher = await page.locator('.ondocs-launcher').count();
     if (baseline) {
       const initial = [...scripts.values()].reduce(
         (total, script) => total + (script.bytes ?? 0),
@@ -193,7 +193,7 @@ async function measure(name, dir, baseline) {
     // Focus a link on the page, to see focus come back to it when the dialog closes.
     await page.evaluate(() => {
       const link = [...document.querySelectorAll('a[href]')].find(
-        (a) => !a.closest('.ask-my-site') && a.getBoundingClientRect().width > 0,
+        (a) => !a.closest('.ondocs') && a.getBoundingClientRect().width > 0,
       );
       link?.setAttribute('data-ask-start', '');
       link?.focus();
@@ -220,7 +220,7 @@ async function measure(name, dir, baseline) {
     );
     let launcherFocusReturned = null;
     if (launcher > 0) {
-      await page.click('.ask-my-site-launcher');
+      await page.click('.ondocs-launcher');
       await page.waitForSelector('.ask-dialog', { timeout: 10_000 });
       await page.waitForFunction(
         () => document.activeElement?.classList.contains('ask-input'),
@@ -232,7 +232,7 @@ async function measure(name, dir, baseline) {
       await page.keyboard.press('Escape');
       await page.waitForSelector('.ask-dialog', { state: 'detached', timeout: 5000 });
       launcherFocusReturned = await focusOn(
-        () => document.activeElement?.classList.contains('ask-my-site-launcher') ?? false,
+        () => document.activeElement?.classList.contains('ondocs-launcher') ?? false,
       );
     }
     await page.unroute('**/*.js');
@@ -266,7 +266,7 @@ const json = args.includes('--json');
 const names = args.filter((arg) => !arg.startsWith('--'));
 const results = [];
 // `docusaurus=examples/docusaurus/build-plain` measures another build of a site, such as one
-// without ask-my-site, for the framework's own JavaScript; it is not opened or checked.
+// without ondocs, for the framework's own JavaScript; it is not opened or checked.
 for (const arg of names.length > 0 ? names : Object.keys(SITES)) {
   const [name = '', dir] = arg.split('=');
   if (!SITES[name])
@@ -278,7 +278,7 @@ else {
   for (const result of results) {
     if (result.baseline) {
       console.log(
-        `${result.site.padEnd(11)} ${String(result.initialKB).padStart(6)} KB without ask-my-site`,
+        `${result.site.padEnd(11)} ${String(result.initialKB).padStart(6)} KB without ondocs`,
       );
       continue;
     }

@@ -1,9 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+
+import type * as astro from '../src/astro';
+import type * as docusaurus from '../src/docusaurus';
+import type * as embed from '../src/embed';
+import type * as starlight from '../src/starlight';
 
 interface Manifest {
+  name?: string;
+  bin?: Record<string, string>;
+  repository?: { url?: string };
+  homepage?: string;
+  bugs?: string;
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
@@ -29,7 +39,7 @@ describe('package.json', () => {
     }
   });
 
-  it('declares what ask-my-site/react imports, and the plugins’ frameworks, as optional peers', () => {
+  it('declares what ondocs/react imports, and the plugins’ frameworks, as optional peers', () => {
     for (const name of [
       'react',
       'react-dom',
@@ -44,10 +54,32 @@ describe('package.json', () => {
     }
   });
 
+  it('is ondocs, with the ondocs command, from github.com/dgesteves/ondocs', () => {
+    expect(manifest.name).toBe('ondocs');
+    expect(manifest.bin).toEqual({ ondocs: 'dist/cli.js' });
+    expect(manifest.repository?.url).toBe('git+https://github.com/dgesteves/ondocs.git');
+    expect(manifest.homepage).toBe('https://github.com/dgesteves/ondocs#readme');
+    expect(manifest.bugs).toBe('https://github.com/dgesteves/ondocs/issues');
+  });
+
   it('makes the script embed what unpkg and jsDelivr serve for the bare package', () => {
-    // https://cdn.jsdelivr.net/npm/ask-my-site@0 serves dist/embed.global.js.
+    // https://cdn.jsdelivr.net/npm/ondocs@0 serves dist/embed.global.js.
     expect(manifest.unpkg).toBe('./dist/embed.global.js');
     expect(manifest.jsdelivr).toBe('./dist/embed.global.js');
     expect(manifest.files).toContain('dist');
+  });
+
+  it('keeps the types’ names from before ondocs, as deprecated aliases', () => {
+    /* eslint-disable @typescript-eslint/no-deprecated */
+    expectTypeOf<astro.AskMySiteOptions>().toEqualTypeOf<astro.OndocsOptions>();
+    expectTypeOf<astro.AskMySiteDialogOptions>().toEqualTypeOf<astro.OndocsDialogOptions>();
+    expectTypeOf<starlight.AskMySiteStarlightOptions>().toEqualTypeOf<starlight.OndocsStarlightOptions>();
+    expectTypeOf<starlight.AskMySiteDialogOptions>().toEqualTypeOf<starlight.OndocsDialogOptions>();
+    expectTypeOf<docusaurus.AskMySiteOptions>().toEqualTypeOf<docusaurus.OndocsOptions>();
+    expectTypeOf<docusaurus.AskMySiteDialogOptions>().toEqualTypeOf<docusaurus.OndocsDialogOptions>();
+    expectTypeOf<docusaurus.AskMySiteGlobalData>().toEqualTypeOf<docusaurus.OndocsGlobalData>();
+    expectTypeOf<embed.AskMySiteDialogOptions>().toEqualTypeOf<embed.OndocsDialogOptions>();
+    expectTypeOf<embed.AskMySiteTheme>().toEqualTypeOf<embed.OndocsTheme>();
+    /* eslint-enable @typescript-eslint/no-deprecated */
   });
 });

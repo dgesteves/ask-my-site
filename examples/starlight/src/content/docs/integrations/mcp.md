@@ -6,15 +6,15 @@ sidebar:
   order: 14
 ---
 
-The index that the Ask box answers from can also be served to agents, such as Claude Code, Cursor, VS Code, ChatGPT and Claude, as an MCP server. `createMcpHandler` from `ask-my-site/server` serves it with three read-only tools: `search`, `fetch` and `list_pages`. The agent brings its own model: the endpoint never calls a language model, and with no embedding model, it calls no model at all.
+The index that the Ask box answers from can also be served to agents, such as Claude Code, Cursor, VS Code, ChatGPT and Claude, as an MCP server. `createMcpHandler` from `ondocs/server` serves it with three read-only tools: `search`, `fetch` and `list_pages`. The agent brings its own model: the endpoint never calls a language model, and with no embedding model, it calls no model at all.
 
 This site serves its own docs this way, at `https://ask-my-site-demo.vercel.app/api/mcp`. To try it in Claude Code:
 
 ```sh
-claude mcp add --transport http ask-my-site https://ask-my-site-demo.vercel.app/api/mcp
+claude mcp add --transport http ondocs https://ask-my-site-demo.vercel.app/api/mcp
 ```
 
-Or add it to [Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=ask-my-site&config=eyJ1cmwiOiJodHRwczovL2Fzay1teS1zaXRlLWRlbW8udmVyY2VsLmFwcC9hcGkvbWNwIn0%3D), [VS Code](vscode:mcp/install?%7B%22name%22%3A%22ask-my-site%22%2C%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fask-my-site-demo.vercel.app%2Fapi%2Fmcp%22%7D) or [Claude](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=ask-my-site&connectorUrl=https%3A%2F%2Fask-my-site-demo.vercel.app%2Fapi%2Fmcp), or in ChatGPT, add a custom MCP server with that URL at chatgpt.com/plugins.
+Or add it to [Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=ondocs&config=eyJ1cmwiOiJodHRwczovL2Fzay1teS1zaXRlLWRlbW8udmVyY2VsLmFwcC9hcGkvbWNwIn0%3D), [VS Code](vscode:mcp/install?%7B%22name%22%3A%22ondocs%22%2C%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fask-my-site-demo.vercel.app%2Fapi%2Fmcp%22%7D) or [Claude](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=ondocs&connectorUrl=https%3A%2F%2Fask-my-site-demo.vercel.app%2Fapi%2Fmcp), or in ChatGPT, add a custom MCP server with that URL at chatgpt.com/plugins.
 
 ## Mount the endpoint
 
@@ -22,7 +22,7 @@ It is a Web-standard `(Request) => Promise<Response>`, like the ask endpoint, an
 
 ```ts
 // app/api/mcp/route.ts
-import { createMcpHandler } from 'ask-my-site/server';
+import { createMcpHandler } from 'ondocs/server';
 import index from '../../../ask-index.json';
 
 const handler = createMcpHandler({ index, siteName: 'the Acme docs' });
@@ -35,7 +35,7 @@ export const OPTIONS = handler;
 
 Pass the same imported `index` to `createAskHandler` and `createMcpHandler`, and it is loaded into memory once for both. MCP clients send JSON-RPC with POST. The handler answers GET and DELETE with a 405, as a server without sessions does, and OPTIONS for browser clients.
 
-For a static site, `npx ask-my-site init` writes it next to the ask endpoint: `api/mcp.ts` on Vercel, `netlify/functions/mcp.mts` on Netlify, `functions/api/mcp.ts` on Cloudflare Pages, or `/api/mcp` in the Worker it writes for a Cloudflare Worker or a GitHub Pages site, each rate-limited on the host's client IP header. On an Astro site with an SSR adapter, the integration serves `/api/mcp` itself. See [Deploying](/guides/deployment/#write-the-endpoint-with-init).
+For a static site, `npx ondocs init` writes it next to the ask endpoint: `api/mcp.ts` on Vercel, `netlify/functions/mcp.mts` on Netlify, `functions/api/mcp.ts` on Cloudflare Pages, or `/api/mcp` in the Worker it writes for a Cloudflare Worker or a GitHub Pages site, each rate-limited on the host's client IP header. On an Astro site with an SSR adapter, the integration serves `/api/mcp` itself. See [Deploying](/guides/deployment/#write-the-endpoint-with-init).
 
 ## The tools
 
@@ -76,19 +76,19 @@ Browsers on other sites get no CORS headers, so they cannot read the answers. Re
 
 Give the Docusaurus or Starlight plugin the endpoint's URL with `mcp`, and a page can show how to add it to Cursor, VS Code, Claude, Claude Code and ChatGPT:
 
-- **Docusaurus:** `['ask-my-site/docusaurus', { mcp: '/api/mcp' }]`, then in an MDX page, `import AskMySiteMcp from '@theme/AskMySiteMcp'` and `<AskMySiteMcp />`.
-- **Astro and Starlight:** `askMySite({ mcp: '/api/mcp' })`, with `site` set, then in an MDX page, `import McpInstall from 'ask-my-site/astro/McpInstall.astro'` and `<McpInstall />`.
-- **React:** `<McpInstall url="https://docs.example.com/api/mcp" name="acme-docs" />` from `ask-my-site/react`.
-- **Anything else:** `mcpInstallLinks({ url, name })` from `ask-my-site` returns the Cursor and VS Code install links, the claude.ai link, the Claude Code command and the JSON for other clients.
+- **Docusaurus:** `['ondocs/docusaurus', { mcp: '/api/mcp' }]`, then in an MDX page, `import OndocsMcp from '@theme/OndocsMcp'` and `<OndocsMcp />`.
+- **Astro and Starlight:** `ondocs({ mcp: '/api/mcp' })`, with `site` set, then in an MDX page, `import McpInstall from 'ondocs/astro/McpInstall.astro'` and `<McpInstall />`.
+- **React:** `<McpInstall url="https://docs.example.com/api/mcp" name="acme-docs" />` from `ondocs/react`.
+- **Anything else:** `mcpInstallLinks({ url, name })` from `ondocs` returns the Cursor and VS Code install links, the claude.ai link, the Claude Code command and the JSON for other clients.
 
 A path is resolved against the site's URL. The name defaults to the site title, as `acme-docs`.
 
 ## Try it locally
 
-`npx ask-my-site dev` serves the index at `http://localhost:8787/api/mcp` as well as the ask endpoint, keyword-only, with the same origin and host checks:
+`npx ondocs dev` serves the index at `http://localhost:8787/api/mcp` as well as the ask endpoint, keyword-only, with the same origin and host checks:
 
 ```sh
-npx ask-my-site dev
+npx ondocs dev
 claude mcp add --transport http docs http://localhost:8787/api/mcp
 ```
 
@@ -101,7 +101,7 @@ claude mcp add --transport http docs http://localhost:8787/api/mcp
 | `embeddingProviderOptions` | none               | As for `createAskHandler`.                                                                                                        |
 | `siteName`                 | `"this site"`      | Names the docs in the tools' descriptions, which the agent reads.                                                                 |
 | `siteUrl`                  | the request's      | The origin to make URLs absolute with, when the endpoint runs on another host. `false` keeps the index's URLs.                    |
-| `name`, `instructions`     | `ask-my-site`      | The server's name, and what it tells the agent about using the tools.                                                             |
+| `name`, `instructions`     | `ondocs`           | The server's name, and what it tells the agent about using the tools.                                                             |
 | `retrieval`                | keyword gate `0.3` | Retrieval settings for `search`; it keeps sections with at least 30% of the query's keyword weight, looser than the ask endpoint. |
 | `rateLimit`                | 60 a minute per IP | Any limiter, or `false`. `rateLimitFailure` works as for `createAskHandler`.                                                      |
 | `budget`                   | none               | `{ requestsPerDay, store }`: tool calls a day.                                                                                    |

@@ -1,7 +1,7 @@
 {
-  "name": "starlight-ask-my-site",
+  "name": "starlight-ondocs",
   "version": "0.6.0",
-  "description": "ask-my-site's Starlight plugin under the name Starlight users search for: a cited Ask AI box, an MCP server and llms.txt for your docs, from one static index, on your own function and key.",
+  "description": "The ondocs Starlight plugin, under the name Starlight users search for: a cited Ask AI box, an MCP server and llms.txt for your docs, from one static index, on your own function and key.",
   "keywords": [
     "starlight",
     "starlight-plugin",
@@ -21,12 +21,12 @@
     "ui",
     "utility"
   ],
-  "homepage": "https://github.com/dgesteves/ask-my-site#readme",
-  "bugs": "https://github.com/dgesteves/ask-my-site/issues",
+  "homepage": "https://github.com/dgesteves/ondocs#readme",
+  "bugs": "https://github.com/dgesteves/ondocs/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dgesteves/ask-my-site.git",
-    "directory": "packages/starlight-ask-my-site"
+    "url": "git+https://github.com/dgesteves/ondocs.git",
+    "directory": "packages/starlight-ondocs"
   },
   "license": "MIT",
   "author": "Diogo Esteves (https://github.com/dgesteves)",
@@ -45,7 +45,7 @@
     "index.d.ts"
   ],
   "dependencies": {
-    "ask-my-site": "workspace:*"
+    "ondocs": "workspace:*"
   },
   "peerDependencies": {
     "@astrojs/starlight": ">=0.32.0",

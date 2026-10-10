@@ -7,12 +7,12 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "api": "ask-my-site dev"
+    "api": "ondocs dev"
   },
   "dependencies": {
     "@astrojs/starlight": "0.42.5",
     "@radix-ui/react-dialog": "^1.1.23",
-    "ask-my-site": "workspace:*",
+    "ondocs": "workspace:*",
     "astro": "7.3.6",
     "cmdk": "^1.1.1",
     "react": "19.3.0",

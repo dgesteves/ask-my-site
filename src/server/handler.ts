@@ -323,7 +323,7 @@ export function createAskHandler(
   const reportError =
     options.onError ??
     ((error: unknown) => {
-      console.error('[ask-my-site]', error);
+      console.error('[ondocs]', error);
     });
   const rateLimit =
     options.rateLimit === undefined

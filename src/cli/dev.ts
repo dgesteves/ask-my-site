@@ -1,4 +1,4 @@
-// `ask-my-site dev`: the ask endpoint on this machine, answering from a built index, so the dialog
+// `ondocs dev`: the ask endpoint on this machine, answering from a built index, so the dialog
 // on a site's dev server has something to post to. Node.js only.
 import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
@@ -18,7 +18,7 @@ import type { RetrievalOptions } from '../search/retrieve';
 import { createAskHandler, createMcpHandler, memoryRateLimit } from '../server';
 import type { CliIO } from './main';
 
-export const DEV_USAGE = `Usage: ask-my-site dev [options]
+export const DEV_USAGE = `Usage: ondocs dev [options]
 
 Serves POST /api/ask on this machine, answering from an index, for the dialog on a site's dev
 server, and the same index as an MCP server at /api/mcp, for your editor's agent. Questions are
@@ -165,7 +165,7 @@ export async function devModels(
       ? `The index was embedded with ${embedding.model}, so questions must be too: set ` +
           `${fromOpenAI ? 'OPENAI_API_KEY or ' : ''}AI_GATEWAY_API_KEY. To try it without a key, ` +
           'rebuild the index with --embedding mock.'
-      : `The index was embedded with ${embedding.model}, which ask-my-site dev cannot load: it ` +
+      : `The index was embedded with ${embedding.model}, which ondocs dev cannot load: it ` +
           'embeds with OpenAI, AI Gateway, Workers AI or the mock model. Serve this index with your own ' +
           'createAskHandler, or rebuild it with --embedding mock to try it.',
   );
@@ -182,7 +182,7 @@ export function findIndexFile(cwd: string, index?: string): string {
   if (file) return file;
   throw new DevError(
     `No index found: looked for ${INDEX_FILES.join(', ')}. Build one with ` +
-      '`ask-my-site index <dir>` (or your site’s build, with the Docusaurus or Astro plugin), ' +
+      '`ondocs index <dir>` (or your site’s build, with the Docusaurus or Astro plugin), ' +
       'or pass --index <file>.',
   );
 }
@@ -358,7 +358,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     // header still carries that name.
     if (!isLocalHost(request.headers.host)) {
       options.error(`  ✗ Refused a request for host ${request.headers.host ?? '(none)'}.`);
-      refuse(request, response, 403, 'forbidden', 'ask-my-site dev only answers on localhost.');
+      refuse(request, response, 403, 'forbidden', 'ondocs dev only answers on localhost.');
       return;
     }
     const origin = request.headers.origin;
@@ -376,7 +376,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
         JSON.stringify({
           error: {
             code: 'not_found',
-            message: 'ask-my-site dev answers POST /api/ask, and MCP at /api/mcp.',
+            message: 'ondocs dev answers POST /api/ask, and MCP at /api/mcp.',
           },
         }),
       );
@@ -490,7 +490,7 @@ function untilInterrupted(): AbortSignal {
   return controller.signal;
 }
 
-/** `ask-my-site dev`: runs until `io.signal` aborts (Ctrl+C by default). Returns the exit code. */
+/** `ondocs dev`: runs until `io.signal` aborts (Ctrl+C by default). Returns the exit code. */
 export async function dev(args: string[], io: CliIO): Promise<number> {
   let values;
   try {
@@ -554,7 +554,7 @@ export async function dev(args: string[], io: CliIO): Promise<number> {
   const cors = origins.includes('*') ? 'any origin' : ['localhost', ...origins].join(', ');
   io.stdout(
     [
-      `ask-my-site dev: ${label} (${String(server.chunks)} chunks), ${server.description}`,
+      `ondocs dev: ${label} (${String(server.chunks)} chunks), ${server.description}`,
       '',
       `  Endpoint  ${endpoint}  (CORS: ${cors})`,
       `  MCP       ${server.mcp}  (claude mcp add --transport http docs ${server.mcp})`,

@@ -1,19 +1,19 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import askMySite, { llmsOwners } from '../src/docusaurus';
+import ondocs, { llmsOwners } from '../src/docusaurus';
 import { parseIndexFile } from '../src/index-file';
 import { consoleLogger, warnMissingDialogPeers } from '../src/integrations/build';
 import { mockEmbeddingModel } from '../src/mock';
 
 let root: string;
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'ask-my-site-docusaurus-'));
+  root = await mkdtemp(join(tmpdir(), 'ondocs-docusaurus-'));
   vi.stubEnv('OPENAI_API_KEY', '');
   vi.stubEnv('AI_GATEWAY_API_KEY', '');
 });
@@ -158,11 +158,11 @@ async function site({ baseUrl = '/', locale = 'en' } = {}) {
 }
 
 async function build(s: Awaited<ReturnType<typeof site>>, options = {}) {
-  await askMySite(s.context, { embeddingModel: mockEmbeddingModel(), ...options }).postBuild(s);
+  await ondocs(s.context, { embeddingModel: mockEmbeddingModel(), ...options }).postBuild(s);
   return parseIndexFile(await readFile(join(s.outDir, 'ask-index.json'), 'utf8'));
 }
 
-describe('ask-my-site/docusaurus', () => {
+describe('ondocs/docusaurus', () => {
   it('indexes docs, blog posts and MDX pages, at the URLs Docusaurus serves', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const index = await build(await site());
@@ -244,19 +244,51 @@ describe('ask-my-site/docusaurus', () => {
     await build(fr, quiet);
     for (const call of log.mock.calls.slice(-2)) {
       expect(call[0]).toMatch(
-        /^\[ask-my-site\] Indexed 9 pages into \d+ chunks, 0 embedded, \d+ reused → ask-index\.json/,
+        /^\[ondocs\] Indexed 9 pages into \d+ chunks, 0 embedded, \d+ reused → ask-index\.json/,
       );
     }
-    const cache = join(root, 'node_modules', '.cache', 'ask-my-site');
+    const cache = join(root, 'node_modules', '.cache', 'ondocs');
     expect(existsSync(join(cache, 'en-default.json'))).toBe(true);
     expect(existsSync(join(cache, 'fr-default.json'))).toBe(true);
 
-    await askMySite(en.context, { id: 'second', llmsTxt: false }).postBuild(en);
+    await ondocs(en.context, { id: 'second', llmsTxt: false }).postBuild(en);
     expect(warn.mock.calls[0]?.[0]).toContain('No embedding model: building a keyword-only index.');
     expect(
       parseIndexFile(await readFile(join(en.outDir, 'ask-index.json'), 'utf8')).embedding,
     ).toBeNull();
     expect(existsSync(join(cache, 'en-second.json'))).toBe(true);
+  });
+
+  it('reuses the vectors cached under ask-my-site, the name before ondocs, on the first build', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const en = await site();
+    await build(en, { llmsTxt: false });
+    const cache = join(root, 'node_modules', '.cache');
+    await rename(join(cache, 'ondocs'), join(cache, 'ask-my-site'));
+
+    await build(en, { llmsTxt: false });
+    expect(log.mock.calls.at(-1)?.[0]).toMatch(/ 0 embedded, \d+ reused → /);
+    expect(existsSync(join(cache, 'ondocs', 'en-default.json'))).toBe(true);
+  });
+
+  it('warns about a swizzled copy of the dialog under its name before ondocs', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { context } = await site();
+    // A swizzled Root is no concern: it renders whichever it imports.
+    await mkdir(join(root, 'src', 'theme', 'Root'), { recursive: true });
+    ondocs(context, { embeddingModel: mockEmbeddingModel() });
+    expect(warn.mock.calls.filter(([line]) => String(line).includes('AskMySite'))).toEqual([]);
+
+    await writeFile(join(root, 'src', 'theme', 'AskMySite.tsx'), 'export default () => null;\n');
+    ondocs(context, { embeddingModel: mockEmbeddingModel() });
+    expect(warn.mock.calls.filter(([line]) => String(line).includes('AskMySite'))).toEqual([
+      [
+        '[ondocs] src/theme/AskMySite.tsx swizzles @theme/AskMySite, which is now @theme/Ondocs, ' +
+          'so the dialog no longer uses it. Rename it: git mv src/theme/AskMySite.tsx ' +
+          'src/theme/Ondocs.tsx, and change any @theme-original/AskMySite import in it to ' +
+          '@theme-original/Ondocs.',
+      ],
+    ]);
   });
 
   it('passes embeddingProviderOptions to the default OpenAI and AI Gateway models', async () => {
@@ -282,7 +314,7 @@ describe('ask-my-site/docusaurus', () => {
     const options = { embeddingProviderOptions: { openai: { dimensions: 4 } } };
 
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
-    await askMySite(s.context, options).postBuild(s);
+    await ondocs(s.context, options).postBuild(s);
     expect(requests.at(-1)).toMatchObject({
       url: 'https://api.openai.com/v1/embeddings',
       body: { model: 'text-embedding-3-small', dimensions: 4 },
@@ -295,7 +327,7 @@ describe('ask-my-site/docusaurus', () => {
     await rm(join(root, 'node_modules'), { recursive: true });
     vi.stubEnv('OPENAI_API_KEY', '');
     vi.stubEnv('AI_GATEWAY_API_KEY', 'gateway-test');
-    await askMySite(s.context, options).postBuild(s);
+    await ondocs(s.context, options).postBuild(s);
     expect(requests.at(-1)).toMatchObject({
       url: expect.stringMatching(/\/embedding-model$/) as string,
       body: { providerOptions: { openai: { dimensions: 4 } } },
@@ -306,7 +338,7 @@ describe('ask-my-site/docusaurus', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { context } = await site();
     // Installed here, as the site's own packages.
-    askMySite(context, {});
+    ondocs(context, {});
     expect(warn).not.toHaveBeenCalled();
 
     // Resolved from a folder with only cmdk installed.
@@ -315,18 +347,18 @@ describe('ask-my-site/docusaurus', () => {
     await writeFile(join(root, 'node_modules', 'cmdk', 'package.json'), '{"name":"cmdk"}');
     warnMissingDialogPeers(consoleLogger(), pathToFileURL(join(root, 'site.js')));
     expect(warn).toHaveBeenCalledWith(
-      '[ask-my-site] The ask dialog renders with react, react-dom, @radix-ui/react-dialog, which are not installed: npm i react react-dom @radix-ui/react-dialog',
+      '[ondocs] The ask dialog renders with react, react-dom, @radix-ui/react-dialog, which are not installed: npm i react react-dom @radix-ui/react-dialog',
     );
   });
 
   it('posts to ASK_ENDPOINT when set, and says once how to get answers in docusaurus start', async () => {
     // The hint shows once per process.
-    Reflect.deleteProperty(globalThis, Symbol.for('ask-my-site.devEndpointHint'));
+    Reflect.deleteProperty(globalThis, Symbol.for('ondocs.devEndpointHint'));
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { context } = await site();
     const setGlobalData = vi.fn();
     const load = (options = {}) => {
-      askMySite(context, options).contentLoaded({ actions: { setGlobalData } });
+      ondocs(context, options).contentLoaded({ actions: { setGlobalData } });
     };
     // A build says nothing.
     load();
@@ -339,7 +371,7 @@ describe('ask-my-site/docusaurus', () => {
     load();
     expect(log.mock.calls).toEqual([
       [
-        '[ask-my-site] The dialog posts to /api/ask, which docusaurus start does not serve. For answers while you work, build the site once, run `npx ask-my-site dev`, and start the site with ASK_ENDPOINT=http://localhost:8787/api/ask.',
+        '[ondocs] The dialog posts to /api/ask, which docusaurus start does not serve. For answers while you work, build the site once, run `npx ondocs dev`, and start the site with ASK_ENDPOINT=http://localhost:8787/api/ask.',
       ],
     ]);
 
@@ -368,9 +400,7 @@ describe('ask-my-site/docusaurus', () => {
       ...s.context,
       siteConfig: { ...s.context.siteConfig, url: 'https://acme.dev', tagline: 'Docs for Acme.' },
     };
-    await askMySite(context, { embeddingModel: mockEmbeddingModel(), mcp: '/api/mcp' }).postBuild(
-      s,
-    );
+    await ondocs(context, { embeddingModel: mockEmbeddingModel(), mcp: '/api/mcp' }).postBuild(s);
     const llms = await readFile(join(s.outDir, 'llms.txt'), 'utf8');
     expect(llms.split('\n').slice(0, 3)).toEqual(['# Acme Docs', '', '> Docs for Acme.']);
     expect(llms).toContain('- [Setup](https://acme.dev/docs/guides/setup.md)');
@@ -392,7 +422,7 @@ describe('ask-my-site/docusaurus', () => {
   it('leaves the llms files to docusaurus-plugin-llms, and writes none with llmsTxt: false', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const s = await site();
-    await askMySite(s.context, { embeddingModel: mockEmbeddingModel() }).postBuild({
+    await ondocs(s.context, { embeddingModel: mockEmbeddingModel() }).postBuild({
       ...s,
       plugins: [
         { name: 'docusaurus-plugin-content-docs' },
@@ -403,11 +433,11 @@ describe('ask-my-site/docusaurus', () => {
     expect(existsSync(join(s.outDir, 'llms-full.txt'))).toBe(false);
     expect(existsSync(join(s.outDir, 'guides/setup.md'))).toBe(true);
     expect(log).toHaveBeenCalledWith(
-      '[ask-my-site] docusaurus-plugin-llms writes llms.txt, so ask-my-site does not.',
+      '[ondocs] docusaurus-plugin-llms writes llms.txt, so ondocs does not.',
     );
 
     const clean = await site({ locale: 'fr' });
-    await askMySite(clean.context, {
+    await ondocs(clean.context, {
       embeddingModel: mockEmbeddingModel(),
       llmsTxt: false,
     }).postBuild(clean);
@@ -443,30 +473,30 @@ describe('ask-my-site/docusaurus', () => {
     expect(owners('copy-page-button-plugin')).toEqual({});
   });
 
-  it('resolves the MCP endpoint against the site URL, for <AskMySiteMcp />', async () => {
+  it('resolves the MCP endpoint against the site URL, for <OndocsMcp />', async () => {
     const { context } = await site();
     const withUrl = {
       ...context,
       siteConfig: { ...context.siteConfig, url: 'https://docs.acme.dev' },
     };
     const setGlobalData = vi.fn();
-    askMySite(withUrl, { mcp: '/api/mcp' }).contentLoaded({ actions: { setGlobalData } });
+    ondocs(withUrl, { mcp: '/api/mcp' }).contentLoaded({ actions: { setGlobalData } });
     expect(setGlobalData).toHaveBeenLastCalledWith(
       expect.objectContaining({ mcp: { url: 'https://docs.acme.dev/api/mcp', name: 'acme-docs' } }),
     );
-    askMySite(context, { mcp: { url: 'https://mcp.acme.dev/', name: 'Acme' } }).contentLoaded({
+    ondocs(context, { mcp: { url: 'https://mcp.acme.dev/', name: 'Acme' } }).contentLoaded({
       actions: { setGlobalData },
     });
     expect(setGlobalData).toHaveBeenLastCalledWith(
       expect.objectContaining({ mcp: { url: 'https://mcp.acme.dev/', name: 'acme' } }),
     );
     // A path needs the site's URL to become one a client can reach.
-    expect(() => askMySite(context, { mcp: '/api/mcp' })).toThrow(/needed to make it absolute/);
+    expect(() => ondocs(context, { mcp: '/api/mcp' })).toThrow(/needed to make it absolute/);
   });
 
   it('hands the dialog its settings, and points Docusaurus at files that exist', async () => {
     const { context } = await site();
-    const plugin = askMySite(context, {
+    const plugin = ondocs(context, {
       endpoint: 'https://api.example.com/ask',
       dialog: { shortcut: false },
     });
@@ -476,8 +506,8 @@ describe('ask-my-site/docusaurus', () => {
       endpoint: 'https://api.example.com/ask',
       dialog: { shortcut: false, title: 'Ask Acme Docs' },
     });
-    // Root renders AskMySite, which a site can also render from its own swizzled Root.
-    for (const component of ['Root.tsx', 'AskMySite.tsx', 'AskMySiteMcp.tsx']) {
+    // Root renders Ondocs, which a site can also render from its own swizzled Root.
+    for (const component of ['Root.tsx', 'Ondocs.tsx', 'OndocsMcp.tsx']) {
       expect(existsSync(join(plugin.getThemePath(), component))).toBe(true);
     }
     expect(existsSync(plugin.getClientModules()[1]!)).toBe(true);

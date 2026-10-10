@@ -1,4 +1,4 @@
-// The quality loop: `ask-my-site eval` scoring retrieval against known answers, and the handler's
+// The quality loop: `ondocs eval` scoring retrieval against known answers, and the handler's
 // feedback and low-confidence signals, the raw material of an "unanswered questions" report.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -17,10 +17,10 @@ import { corpus } from './helpers';
 
 const embeddingModel = mockEmbeddingModel();
 
-describe('ask-my-site eval', () => {
+describe('ondocs eval', () => {
   let cwd: string;
   beforeEach(async () => {
-    cwd = await mkdtemp(join(tmpdir(), 'ask-my-site-eval-'));
+    cwd = await mkdtemp(join(tmpdir(), 'ondocs-eval-'));
     const { index } = await buildIndex({ documents: corpus, embeddingModel });
     await writeIndexFile(join(cwd, 'ask-index.json'), index);
     const { index: keywords } = await buildIndex({ documents: corpus });
@@ -89,7 +89,7 @@ describe('ask-my-site eval', () => {
     const result = await run(`thresholds: { hit@1: 0.9, refusalRecall: 1 }\n${QUESTIONS}`);
     expect(result.code).toBe(1);
     expect(result.stdout).toContain(
-      'ask-my-site eval: 5 questions against ask-index.json (9 chunks, hybrid search)',
+      'ondocs eval: 5 questions against ask-index.json (9 chunks, hybrid search)',
     );
     expect(result.stdout).toMatch(/✓ 1 +How do I rate limit with Upstash\?/);
     expect(result.stdout).toMatch(/✓ refused +Who won the 1998 World Cup final\?/);

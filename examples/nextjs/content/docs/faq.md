@@ -5,13 +5,13 @@ section: Reference
 order: 36
 ---
 
-## What is ask-my-site?
+## What is ondocs?
 
-ask-my-site is a self-hosted "Ask AI" box for documentation sites: a build-time index, in-memory hybrid search, and streamed answers with citations from a model you choose. It is an open-source npm package, not a hosted service. See the [introduction](/docs/introduction).
+ondocs is a self-hosted "Ask AI" box for documentation sites: a build-time index, in-memory hybrid search, and streamed answers with citations from a model you choose. It is an open-source npm package, not a hosted service. See the [introduction](/docs/introduction).
 
 ## Is it free?
 
-Yes. ask-my-site is free and open source under the MIT license, with no paid tier and no hosted service. You pay only your model provider for the calls your endpoint makes, under your own API key.
+Yes. ondocs is free and open source under the MIT license, with no paid tier and no hosted service. You pay only your model provider for the calls your endpoint makes, under your own API key.
 
 ## How much does it cost to run?
 
@@ -23,7 +23,7 @@ No. The index is a static JSON file built with your site, and the endpoint searc
 
 ## Do I need an API key to try it?
 
-No. Mock mode runs the whole pipeline offline with a deterministic embedder and a model that quotes your pages: `npx ask-my-site index ./docs -e mock`, then `npx ask-my-site dev`. In production you need a key for your model provider. See [Try it locally](/docs/local-development).
+No. Mock mode runs the whole pipeline offline with a deterministic embedder and a model that quotes your pages: `npx ondocs index ./docs -e mock`, then `npx ondocs dev`. In production you need a key for your model provider. See [Try it locally](/docs/local-development).
 
 ## Can I use Claude or other models?
 
@@ -35,7 +35,7 @@ No. A site that answers its visitors calls a model through an API, and chat subs
 
 ## Where are my docs and questions sent?
 
-Only to your own model provider. Your endpoint sends the question to the embedding model, and the question with the retrieved excerpts to the language model, under your API key. ask-my-site runs no service and sends no telemetry. See [Privacy](/docs/security#privacy-what-leaves-your-servers).
+Only to your own model provider. Your endpoint sends the question to the embedding model, and the question with the retrieved excerpts to the language model, under your API key. ondocs runs no service and sends no telemetry. See [Privacy](/docs/security#privacy-what-leaves-your-servers).
 
 ## Where does the index live?
 
@@ -43,7 +43,7 @@ In `ask-index.json`, a static file next to your site: in your repository when yo
 
 ## How large can my site be?
 
-ask-my-site is comfortable on sites as large as 10,000 chunks, and workable to about 50,000. At 10,000 chunks the index is 15.7 MB, loads in 339 ms and answers a query in about 7 ms. Every section of a page makes at least one chunk, of up to 1,200 characters. See [Benchmarks](/docs/benchmarks).
+ondocs is comfortable on sites as large as 10,000 chunks, and workable to about 50,000. At 10,000 chunks the index is 15.7 MB, loads in 339 ms and answers a query in about 7 ms. Every section of a page makes at least one chunk, of up to 1,200 characters. See [Benchmarks](/docs/benchmarks).
 
 ## What happens when the docs don't cover a question?
 
@@ -59,20 +59,20 @@ Yes, through the embedding model: a multilingual model such as Cohere's `embed-m
 
 ## How is it different from Kapa, Inkeep or Algolia Ask AI?
 
-Those are hosted services: your docs are ingested into their platform, and answers come from their infrastructure under their pricing. ask-my-site is a library. The index is a file in your build, the endpoint is a function on your host, and the model is one you choose under your own key. You give up their dashboards and analytics: you get `ask-my-site eval`, readers' ratings and a log of unanswered questions to wire as you like instead, and no account, no vendor, and nothing to keep in sync.
+Those are hosted services: your docs are ingested into their platform, and answers come from their infrastructure under their pricing. ondocs is a library. The index is a file in your build, the endpoint is a function on your host, and the model is one you choose under your own key. You give up their dashboards and analytics: you get `ondocs eval`, readers' ratings and a log of unanswered questions to wire as you like instead, and no account, no vendor, and nothing to keep in sync.
 
 ## How is it different from Pagefind?
 
-Pagefind is static search: it builds an index at build time and returns matching pages, with no server at all. ask-my-site builds a similar static index, then adds an endpoint that answers in sentences with citations. It needs one function and a model key that Pagefind doesn't. They can run side by side: Pagefind on ⌘K, ask-my-site on ⌘I.
+Pagefind is static search: it builds an index at build time and returns matching pages, with no server at all. ondocs builds a similar static index, then adds an endpoint that answers in sentences with citations. It needs one function and a model key that Pagefind doesn't. They can run side by side: Pagefind on ⌘K, ondocs on ⌘I.
 
 ## Can I host the endpoint somewhere other than my site?
 
-Yes. `npx ask-my-site init --host github-pages` writes a Cloudflare Worker that reads the index from the live site and answers it across origins with Workers AI, with no API key and CORS for the site's origin only; point the dialog's `endpoint`, or the script tag's `data-endpoint`, at it. See [Deploying](/docs/deployment#github-pages-and-other-static-hosts). An endpoint on Vercel or Netlify works the same way: set `access-control-allow-origin` for your site's origin in the handler's `headers`.
+Yes. `npx ondocs init --host github-pages` writes a Cloudflare Worker that reads the index from the live site and answers it across origins with Workers AI, with no API key and CORS for the site's origin only; point the dialog's `endpoint`, or the script tag's `data-endpoint`, at it. See [Deploying](/docs/deployment#github-pages-and-other-static-hosts). An endpoint on Vercel or Netlify works the same way: set `access-control-allow-origin` for your site's origin in the handler's `headers`.
 
 ## Does it work with versioned docs and several languages?
 
 Yes. Docusaurus and Starlight sites get one index per locale, and the dialog on a locale's pages is answered from it. Versioned Docusaurus docs index every version; leave old ones out with `exclude: ['/docs/1.0']`. See [Docusaurus](/docs/docusaurus#locales-and-versions).
 
-## How is the ask-my-site website built?
+## How is the ondocs website built?
 
-The website is a Next.js app that uses ask-my-site on these docs. `ask-my-site index` builds the index from the Markdown pages before every build, `createAskHandler` serves `/api/ask`, and `<AskDialog />` is the dialog. In production it answers with OpenAI; its preview deployments, and the example run locally without a key, use mock mode, where answers are quotes picked from the pages rather than written by a model. The repository's Docusaurus and Starlight examples build the same pages with their plugins.
+The website is a Next.js app that uses ondocs on these docs. `ondocs index` builds the index from the Markdown pages before every build, `createAskHandler` serves `/api/ask`, and `<AskDialog />` is the dialog. In production it answers with OpenAI; its preview deployments, and the example run locally without a key, use mock mode, where answers are quotes picked from the pages rather than written by a model. The repository's Docusaurus and Starlight examples build the same pages with their plugins.

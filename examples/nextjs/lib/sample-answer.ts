@@ -1,5 +1,5 @@
-import type { AskSource } from 'ask-my-site/react';
-import { SOURCE_METADATA_KEY } from 'ask-my-site/server';
+import type { AskSource } from 'ondocs/react';
+import { SOURCE_METADATA_KEY } from 'ondocs/server';
 
 import { askHandler } from './ask-handler';
 

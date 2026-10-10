@@ -99,7 +99,7 @@ describe('scriptOptions', () => {
 describe('mountAskDialog', () => {
   it('renders the launcher and the dialog into a container of its own, and removes them', async () => {
     const dialog = mount({ title: 'Ask Acme', suggestions: ['How do I install it?'] });
-    const container = document.querySelector('body > .ask-my-site');
+    const container = document.querySelector('body > .ondocs');
     expect(container).not.toBeNull();
     const launcher = screen.getByRole('button', { name: 'Ask AI' });
     expect(launcher.getAttribute('aria-keyshortcuts')).toBe('Meta+I Control+I');
@@ -120,7 +120,7 @@ describe('mountAskDialog', () => {
     act(() => {
       dialog.unmount();
     });
-    expect(document.querySelector('.ask-my-site')).toBeNull();
+    expect(document.querySelector('.ondocs')).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -128,7 +128,7 @@ describe('mountAskDialog', () => {
     const container = document.createElement('section');
     document.body.append(container);
     const dialog = mount({ container, buttonLabel: false, shortcut: 'j' });
-    expect(container.querySelector('.ask-my-site-launcher')).toBeNull();
+    expect(container.querySelector('.ondocs-launcher')).toBeNull();
     await userEvent.keyboard('{Control>}j{/Control}');
     expect(await screen.findByRole('dialog', { name: 'Ask this site' })).toBeTruthy();
     act(() => {
@@ -171,7 +171,7 @@ describe('mountAskDialog', () => {
 
   it('puts its container back after Astro’s client router swaps the page', () => {
     mount();
-    const container = document.querySelector('.ask-my-site')!;
+    const container = document.querySelector('.ondocs')!;
     document.body.replaceChildren();
     document.dispatchEvent(new Event('astro:after-swap'));
     expect(container.isConnected).toBe(true);
@@ -225,8 +225,10 @@ describe('dist/embed.global.js', () => {
 
   afterEach(() => {
     act(() => {
-      document.querySelector('.ask-my-site')?.remove();
+      document.querySelector('.ondocs')?.remove();
     });
+    delete window.Ondocs;
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- its name from before ondocs
     delete window.AskMySite;
   });
 
@@ -234,23 +236,43 @@ describe('dist/embed.global.js', () => {
     await runScript({ 'data-button-label': 'Ask the docs', 'data-shortcut': 'j' });
     const launcher = screen.getByRole('button', { name: 'Ask the docs' });
     expect(launcher.getAttribute('aria-keyshortcuts')).toBe('Meta+J Control+J');
-    expect(document.head.firstElementChild?.id).toBe('ask-my-site-styles');
+    expect(document.head.firstElementChild?.id).toBe('ondocs-styles');
     act(() => {
-      window.AskMySite?.mount({ container: document.createElement('div') });
+      window.Ondocs?.mount({ container: document.createElement('div') });
     });
-    expect(document.querySelectorAll('#ask-my-site-styles')).toHaveLength(1);
+    expect(document.querySelectorAll('#ondocs-styles')).toHaveLength(1);
   });
 
-  it('leaves mounting to window.AskMySite.mount with data-manual', async () => {
+  it('leaves mounting to window.Ondocs.mount with data-manual', async () => {
     await runScript({ 'data-manual': '' });
-    expect(document.querySelector('.ask-my-site')).toBeNull();
+    expect(document.querySelector('.ondocs')).toBeNull();
     let dialog!: MountedAskDialog;
     act(() => {
-      dialog = window.AskMySite!.mount({ buttonLabel: 'Ask' });
+      dialog = window.Ondocs!.mount({ buttonLabel: 'Ask' });
     });
     expect(screen.getByRole('button', { name: 'Ask' })).toBeTruthy();
     act(() => {
       dialog.unmount();
     });
   });
+
+  /* eslint-disable @typescript-eslint/no-deprecated -- the name from before ondocs, on purpose */
+  it('keeps window.AskMySite, its name before ondocs, and says once to use window.Ondocs', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await runScript({ 'data-manual': '' });
+    expect(warn).not.toHaveBeenCalled();
+    expect(window.AskMySite).toBe(window.Ondocs);
+    let dialog!: MountedAskDialog;
+    act(() => {
+      dialog = window.AskMySite!.mount({ buttonLabel: 'Ask' });
+    });
+    expect(screen.getByRole('button', { name: 'Ask' })).toBeTruthy();
+    expect(warn.mock.calls).toEqual([
+      ['[ondocs] window.AskMySite is now window.Ondocs; the old name still works for now.'],
+    ]);
+    act(() => {
+      dialog.unmount();
+    });
+  });
+  /* eslint-enable @typescript-eslint/no-deprecated */
 });

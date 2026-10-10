@@ -185,7 +185,7 @@ export interface UpstashRateLimitOptions extends ClientKeyOptions {
 
 /**
  * Adapts an `@upstash/ratelimit` instance, giving a limit shared by every instance of your app.
- * ask-my-site does not depend on Upstash; you pass in the instance you configured.
+ * ondocs does not depend on Upstash; you pass in the instance you configured.
  *
  * ```ts
  * const ratelimit = new Ratelimit({ redis: Redis.fromEnv(), limiter: Ratelimit.slidingWindow(10, '60 s') });

@@ -2,8 +2,8 @@
 # answer each, and six that the docs do not answer. test/corpus.test.ts runs it against the docs
 # at a pinned commit (scripts/corpus.mjs); copy it as a start for your own site's questions.
 #
-#   ask-my-site index website/docs --framework docusaurus --base-url /docs -e none
-#   ask-my-site eval docusaurus.io.yaml --index ask-index.json
+#   ondocs index website/docs --framework docusaurus --base-url /docs -e none
+#   ondocs eval docusaurus.io.yaml --index ask-index.json
 
 # Keyword-only, these docs score hit@1 14/22 and hit@3 18/22, refuse all six off-topic
 # questions, and refuse two they do answer (refusal precision 6/8): the thresholds hold that.

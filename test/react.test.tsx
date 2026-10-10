@@ -159,7 +159,7 @@ describe('useAsk', () => {
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining(`POST ${new URL('/api/ask', location.href).href} returned 404`),
     );
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('run `npx ask-my-site dev`'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('run `npx ondocs dev`'));
 
     // A production build on a deployed site keeps the console quiet.
     warn.mockClear();
@@ -248,12 +248,12 @@ describe('AskAnswer', () => {
   it('renders lists, code and emphasis', () => {
     render(
       <AskAnswer
-        text={'Steps:\n\n1. Install `ask-my-site`\n2. Run **index**\n\n```sh\npnpm build\n```'}
+        text={'Steps:\n\n1. Install `ondocs`\n2. Run **index**\n\n```sh\npnpm build\n```'}
         sources={[]}
       />,
     );
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
-    expect(document.querySelector('code')?.textContent).toBe('ask-my-site');
+    expect(document.querySelector('code')?.textContent).toBe('ondocs');
     expect(document.querySelector('strong')?.textContent).toBe('index');
     expect(document.querySelector('pre code')?.textContent).toBe('pnpm build');
   });
@@ -439,7 +439,7 @@ describe('AskDialog', () => {
 
     rerender(<AskDialog fetch={handlerFetch()} launcher theme="dark" />);
     const button = screen.getByRole('button', { name: /Ask AI/ });
-    expect(button.className).toBe('ask-my-site-launcher');
+    expect(button.className).toBe('ondocs-launcher');
     expect(button.dataset.askTheme).toBe('dark');
     expect(button.getAttribute('aria-keyshortcuts')).toBe('Meta+K Control+K');
     await user.click(button);

@@ -1,4 +1,4 @@
-// The files `ask-my-site init` writes: one ask endpoint and one MCP endpoint per host, with the
+// The files `ondocs init` writes: one ask endpoint and one MCP endpoint per host, with the
 // rate limit, the daily budget and, where the endpoint is on another origin than the pages, CORS.
 // Each is plain code the site owns afterwards, so it reads as if written by hand.
 
@@ -83,7 +83,7 @@ export function comment(text: string, pad = ''): string {
 const HEADER = (what: string, ...paragraphs: string[]) =>
   [
     comment(
-      `${what} Written by \`npx ask-my-site init\`: edit it as you like, and init asks before it overwrites it.`,
+      `${what} Written by \`npx ondocs init\`: edit it as you like, and init asks before it overwrites it.`,
     ),
     ...paragraphs.map((paragraph) => comment(paragraph)),
   ].join('\n//\n');
@@ -154,7 +154,7 @@ function mcpOptions(site: TemplateSite, host: Host, pad: string): string {
     .join('\n');
 }
 
-/** How the MCP tools' descriptions name the docs: "Acme Docs", or "the ask-my-site docs". */
+/** How the MCP tools' descriptions name the docs: "Acme Docs", or "the acme-site docs". */
 const docsName = (name: string): string =>
   /\bdocs?\b|documentation/i.test(name) ? name : `the ${name} docs`;
 
@@ -169,7 +169,7 @@ export function vercelFiles(site: TemplateSite, mcp: boolean): GeneratedFile[] {
       "import { join } from 'node:path';",
       '',
       ...(names.includes('createAskHandler') ? ["import { openai } from '@ai-sdk/openai';"] : []),
-      `import { ${names} } from 'ask-my-site/server';`,
+      `import { ${names} } from 'ondocs/server';`,
     ].join('\n');
   const files: GeneratedFile[] = [
     {
@@ -257,7 +257,7 @@ export function netlifyFiles(site: TemplateSite, mcp: boolean): GeneratedFile[] 
       "import { join } from 'node:path';",
       '',
       ...(names.includes('createAskHandler') ? ["import { openai } from '@ai-sdk/openai';"] : []),
-      `import { ${names} } from 'ask-my-site/server';`,
+      `import { ${names} } from 'ondocs/server';`,
     ].join('\n');
   const files: GeneratedFile[] = [
     {
@@ -326,7 +326,7 @@ export function netlifyConfig(
       error: `netlify.toml already configures ${configured.map((name) => `[functions.${name}]`).join(' and ')}; add included_files = [${files}] to ${configured.length === 1 ? 'it' : 'each'}`,
     };
   }
-  const comment = '# The index the ask-my-site functions answer from, bundled with them.';
+  const comment = '# The index the ondocs functions answer from, bundled with them.';
   const separator =
     text === '' ? '' : text.endsWith('\n\n') ? '' : text.endsWith('\n') ? '\n' : '\n\n';
   return { content: `${text}${separator}${comment}\n${tables}\n` };
@@ -376,7 +376,7 @@ export function cloudflarePagesFiles(site: TemplateSite, mcp: boolean): Generate
       description: 'POST /api/ask: answers questions from the index',
       content: `${HEADER('The ask endpoint, POST /api/ask, as a Cloudflare Pages Function.', `It answers from ${site.indexPath}, which the build writes into the site's files, read through the ASSETS binding. Set OPENAI_API_KEY as a secret, for production and previews: in the dashboard (Settings, Variables and Secrets) or with \`npx wrangler pages secret put OPENAI_API_KEY\`. Set it as a build variable too: the build embeds the pages with it.`)}
 import { createOpenAI } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 ${envType(true)}
 
@@ -402,7 +402,7 @@ export const onRequest = ({ request, env }: { request: Request; env: Env }): Pro
       path: 'functions/api/mcp.ts',
       description: '/api/mcp: the same index as an MCP server for agents, keyword-only',
       content: `${HEADER('The MCP endpoint, /api/mcp, as a Cloudflare Pages Function.', `It serves ${site.indexPath} to agents as search, fetch and list_pages tools. Search is keyword-only, so it calls no model: the agent brings its own.`)}
-import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createMcpHandler, memoryRateLimit } from 'ondocs/server';
 
 ${envType(false)}
 
@@ -422,16 +422,16 @@ ${mcpOptions(site, 'cloudflare', '    ')}
 }
 
 /** The Worker module for a Cloudflare Worker with static assets: the endpoints, then the files. */
-export const WORKER_MODULE = 'worker/ask-my-site.ts';
+export const WORKER_MODULE = 'worker/ondocs.ts';
 
 export function cloudflareWorkerFiles(site: TemplateSite, mcp: boolean): GeneratedFile[] {
   return [
     {
       path: WORKER_MODULE,
       description: `the Worker: POST /api/ask${mcp ? ' and /api/mcp' : ''}; other requests get the static files`,
-      content: `${HEADER("The Worker's entry point: the ask endpoint and the MCP endpoint, then the site's files.", `It answers from ${site.indexPath}, which the build writes into the static assets, read through the ASSETS binding. Set OPENAI_API_KEY with \`npx wrangler secret put OPENAI_API_KEY\`, and in the build's environment: the build embeds the pages with it.`, `A Worker that has its own entry point already can call \`askMySite(request, env)\` from it: it answers the endpoints' paths and returns null for every other request.`)}
+      content: `${HEADER("The Worker's entry point: the ask endpoint and the MCP endpoint, then the site's files.", `It answers from ${site.indexPath}, which the build writes into the static assets, read through the ASSETS binding. Set OPENAI_API_KEY with \`npx wrangler secret put OPENAI_API_KEY\`, and in the build's environment: the build embeds the pages with it.`, `A Worker that has its own entry point already can call \`ondocs(request, env)\` from it: it answers the endpoints' paths and returns null for every other request.`)}
 import { createOpenAI } from '@ai-sdk/openai';
-import { createAskHandler, ${mcp ? 'createMcpHandler, ' : ''}memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, ${mcp ? 'createMcpHandler, ' : ''}memoryRateLimit } from 'ondocs/server';
 
 interface Env {
   OPENAI_API_KEY: string;
@@ -471,7 +471,7 @@ ${mcpOptions(site, 'cloudflare', '      ')}
 }
 
 /** Answers the endpoints' paths, or returns null for any other request. */
-export function askMySite(request: Request, env: Env): Promise<Response> | null {
+export function ondocs(request: Request, env: Env): Promise<Response> | null {
   const { pathname } = new URL(request.url);
   if (pathname !== '/api/ask'${mcp ? " && pathname !== '/api/mcp'" : ''}) return null;
   handlers ??= create(request, env);
@@ -480,7 +480,7 @@ export function askMySite(request: Request, env: Env): Promise<Response> | null 
 
 export default {
   fetch(request: Request, env: Env): Promise<Response> {
-    return askMySite(request, env) ?? env.ASSETS.fetch(request);
+    return ondocs(request, env) ?? env.ASSETS.fetch(request);
   },
 };
 `,
@@ -489,7 +489,7 @@ export default {
 }
 
 /** The folder of the Worker that answers for a site on GitHub Pages or another static host. */
-export const STANDALONE_DIR = 'ask-my-site-worker';
+export const STANDALONE_DIR = 'ondocs-worker';
 
 /** A Worker name from the site's: lowercase letters, digits and dashes, at most 63 characters. */
 export function workerName(name: string): string {
@@ -513,7 +513,7 @@ export const WORKERS_AI_CHAT_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 export const WORKERS_AI_EMBEDDING = '@cf/baai/bge-small-en-v1.5';
 
 export interface WorkerVersions {
-  askMySite: string;
+  ondocs: string;
   ai: string;
   openai: string;
   workersAi: string;
@@ -551,7 +551,7 @@ export function standaloneWorkerFiles(
           dependencies: {
             ...(workersAi ? {} : { '@ai-sdk/openai': versions.openai }),
             ai: versions.ai,
-            'ask-my-site': versions.askMySite,
+            ondocs: versions.ondocs,
             ...(workersAi ? { 'workers-ai-provider': versions.workersAi } : {}),
           },
           devDependencies: {
@@ -588,7 +588,7 @@ export function standaloneWorkerFiles(
     {
       path: `${dir}/wrangler.jsonc`,
       description: 'the Worker’s configuration, with the site’s URL',
-      content: `// The Worker that answers questions for ${site.name}. Written by \`npx ask-my-site init\`.
+      content: `// The Worker that answers questions for ${site.name}. Written by \`npx ondocs init\`.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": ${JSON.stringify(name)},
@@ -606,7 +606,7 @@ export function standaloneWorkerFiles(
       workersAi
         ? `,
     // The Workers AI model that writes the answers. About 100 questions a day fit in Workers AI's
-    // free allowance with this one; ask-my-site's Workers AI guide compares others.
+    // free allowance with this one; the ondocs Workers AI guide compares others.
     "CHAT_MODEL": ${JSON.stringify(WORKERS_AI_CHAT_MODEL)}`
         : ''
     }
@@ -642,7 +642,7 @@ function workerFetch(mcp: boolean): string {
       ready = await handlers;
     } catch (error) {
       // The index could not be fetched or used; the next request tries again.
-      console.error('[ask-my-site]', error);
+      console.error('[ondocs]', error);
       return Response.json(
         { error: { code: 'internal_error', message: 'The ask endpoint is misconfigured.' } },
         { status: 500, headers: corsFor(env) },
@@ -682,14 +682,14 @@ function workersAiWorker(site: TemplateSite & { url: string }, mcp: boolean): st
   return `${HEADER(
     `The Worker that answers questions for ${site.name}, with Workers AI: no API key to set, and within Workers AI's free daily allowance for a small site.`,
     `It fetches the index from the live site, SITE_URL${site.indexPath}, and checks it again every five minutes, so it follows the site's deploys. The site's pages call it across origins, so it sends CORS headers for SITE_URL's origin, and only for it.`,
-    `Questions are embedded with the Workers AI model the index records, as with \`ask-my-site index -e workers-ai:${WORKERS_AI_EMBEDDING}\`, and matched on keywords for an index built without one. CHAT_MODEL, in wrangler.jsonc, writes the answers.`,
+    `Questions are embedded with the Workers AI model the index records, as with \`ondocs index -e workers-ai:${WORKERS_AI_EMBEDDING}\`, and matched on keywords for an index built without one. CHAT_MODEL, in wrangler.jsonc, writes the answers.`,
     'Deploy with `npx wrangler deploy`.',
   )}
 import {
   createAskHandler,${mcp ? '\n  createMcpHandler,' : ''}
   memoryRateLimit,
   remoteIndex,
-} from 'ask-my-site/server';
+} from 'ondocs/server';
 import { createWorkersAI } from 'workers-ai-provider';
 
 interface Env {
@@ -717,7 +717,7 @@ async function create(env: Env) {
     : undefined;
   if (embedding && !embeddingModel) {
     console.warn(
-      \`[ask-my-site] The index was embedded with \${embedding.model}, which Workers AI does not run, so questions are matched on keywords. Build it with -e workers-ai:${WORKERS_AI_EMBEDDING}, or -e none.\`,
+      \`[ondocs] The index was embedded with \${embedding.model}, which Workers AI does not run, so questions are matched on keywords. Build it with -e workers-ai:${WORKERS_AI_EMBEDDING}, or -e none.\`,
     );
   }
   const cors = corsFor(env);
@@ -753,7 +753,7 @@ import {
   createAskHandler,${mcp ? '\n  createMcpHandler,' : ''}
   memoryRateLimit,
   remoteIndex,
-} from 'ask-my-site/server';
+} from 'ondocs/server';
 
 interface Env {
   /** The site's URL, with its base path. */
@@ -778,7 +778,7 @@ async function create(env: Env) {
     model?.startsWith('text-embedding-') ? openai.embedding(model) : undefined;
   if (embedding && !embeddingModel) {
     console.warn(
-      \`[ask-my-site] The index was embedded with \${embedding.model}, which this Worker does not run, so questions are matched on keywords.\`,
+      \`[ondocs] The index was embedded with \${embedding.model}, which this Worker does not run, so questions are matched on keywords.\`,
     );
   }
   const cors = corsFor(env);
@@ -816,9 +816,9 @@ export function nextFiles(
     {
       path: `${appDir}/api/ask/route.ts`,
       description: 'POST /api/ask: answers questions from the index',
-      content: `${HEADER('The ask endpoint, POST /api/ask, as a Next.js route handler.', `It answers from ${site.indexFile}, which \`ask-my-site index\` writes before the build, imported so it is bundled with the route. Set OPENAI_API_KEY where the app builds and runs.`)}
+      content: `${HEADER('The ask endpoint, POST /api/ask, as a Next.js route handler.', `It answers from ${site.indexFile}, which \`ondocs index\` writes before the build, imported so it is bundled with the route. Set OPENAI_API_KEY where the app builds and runs.`)}
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 import index from '${importPath}';
 
@@ -836,7 +836,7 @@ export { handler as OPTIONS, handler as POST };
       path: `${appDir}/api/mcp/route.ts`,
       description: '/api/mcp: the same index as an MCP server for agents, keyword-only',
       content: `${HEADER('The MCP endpoint, /api/mcp, as a Next.js route handler.', `It serves ${site.indexFile} to agents as search, fetch and list_pages tools. Search is keyword-only, so it calls no model: the agent brings its own. Importing the same file as the ask route keeps one copy of the index in memory.`)}
-import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createMcpHandler, memoryRateLimit } from 'ondocs/server';
 
 import index from '${importPath}';
 

@@ -122,7 +122,7 @@ describe('MCP lifecycle (2025 revisions: initialize first)', () => {
       expect(body.result).toMatchObject({
         protocolVersion: version,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'ask-my-site', title: 'Search the Acme docs' },
+        serverInfo: { name: 'ondocs', title: 'Search the Acme docs' },
       });
       expect(body.result?.instructions).toMatch(/search .* then fetch/);
     }
@@ -532,7 +532,7 @@ describe('MCP 2026-07-28: stateless, every request names its version', () => {
       cacheScope: 'public',
       _meta: {
         'io.modelcontextprotocol/serverInfo': {
-          name: 'ask-my-site',
+          name: 'ondocs',
           title: 'Search the Acme docs',
           version: expect.any(String) as unknown,
         },

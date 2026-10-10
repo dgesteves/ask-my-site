@@ -3,14 +3,14 @@ import { ImageResponse } from 'next/og';
 import { Brand, COLORS, OG_SIZE, Spark, ogFonts } from '../lib/og';
 
 export const alt =
-  'ask-my-site: make your docs answerable by people and by agents. Beside the headline, the dialog answers “How do I add it to Docusaurus?” with the plugin config and a citation.';
+  'ondocs: make your docs answerable by people and by agents. Beside the headline, the dialog answers “How do I add it to Docusaurus?” with the plugin config and a citation.';
 export const size = OG_SIZE;
 export const contentType = 'image/png';
 
 const CODE = [
   ['// docusaurus.config.ts', COLORS.subtle],
   ['export default {', COLORS.soft],
-  ["  plugins: [['ask-my-site/docusaurus',", COLORS.soft],
+  ["  plugins: [['ondocs/docusaurus',", COLORS.soft],
   ["    { endpoint: '/api/ask' }]],", COLORS.soft],
   ['};', COLORS.soft],
 ] as const;
@@ -112,7 +112,7 @@ export default async function Image() {
               color: COLORS.soft,
             }}
           >
-            <span>To add ask-my-site to Docusaurus, put the</span>
+            <span>To add ondocs to Docusaurus, put the</span>
             <span>plugin in the plugins array of</span>
             <span style={{ display: 'flex', alignItems: 'center' }}>
               docusaurus.config.ts:

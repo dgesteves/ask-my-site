@@ -10,7 +10,7 @@ The index is one JSON file, `ask-index.json`, with your documents, their chunks 
 
 ## What the file holds
 
-The file records its format (`ask-my-site/index@1`), the embedding model and vector size it was built with, the chunking options, a content hash, the documents (`id`, `url`, `title`) and the chunks. Each chunk has its heading path, its anchor, its text, a hash of the text it was embedded from, and its vector.
+The file records its format (`ask-my-site/index@1`, under the package's name before it became ondocs, so indexes from either name are read by both), the embedding model and vector size it was built with, the chunking options, a content hash, the documents (`id`, `url`, `title`) and the chunks. Each chunk has its heading path, its anchor, its text, a hash of the text it was embedded from, and its vector.
 
 ## Index size
 

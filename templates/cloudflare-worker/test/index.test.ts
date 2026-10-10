@@ -1,8 +1,8 @@
 // The Worker in workerd, offline: a stand-in site serves its index, and a stand-in AI binding
 // embeds questions and answers them. `npm test` runs it; `wrangler dev` runs the real Workers AI
 // instead, which needs a login and counts against your allowance.
-import { buildIndex, serializeIndexFile, type SourceDocument } from 'ask-my-site';
-import { hashEmbedding } from 'ask-my-site/mock';
+import { buildIndex, serializeIndexFile, type SourceDocument } from 'ondocs';
+import { hashEmbedding } from 'ondocs/mock';
 import { env } from 'cloudflare:test';
 import { beforeAll, expect, it, vi } from 'vitest';
 

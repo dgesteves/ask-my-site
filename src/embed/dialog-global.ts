@@ -4,14 +4,14 @@
 import dialogStyles from '../react/styles.css';
 import { render } from './dialog';
 
-if (!document.getElementById('ask-my-site-dialog-styles')) {
+if (!document.getElementById('ondocs-dialog-styles')) {
   const style = document.createElement('style');
-  style.id = 'ask-my-site-dialog-styles';
+  style.id = 'ondocs-dialog-styles';
   style.textContent = dialogStyles;
   // After the launcher's, and still before the site's own stylesheets, which override it.
-  const launcher = document.getElementById('ask-my-site-styles');
+  const launcher = document.getElementById('ondocs-styles');
   if (launcher) launcher.after(style);
   else document.head.prepend(style);
 }
 
-window.AskMySiteDialog = { render };
+window.OndocsDialog = { render };

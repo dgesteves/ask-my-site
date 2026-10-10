@@ -1,23 +1,23 @@
 import type * as Preset from '@docusaurus/preset-classic';
 import type { Config } from '@docusaurus/types';
-import type { AskMySiteOptions } from 'ask-my-site/docusaurus';
+import type { OndocsOptions } from 'ondocs/docusaurus';
 import { themes as prismThemes } from 'prism-react-renderer';
 
 // With OPENAI_API_KEY the plugin embeds with OpenAI (its default); without it, this example uses
 // the offline mock model so it builds anywhere. The ask endpoint must use the same model. The
 // dialog posts to ASK_ENDPOINT when it is set, else to /api/ask.
-const askMySite: AskMySiteOptions = {
+const ondocs: OndocsOptions = {
   ...(process.env.OPENAI_API_KEY ? {} : { embedding: 'mock' as const }),
   // The same docs, served to agents by the website's MCP endpoint; src/pages/ai-tools.mdx shows
   // how to connect to it.
-  mcp: { url: 'https://ask-my-site-demo.vercel.app/api/mcp', name: 'ask-my-site' },
+  mcp: { url: 'https://ask-my-site-demo.vercel.app/api/mcp', name: 'ondocs' },
   dialog: {
     suggestions: ['How do I add it to Docusaurus?', 'Do I need a vector database?'],
   },
 };
 
 const config: Config = {
-  title: 'ask-my-site',
+  title: 'ondocs',
   tagline: 'An ask box for your docs: cited answers, no vector database.',
   favicon: 'img/favicon.ico',
   url: 'https://ask-my-site-docusaurus.vercel.app',
@@ -42,15 +42,13 @@ const config: Config = {
     ],
   ],
 
-  plugins: [['ask-my-site/docusaurus', askMySite]],
+  plugins: [['ondocs/docusaurus', ondocs]],
 
   themeConfig: {
     colorMode: { respectPrefersColorScheme: true },
     navbar: {
-      title: 'ask-my-site',
-      items: [
-        { href: 'https://github.com/dgesteves/ask-my-site', label: 'GitHub', position: 'right' },
-      ],
+      title: 'ondocs',
+      items: [{ href: 'https://github.com/dgesteves/ondocs', label: 'GitHub', position: 'right' }],
     },
     prism: { theme: prismThemes.github, darkTheme: prismThemes.dracula },
   } satisfies Preset.ThemeConfig,

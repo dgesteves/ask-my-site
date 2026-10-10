@@ -7,8 +7,8 @@
 //
 // Each page keeps its text. What changes per site is the frontmatter, where a page lives (and so
 // its URL), and the links between pages, which point at that site's URLs. Every link is checked:
-// its page must exist and its anchor must be a heading on it, slugged as ask-my-site and both
-// frameworks slug headings. Needs the built package (dist) for ask-my-site's own slugger.
+// its page must exist and its anchor must be a heading on it, slugged as ondocs and both
+// frameworks slug headings. Needs the built package (dist) for ondocs's own slugger.
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';

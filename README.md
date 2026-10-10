@@ -1,9 +1,9 @@
-# ask-my-site
+# ondocs
 
 **Make your docs answerable by people and by agents, from one static index: a cited Ask box, an MCP server and llms.txt, on your own function and key, with no vector database and no vendor. Agent traffic costs you no model tokens.**
 
-[![CI](https://img.shields.io/github/actions/workflow/status/dgesteves/ask-my-site/ci.yml?branch=main&label=CI&style=flat-square&labelColor=181c22)](https://github.com/dgesteves/ask-my-site/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/ask-my-site?style=flat-square&labelColor=181c22&color=22d3ee)](https://www.npmjs.com/package/ask-my-site)
+[![CI](https://img.shields.io/github/actions/workflow/status/dgesteves/ondocs/ci.yml?branch=main&label=CI&style=flat-square&labelColor=181c22)](https://github.com/dgesteves/ondocs/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/ondocs?style=flat-square&labelColor=181c22&color=22d3ee)](https://www.npmjs.com/package/ondocs)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square&labelColor=181c22)](./LICENSE)
 [![Types](https://img.shields.io/badge/types-included-22d3ee?style=flat-square&labelColor=181c22)](https://ask-my-site-demo.vercel.app/docs/api)
 
@@ -42,25 +42,25 @@ Search runs in memory inside one function you deploy: BM25 and vectors, merged w
 | Next.js or another React app       | A route and a component     | [Next.js and React](https://ask-my-site-demo.vercel.app/docs/nextjs)  |
 | Hugo, Jekyll, MkDocs or plain HTML | One script tag              | [Script tag](https://ask-my-site-demo.vercel.app/docs/script-tag)     |
 
-Each answers from an endpoint you deploy as one function next to the site, rate-limited by default. `npx ask-my-site init` writes it for Vercel, Netlify, Cloudflare or GitHub Pages (as a Cloudflare Worker of its own, answering with Workers AI and no API key), and an Astro site with an SSR adapter needs none: see [Deploying](https://ask-my-site-demo.vercel.app/docs/deployment).
+Each answers from an endpoint you deploy as one function next to the site, rate-limited by default. `npx ondocs init` writes it for Vercel, Netlify, Cloudflare or GitHub Pages (as a Cloudflare Worker of its own, answering with Workers AI and no API key), and an Astro site with an SSR adapter needs none: see [Deploying](https://ask-my-site-demo.vercel.app/docs/deployment).
 
-**Docusaurus.** `npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk`, then:
+**Docusaurus.** `npm i ondocs ai @ai-sdk/openai @radix-ui/react-dialog cmdk`, then:
 
 ```ts
 // docusaurus.config.ts
-export default { plugins: ['ask-my-site/docusaurus'] };
+export default { plugins: ['ondocs/docusaurus'] };
 ```
 
 After `docusaurus build`, it indexes the pages into `build/ask-index.json`, writes `llms.txt` and the `.md` pages, and adds an "Ask AI" button with ⌘I.
 
-**Starlight.** `npm i ask-my-site ai @ai-sdk/openai react react-dom @radix-ui/react-dialog cmdk`, then:
+**Starlight.** `npm i ondocs ai @ai-sdk/openai react react-dom @radix-ui/react-dialog cmdk`, then:
 
 ```js
 // astro.config.mjs
-integrations: [starlight({ title: 'Acme Docs', plugins: [askMySite()] })],
+integrations: [starlight({ title: 'Acme Docs', plugins: [ondocs()] })],
 ```
 
-**Next.js.** With `OPENAI_API_KEY` set, index your content with `npx ask-my-site index ./content --base-url /docs`, then:
+**Next.js.** With `OPENAI_API_KEY` set, index your content with `npx ondocs index ./content --base-url /docs`, then:
 
 ```ts
 // app/api/ask/route.ts
@@ -71,15 +71,15 @@ export const POST = createAskHandler({
 });
 ```
 
-and render `<AskDialog launcher />` from `ask-my-site/react` in your layout.
+and render `<AskDialog launcher />` from `ondocs/react` in your layout.
 
-**Any other site.** Index the HTML it builds (`npx ask-my-site index public`), write the endpoint with `npx ask-my-site init`, and add:
+**Any other site.** Index the HTML it builds (`npx ondocs index public`), write the endpoint with `npx ondocs init`, and add:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/ask-my-site@0.6/dist/embed.global.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/ondocs@0.7/dist/embed.global.js" defer></script>
 ```
 
-**Try it without a key.** `npx ask-my-site index ./docs -e mock`, then `npx ask-my-site dev`, serves the ask endpoint and the MCP server on localhost, with offline embeddings and a mock model that quotes your docs. See [Try it locally](https://ask-my-site-demo.vercel.app/docs/local-development).
+**Try it without a key.** `npx ondocs index ./docs -e mock`, then `npx ondocs dev`, serves the ask endpoint and the MCP server on localhost, with offline embeddings and a mock model that quotes your docs. See [Try it locally](https://ask-my-site-demo.vercel.app/docs/local-development).
 
 ## For agents
 
@@ -116,12 +116,12 @@ See [MCP server](https://ask-my-site-demo.vercel.app/docs/mcp) and [llms.txt and
 ## How it compares
 
 - **Algolia DocSearch Ask AI** is free for open-source and technical docs, with your own model key and one config line in Docusaurus and VitePress. Choose it if you already use DocSearch and are fine with an Algolia account and its crawler.
-- **Kapa.ai and Inkeep** are hosted. They take more sources than your docs (forums, issues, chat) and come with analytics dashboards and support tooling. ask-my-site gives you `ask-my-site eval` for CI, readers' ratings and a log of unanswered questions you wire yourself, not a dashboard.
+- **Kapa.ai and Inkeep** are hosted. They take more sources than your docs (forums, issues, chat) and come with analytics dashboards and support tooling. ondocs gives you `ondocs eval` for CI, readers' ratings and a log of unanswered questions you wire yourself, not a dashboard.
 - **Fumadocs** has first-party AI chat and an MCP route. On a Fumadocs site, they fit its framework natively.
 - **docusaurus-plugin-mcp-server** builds the same kind of index for an MCP endpoint, more widely used today, with no Ask box for people.
-- **The llms.txt plugins** (docusaurus-plugin-llms, @signalwire/docusaurus-plugin-llms-txt, starlight-llms-txt) have more output options, such as custom sets and versions. ask-my-site writes the basics, and steps aside when one of them is installed.
+- **The llms.txt plugins** (docusaurus-plugin-llms, @signalwire/docusaurus-plugin-llms-txt, starlight-llms-txt) have more output options, such as custom sets and versions. ondocs writes the basics, and steps aside when one of them is installed.
 
-What ask-my-site adds is one index you host serving both people and agents, on Docusaurus, Starlight, Next.js or any static site, with no vendor account. See [Limits and trade-offs](https://ask-my-site-demo.vercel.app/docs/limits) for where it is the wrong tool.
+What ondocs adds is one index you host serving both people and agents, on Docusaurus, Starlight, Next.js or any static site, with no vendor account. See [Limits and trade-offs](https://ask-my-site-demo.vercel.app/docs/limits) for where it is the wrong tool.
 
 ## Links
 

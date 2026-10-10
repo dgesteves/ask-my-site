@@ -4,30 +4,30 @@ title: 'Deploying'
 description: 'Write the endpoint for Vercel, Netlify, Cloudflare or GitHub Pages with one command, where the index lives, cold starts and cost.'
 ---
 
-The endpoint deploys wherever your site's server code runs, as one function. There is no database to provision and nothing to keep in sync: the index is a file built with the site. `npx ask-my-site init` writes that function for your host.
+The endpoint deploys wherever your site's server code runs, as one function. There is no database to provision and nothing to keep in sync: the index is a file built with the site. `npx ondocs init` writes that function for your host.
 
 ## Write the endpoint with init
 
-Run `npx ask-my-site init` in your site's folder. It works out the site and the host from their config files, writes the ask endpoint and the [MCP endpoint](./mcp.md), and prints what it wrote, the environment variables to set and what is left to do:
+Run `npx ondocs init` in your site's folder. It works out the site and the host from their config files, writes the ask endpoint and the [MCP endpoint](./mcp.md), and prints what it wrote, the environment variables to set and what is left to do:
 
 ```sh
-npx ask-my-site init             # detects the site and the host, or asks which host
-npx ask-my-site init --dry-run   # prints every file it would write, and writes nothing
+npx ondocs init             # detects the site and the host, or asks which host
+npx ondocs init --dry-run   # prints every file it would write, and writes nothing
 ```
 
-| Host                                   | Detected from                                                                       | What init writes                                                                                                        |
-| -------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Vercel                                 | `vercel.json` or `.vercel/`                                                         | `api/ask.ts` and `api/mcp.ts`, and `includeFiles` for the index in `vercel.json`                                        |
-| Netlify                                | `netlify.toml` or `.netlify/`                                                       | `netlify/functions/ask.mts` and `mcp.mts`, and `included_files` for the index in `netlify.toml`                         |
-| Cloudflare Pages                       | a wrangler config with `pages_build_output_dir`, or `--host cloudflare` without one | `functions/api/ask.ts` and `mcp.ts`, which read the index through the `ASSETS` binding                                  |
-| Cloudflare Workers with static assets  | a wrangler config with `assets`                                                     | `worker/ask-my-site.ts`, which answers `/api/*` and serves the files, and `main` and the `ASSETS` binding in the config |
-| GitHub Pages, or any other static host | a Pages workflow, a `gh-pages` script or `docusaurus deploy`                        | `ask-my-site-worker/`, a Cloudflare Worker of its own that reads the index from the live site and needs no API key      |
+| Host                                   | Detected from                                                                       | What init writes                                                                                                   |
+| -------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Vercel                                 | `vercel.json` or `.vercel/`                                                         | `api/ask.ts` and `api/mcp.ts`, and `includeFiles` for the index in `vercel.json`                                   |
+| Netlify                                | `netlify.toml` or `.netlify/`                                                       | `netlify/functions/ask.mts` and `mcp.mts`, and `included_files` for the index in `netlify.toml`                    |
+| Cloudflare Pages                       | a wrangler config with `pages_build_output_dir`, or `--host cloudflare` without one | `functions/api/ask.ts` and `mcp.ts`, which read the index through the `ASSETS` binding                             |
+| Cloudflare Workers with static assets  | a wrangler config with `assets`                                                     | `worker/ondocs.ts`, which answers `/api/*` and serves the files, and `main` and the `ASSETS` binding in the config |
+| GitHub Pages, or any other static host | a Pages workflow, a `gh-pages` script or `docusaurus deploy`                        | `ondocs-worker/`, a Cloudflare Worker of its own that reads the index from the live site and needs no API key      |
 
 For a Next.js app it writes `app/api/ask/route.ts` and `app/api/mcp/route.ts` instead, which import the index, with the client IP header of the host. An Astro site with an SSR adapter needs no file at all: see [Astro with an adapter](#astro-with-an-adapter).
 
 On a site with several locales, read from Docusaurus's or Astro's `i18n` or Starlight's `locales`, the ask endpoint gets each locale's index as `indexes`, bundled with it, so the dialog on a locale's pages is answered from that locale's docs. Every endpoint it writes has a rate limit keyed on the client IP header the host sets (10 questions and 60 tool calls a minute), a daily budget of 500 questions and 1.5 million model tokens, the answer cache, and the CORS preflight answered. The one on another origin than the pages, the GitHub Pages Worker, sends CORS headers for the site's origin only. The files are plain code you own: edit the model, the limits or the budget there.
 
-Run it again whenever you like. Files that are already as it would write them are left alone, a file that differs is only overwritten if you say yes (or pass `--yes`), and an edit to a config file it cannot make safely, such as a `netlify.toml` that already configures the function, is printed for you to make by hand. It never deploys anything, and it reads no `.env` file or credential. `--no-mcp` leaves out the MCP endpoint, and [the CLI reference](./cli.md#ask-my-site-init) lists every flag.
+Run it again whenever you like. Files that are already as it would write them are left alone, a file that differs is only overwritten if you say yes (or pass `--yes`), and an edit to a config file it cannot make safely, such as a `netlify.toml` that already configures the function, is printed for you to make by hand. It never deploys anything, and it reads no `.env` file or credential. `--no-mcp` leaves out the MCP endpoint, and [the CLI reference](./cli.md#ondocs-init) lists every flag.
 
 ## Astro with an adapter
 
@@ -36,7 +36,7 @@ On an Astro or Starlight site with an SSR adapter, the integration serves `POST 
 The routes have the same defaults as the files `init` writes: 10 questions and 60 tool calls a minute per visitor, by the client address the adapter reports, a daily budget of 500 questions and 1.5 million model tokens per server instance, and the answer cache. Change them with `route`, or turn the routes off with `route: false` for a route of your own:
 
 ```js
-askMySite({
+ondocs({
   route: {
     model: 'openai:gpt-5.4-mini', // or an AI Gateway id, such as 'anthropic/claude-haiku-4.5'
     rateLimit: 10,
@@ -50,21 +50,21 @@ A route file the site already has at `src/pages/api/ask.ts` or `src/pages/api/mc
 
 ## GitHub Pages and other static hosts
 
-A host that serves only files, such as GitHub Pages, S3, Read the Docs or a plain web server, cannot run the endpoint. `init --host github-pages` writes `ask-my-site-worker/`, a Cloudflare Worker of its own, that answers for the site from another origin with Workers AI, so there is no API key to set (`--provider openai` answers with OpenAI instead):
+A host that serves only files, such as GitHub Pages, S3, Read the Docs or a plain web server, cannot run the endpoint. `init --host github-pages` writes `ondocs-worker/`, a Cloudflare Worker of its own, that answers for the site from another origin with Workers AI, so there is no API key to set (`--provider openai` answers with OpenAI instead):
 
 - It fetches `ask-index.json` from the live site, at the site's URL from your config (or `--site-url`), keeps it in memory, and checks it again every five minutes with a conditional request, so it follows the site's deploys without being redeployed.
 - It sends CORS headers for the site's origin, and only for it, so other sites' pages cannot spend your model budget through their visitors' browsers.
 - The MCP endpoint's results link to the pages on the site, not on the Worker.
 
-Deploy it with `cd ask-my-site-worker && npm install && npx wrangler deploy`, then set the dialog's `endpoint` (or the script tag's `data-endpoint`) to the URL Wrangler prints, plus `/api/ask`. The site keeps deploying as it does today. The same Worker is a template for `npm create cloudflare`; [Workers AI](./workers-ai.md) has both ways in, the models and what they cost, and how large a site fits.
+Deploy it with `cd ondocs-worker && npm install && npx wrangler deploy`, then set the dialog's `endpoint` (or the script tag's `data-endpoint`) to the URL Wrangler prints, plus `/api/ask`. The site keeps deploying as it does today. The same Worker is a template for `npm create cloudflare`; [Workers AI](./workers-ai.md) has both ways in, the models and what they cost, and how large a site fits.
 
-The Worker uses `remoteIndex` from `ask-my-site/server`, which any endpoint deployed apart from its site can use: `createAskHandler({ index: remoteIndex('https://acme.github.io/docs/ask-index.json'), … })`. A check that fails keeps the index it has; only the first fetch's failure fails a request.
+The Worker uses `remoteIndex` from `ondocs/server`, which any endpoint deployed apart from its site can use: `createAskHandler({ index: remoteIndex('https://acme.github.io/docs/ask-index.json'), … })`. A check that fails keeps the index it has; only the first fetch's failure fails a request.
 
 The first request in each Worker instance loads the index: 11 ms for this site's docs (229 chunks) and 38 ms for 1,000 chunks, in a fresh Node.js process on an Apple M1 Max. The Workers Free plan gives a request 10 ms of CPU time, with what Cloudflare calls "some built-in flexibility" for a Worker that "infrequently runs over" it, so a small site fits; a large one needs the Workers Paid plan, which allows 30 seconds by default.
 
 ## Runtimes
 
-The handler uses Web APIs only, so it runs on Node.js, Bun, Deno, Cloudflare Workers, Vercel Functions and Netlify Functions. File-system helpers live in `ask-my-site/node` and are only needed at build time.
+The handler uses Web APIs only, so it runs on Node.js, Bun, Deno, Cloudflare Workers, Vercel Functions and Netlify Functions. File-system helpers live in `ondocs/node` and are only needed at build time.
 
 ## Where the index lives
 
@@ -87,7 +87,7 @@ For a static site, such as a Docusaurus or Astro site, `init` writes `api/ask.ts
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 export const POST = createAskHandler({
   index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
@@ -109,7 +109,7 @@ On Netlify, `init` writes a function at `netlify/functions/ask.mts` that rate-li
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 export default createAskHandler({
   index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
@@ -139,7 +139,7 @@ On Cloudflare Pages, `init` writes a Pages Function at `functions/api/ask.ts`. I
 ```ts
 // functions/api/ask.ts
 import { createOpenAI } from '@ai-sdk/openai';
-import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+import { createAskHandler, memoryRateLimit } from 'ondocs/server';
 
 const INDEX = '/ask-index.json';
 
@@ -164,7 +164,7 @@ export const onRequest: PagesFunction<{ OPENAI_API_KEY: string; ASSETS: Fetcher 
 };
 ```
 
-For a static site on Cloudflare Workers, `init` writes `worker/ask-my-site.ts`, which answers `/api/ask` and `/api/mcp` and hands every other request to the static assets, and points the wrangler config's `main` at it. A Worker that already has an entry point can call its `askMySite(request, env)` from there. On Cloudflare, always rate-limit with `trustedHeader: 'cf-connecting-ip'`, as above: the default limiter reads `X-Forwarded-For`, which is not the header Cloudflare vouches for.
+For a static site on Cloudflare Workers, `init` writes `worker/ondocs.ts`, which answers `/api/ask` and `/api/mcp` and hands every other request to the static assets, and points the wrangler config's `main` at it. A Worker that already has an entry point can call its `ondocs(request, env)` from there. On Cloudflare, always rate-limit with `trustedHeader: 'cf-connecting-ip'`, as above: the default limiter reads `X-Forwarded-For`, which is not the header Cloudflare vouches for.
 
 ## Environment variables
 
@@ -176,4 +176,4 @@ Loading the index is a one-time cost per server instance: about 32 ms for 1,000 
 
 ## Cost
 
-ask-my-site itself is free and MIT-licensed; you pay your model provider. Each answered question costs one embedding call for the question and one model call for the answer, with at most 8,000 characters of sources in (`maxContextChars`) and at most 800 tokens out (`generation.maxOutputTokens`). A follow-up that needs rewriting costs one more call, with the last three questions and answers in and at most 200 tokens out. A refused question costs the embedding call only: the model is never called. Indexing costs one embedding call per changed chunk, since unchanged chunks reuse their vectors.
+ondocs itself is free and MIT-licensed; you pay your model provider. Each answered question costs one embedding call for the question and one model call for the answer, with at most 8,000 characters of sources in (`maxContextChars`) and at most 800 tokens out (`generation.maxOutputTokens`). A follow-up that needs rewriting costs one more call, with the last three questions and answers in and at most 200 tokens out. A refused question costs the embedding call only: the model is never called. Indexing costs one embedding call per changed chunk, since unchanged chunks reuse their vectors.

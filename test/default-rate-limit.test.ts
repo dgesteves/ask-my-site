@@ -98,9 +98,9 @@ describe('the default rate limit', () => {
   });
 });
 
-describe('ask-my-site dev', () => {
+describe('ondocs dev', () => {
   it('answers up to 30 questions a minute from this machine, without warning about IPs', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'ask-my-site-limit-'));
+    const root = await mkdtemp(join(tmpdir(), 'ondocs-limit-'));
     const file = join(root, 'ask-index.json');
     await writeIndexFile(file, index);
     const logs: string[] = [];

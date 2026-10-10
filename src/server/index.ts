@@ -1,5 +1,5 @@
 /**
- * ask-my-site/server: the ask endpoint and the MCP endpoint, as Web-standard request handlers.
+ * ondocs/server: the ask endpoint and the MCP endpoint, as Web-standard request handlers.
  */
 
 export { createAskHandler } from './handler';

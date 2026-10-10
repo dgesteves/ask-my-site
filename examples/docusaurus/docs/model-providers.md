@@ -4,11 +4,11 @@ title: 'Model providers'
 description: 'Bring your own key for OpenAI, Anthropic, Google, xAI, AI Gateway or any AI SDK provider, and configure the embedding model.'
 ---
 
-ask-my-site uses the Vercel AI SDK for every model call, so it works with OpenAI, Anthropic, Google and xAI, and with any other provider the AI SDK supports. You bring your own API key: requests go from your function straight to your provider, and ask-my-site never sees or proxies them.
+ondocs uses the Vercel AI SDK for every model call, so it works with OpenAI, Anthropic, Google and xAI, and with any other provider the AI SDK supports. You bring your own API key: requests go from your function straight to your provider, and ondocs never sees or proxies them.
 
 ## Two models, two jobs
 
-ask-my-site uses two models. The embedding model turns chunks into vectors at build time and each question into a vector at request time; it must be the same model in both places. The language model writes the answer from the retrieved sources; you can change it at any time without rebuilding the index.
+ondocs uses two models. The embedding model turns chunks into vectors at build time and each question into a vector at request time; it must be the same model in both places. The language model writes the answer from the retrieved sources; you can change it at any time without rebuilding the index.
 
 The index records which embedding model built it, and the handler checks it: a handler that embeds questions with another model fails with an error that names both, instead of returning poor answers.
 
@@ -18,7 +18,7 @@ OpenAI is the default. Install `@ai-sdk/openai`, set `OPENAI_API_KEY` at build t
 
 ```ts
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler } from 'ask-my-site/server';
+import { createAskHandler } from 'ondocs/server';
 import index from './ask-index.json';
 
 export const POST = createAskHandler({
@@ -38,7 +38,7 @@ To answer with Claude, install `@ai-sdk/anthropic`, set `ANTHROPIC_API_KEY`, and
 ```ts
 import { anthropic } from '@ai-sdk/anthropic';
 import { openai } from '@ai-sdk/openai';
-import { createAskHandler } from 'ask-my-site/server';
+import { createAskHandler } from 'ondocs/server';
 import index from './ask-index.json';
 
 export const POST = createAskHandler({
@@ -56,10 +56,10 @@ Or build a keyword-only index with `-e none` and leave `embeddingModel` out, so 
 Google offers both a chat model and an embedding model, so one `GOOGLE_GENERATIVE_AI_API_KEY` covers answers and vectors. Install `@ai-sdk/google`, and build the index from a [config file](./cli.md#the-config-file), since the CLI's `-e` specs name OpenAI and AI Gateway models:
 
 ```js
-// ask-my-site.config.mjs
+// ondocs.config.mjs
 import { google } from '@ai-sdk/google';
 
-/** @type {import('ask-my-site/node').AskConfig} */
+/** @type {import('ondocs/node').AskConfig} */
 export default {
   embeddingModel: google.embedding('gemini-embedding-001'),
   embeddingProviderOptions: { google: { outputDimensionality: 768 } },
@@ -70,7 +70,7 @@ Then give the handler the same embedding model and options, with a Gemini model 
 
 ```ts
 import { google } from '@ai-sdk/google';
-import { createAskHandler } from 'ask-my-site/server';
+import { createAskHandler } from 'ondocs/server';
 import index from './ask-index.json';
 
 export const POST = createAskHandler({
@@ -90,7 +90,7 @@ xAI's Grok writes answers, but xAI has no embedding model in the AI SDK. Install
 ```ts
 import { openai } from '@ai-sdk/openai';
 import { xai } from '@ai-sdk/xai';
-import { createAskHandler } from 'ask-my-site/server';
+import { createAskHandler } from 'ondocs/server';
 import index from './ask-index.json';
 
 export const POST = createAskHandler({
@@ -105,7 +105,7 @@ Or build a keyword-only index with `-e none` and leave `embeddingModel` out, so 
 
 ## Workers AI
 
-Cloudflare's Workers AI runs in a Cloudflare Worker through an `AI` binding, with no API key, and the `workers-ai-provider` package makes its models AI SDK models. The [Workers AI guide](./workers-ai.md) has a Worker that answers any static site with it, from the template or from `npx ask-my-site init --host github-pages`:
+Cloudflare's Workers AI runs in a Cloudflare Worker through an `AI` binding, with no API key, and the `workers-ai-provider` package makes its models AI SDK models. The [Workers AI guide](./workers-ai.md) has a Worker that answers any static site with it, from the template or from `npx ondocs init --host github-pages`:
 
 ```ts
 import { createWorkersAI } from 'workers-ai-provider';
@@ -142,10 +142,10 @@ The CLI and the plugins name the embedding model with a spec string, so a config
 `--dimensions 512` (or `dimensions: 512` in a plugin, its default) shrinks vectors for models that support it. For OpenAI's `text-embedding-3` models the handler reads the size from the index; for another provider's size option, pass the same value in `embeddingProviderOptions`. For a provider package the specs don't cover, export the model from a [config file](./cli.md#the-config-file):
 
 ```js
-// ask-my-site.config.mjs
+// ondocs.config.mjs
 import { cohere } from '@ai-sdk/cohere';
 
-/** @type {import('ask-my-site/node').AskConfig} */
+/** @type {import('ondocs/node').AskConfig} */
 export default {
   embeddingModel: cohere.embedding('embed-multilingual-v3.0'),
 };

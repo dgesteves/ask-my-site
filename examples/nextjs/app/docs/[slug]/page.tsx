@@ -14,14 +14,14 @@ export async function generateMetadata(props: PageProps<'/docs/[slug]'>): Promis
   const doc = await getDoc((await props.params).slug);
   if (!doc) return {};
   const url = `/docs/${doc.slug}`;
-  const title = `${doc.title} · ask-my-site`;
+  const title = `${doc.title} · ondocs`;
   return {
     title: doc.title,
     description: doc.description,
     alternates: { canonical: url },
     openGraph: {
       type: 'article',
-      siteName: 'ask-my-site',
+      siteName: 'ondocs',
       title,
       description: doc.description,
       url,

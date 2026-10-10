@@ -1,7 +1,7 @@
 import type { AskDialogLabels } from '../react/labels';
 
 /** What the dialog and its floating launcher show, in the embed and the framework plugins. */
-export interface AskMySiteDialogOptions {
+export interface OndocsDialogOptions {
   /**
    * Every string the dialog and its button show or announce, in your language, over the English
    * defaults. `title`, `placeholder` and `buttonLabel` win over their labels.
@@ -28,4 +28,4 @@ export interface AskMySiteDialogOptions {
  * `auto` follows a `data-theme="light"` or `"dark"` on `<html>`, as Starlight and Docusaurus set
  * it, and `prefers-color-scheme` on a page without one, live in both cases.
  */
-export type AskMySiteTheme = 'auto' | 'light' | 'dark';
+export type OndocsTheme = 'auto' | 'light' | 'dark';

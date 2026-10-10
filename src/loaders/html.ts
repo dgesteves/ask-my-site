@@ -715,7 +715,7 @@ function linkTarget(href: string, page: string): string | null {
   if (!value || value.startsWith('#')) return value || null;
   const scheme = /^([a-z][a-z\d+.-]*):/i.exec(value)?.[1]?.toLowerCase();
   if (scheme) return ['http', 'https', 'mailto'].includes(scheme) ? value : null;
-  const base = 'https://ask-my-site.invalid';
+  const base = 'https://ondocs.invalid';
   try {
     const resolved = new URL(value, new URL(page, `${base}/`));
     return resolved.origin === base

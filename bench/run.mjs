@@ -157,7 +157,7 @@ console.log(JSON.stringify({ chunks: index.chunks.length, steady: steady - start
 `;
 
 function rssGrowth(json) {
-  const dir = mkdtempSync(join(tmpdir(), 'ask-my-site-bench-'));
+  const dir = mkdtempSync(join(tmpdir(), 'ondocs-bench-'));
   try {
     const file = join(dir, 'ask-index.json');
     writeFileSync(file, json);

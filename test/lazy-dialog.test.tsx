@@ -67,9 +67,7 @@ describe('AskDialog loads the dialog on first use', () => {
       expect(document.activeElement?.className).toContain('ask-input');
     });
     // The page behind the open dialog is hidden from assistive tech, the button with it.
-    expect(document.querySelector('.ask-my-site-launcher')?.getAttribute('aria-expanded')).toBe(
-      'true',
-    );
+    expect(document.querySelector('.ondocs-launcher')?.getAttribute('aria-expanded')).toBe('true');
     await user.keyboard('{Escape}');
     await waitFor(() => {
       expect(dialog.isConnected).toBe(false);
@@ -206,13 +204,13 @@ describe('the embed loads the dialog on first use', () => {
     mounted.unmount();
     await arrive();
     expect(renders).toEqual([]);
-    expect(document.querySelector('.ask-my-site')).toBeNull();
+    expect(document.querySelector('.ondocs')).toBeNull();
   });
 
   it('passes open and close through to the dialog once it is there', async () => {
     const { load, setOpen, arrive } = deferredLoader();
     const mounted = mountWithLoader({ buttonLabel: false, shortcut: false }, load);
-    expect(document.querySelector('.ask-my-site-launcher')).toBeNull();
+    expect(document.querySelector('.ondocs-launcher')).toBeNull();
     mounted.open();
     await arrive();
     mounted.close();

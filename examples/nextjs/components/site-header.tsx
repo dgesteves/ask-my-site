@@ -9,11 +9,11 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="site-header-inner">
-        <Link href="/" className="brand" aria-label="ask-my-site home">
+        <Link href="/" className="brand" aria-label="ondocs home">
           <span className="brand-mark">
             <Spark size={16} />
           </span>
-          ask-my-site
+          ondocs
         </Link>
         <nav aria-label="Site" className="header-nav">
           <NavLink href="/docs" className="header-link">

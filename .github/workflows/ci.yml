@@ -40,7 +40,7 @@ jobs:
         run: node -e "for(const[f,kb]of[['dist/embed.global.js',4],['dist/embed-dialog.global.js',110]]){const s=require('zlib').gzipSync(require('fs').readFileSync(f)).length;console.log(f+':',(s/1024).toFixed(1),'KB gzipped, budget',kb);if(s>kb*1024)throw new Error(f+' is over its '+kb+' KB budget')}"
       - name: The Docusaurus and Starlight docs match the website's
         run: pnpm examples:check
-      - name: The Cloudflare Worker template is what ask-my-site init writes
+      - name: The Cloudflare Worker template is what ondocs init writes
         run: pnpm template:check
       - name: CLI smoke test, including --check and --llms-txt
         run: |
@@ -52,7 +52,7 @@ jobs:
           # Re-link the workspace now that dist/cli.js exists, so the example gets its bin.
           pnpm install --frozen-lockfile --offline
           pnpm --filter ask-my-site-example-nextjs build
-      - name: Score the website's retrieval with ask-my-site eval
+      - name: Score the website's retrieval with ondocs eval
         run: node dist/cli.js eval examples/nextjs/ask-eval.yaml
       - name: Lint the example app
         run: pnpm --filter ask-my-site-example-nextjs lint
@@ -75,7 +75,7 @@ jobs:
       - name: JavaScript per page and the dialog's focus, in a browser
         run: node scripts/js-weight.mjs docusaurus starlight next embed --check
 
-  # A site made the way a new user makes one, with the scaffolder's defaults, and ask-my-site
+  # A site made the way a new user makes one, with the scaffolder's defaults, and ondocs
   # installed from the packed tarball rather than linked from the workspace. The index is built
   # with OpenAI embeddings from a local stub (scripts/openai-stub.mjs) and must come out embedded.
   # The sites are generated rather than committed: scaffolding takes seconds next to installing,
@@ -87,7 +87,7 @@ jobs:
       fail-fast: false
       matrix:
         # The last two install the plugin under its own package's name, from packages/.
-        site: [next, docusaurus, starlight, docusaurus-plugin-ask-my-site, starlight-ask-my-site]
+        site: [next, docusaurus, starlight, docusaurus-plugin-ondocs, starlight-ondocs]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -108,9 +108,9 @@ jobs:
       - run: pnpm build
       - run: npm pack --pack-destination "$RUNNER_TEMP"
       - name: Create, build and check the site
-        run: node scripts/consumer-site.mjs ${{ matrix.site }} "$RUNNER_TEMP"/ask-my-site-*.tgz "$RUNNER_TEMP/site"
+        run: node scripts/consumer-site.mjs ${{ matrix.site }} "$RUNNER_TEMP"/ondocs-*.tgz "$RUNNER_TEMP/site"
 
-  # What `ask-my-site init` writes for each host, built with that host's own tooling (vercel build,
+  # What `ondocs init` writes for each host, built with that host's own tooling (vercel build,
   # netlify build --offline and serve, wrangler --dry-run and local dev), signed in to nothing, then
   # asked questions against a local OpenAI stub. The astro-* recipes have no route file: the
   # integration serves the endpoints through the adapter. workers-ai runs the Cloudflare Worker
@@ -150,7 +150,7 @@ jobs:
       - run: pnpm build
       - run: npm pack --pack-destination "$RUNNER_TEMP"
       - name: Write, build and ask the endpoint
-        run: node scripts/deploy-recipes.mjs ${{ matrix.recipe }} "$RUNNER_TEMP"/ask-my-site-*.tgz "$RUNNER_TEMP/site"
+        run: node scripts/deploy-recipes.mjs ${{ matrix.recipe }} "$RUNNER_TEMP"/ondocs-*.tgz "$RUNNER_TEMP/site"
 
   node-compat:
     name: Test on Node ${{ matrix.node }}

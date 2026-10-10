@@ -15,7 +15,7 @@ import { loadDirectory, writeIndexFile } from '../src/node';
 import { createMcpHandler } from '../src/server';
 
 const corpus = join(
-  process.env.ASK_MY_SITE_CORPUS ?? join(import.meta.dirname, '..', '.corpus'),
+  process.env.ONDOCS_CORPUS ?? join(import.meta.dirname, '..', '.corpus'),
   'docusaurus',
 );
 const docs = join(corpus, 'website/docs');
@@ -205,7 +205,7 @@ describe.skipIf(!present)(
     });
 
     it('scores the sample eval file of the audit’s questions, as asked, within its thresholds', async () => {
-      const dir = await mkdtemp(join(tmpdir(), 'ask-my-site-corpus-eval-'));
+      const dir = await mkdtemp(join(tmpdir(), 'ondocs-corpus-eval-'));
       try {
         await writeIndexFile(join(dir, 'ask-index.json'), index);
         const out: string[] = [];

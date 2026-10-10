@@ -30,16 +30,16 @@ export interface CliIO {
   stderr: (line: string) => void;
   cwd: string;
   env: Record<string, string | undefined>;
-  /** Stops `ask-my-site dev`. Default: Ctrl+C. */
+  /** Stops `ondocs dev`. Default: Ctrl+C. */
   signal?: AbortSignal;
-  /** Asks the person at the terminal, for `ask-my-site init`. Absent when stdin is not a TTY. */
+  /** Asks the person at the terminal, for `ondocs init`. Absent when stdin is not a TTY. */
   prompt?: (question: string) => Promise<string>;
 }
 
-const USAGE = `Usage: ask-my-site index [dir] [options]
-       ask-my-site init [options]  Write the endpoint for your host (ask-my-site init --help)
-       ask-my-site dev [options]   Serve the ask endpoint locally (ask-my-site dev --help)
-       ask-my-site eval <file>     Score retrieval against known answers (ask-my-site eval --help)
+const USAGE = `Usage: ondocs index [dir] [options]
+       ondocs init [options]  Write the endpoint for your host (ondocs init --help)
+       ondocs dev [options]   Serve the ask endpoint locally (ondocs dev --help)
+       ondocs eval <file>     Score retrieval against known answers (ondocs eval --help)
 
 Builds a static retrieval index from the Markdown, MDX and HTML files in <dir>.
 
@@ -484,7 +484,7 @@ export async function main(args: string[], io: CliIO): Promise<number> {
     if (flags.check) {
       const existing = await readIndexFile(out);
       if (!existing) {
-        io.stderr(`✗ ${outLabel} does not exist. Run \`ask-my-site index\` without --check.`);
+        io.stderr(`✗ ${outLabel} does not exist. Run \`ondocs index\` without --check.`);
         return 1;
       }
       const embedding = await resolveEmbedding(flags, config, io, 'check');
@@ -513,7 +513,7 @@ export async function main(args: string[], io: CliIO): Promise<number> {
       sample('added', result.added);
       sample('changed', result.changed);
       sample('removed', result.removed);
-      io.stderr('  Rebuild it with `ask-my-site index` and commit the result.');
+      io.stderr('  Rebuild it with `ondocs index` and commit the result.');
       return 1;
     }
 
