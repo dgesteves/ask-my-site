@@ -15,6 +15,7 @@ import {
 } from 'react';
 
 import type { AnswerLinks } from './answer';
+import type { AskDialogLabels } from './labels';
 import type { AskState, UseAskOptions } from './use-ask';
 
 export type AskDialogSlot =
@@ -38,7 +39,12 @@ export interface AskDialogProps extends Omit<UseAskOptions, 'onFinish'> {
    * `ask-my-site/embed/launcher.css` for its look, or style `.ask-my-site-launcher` yourself.
    */
   launcher?: boolean | string;
-  /** Accessible dialog title. Default `"Ask this site"`. */
+  /**
+   * Every string the dialog shows or announces, in your language: any of them, over the English
+   * defaults. `title`, `placeholder` and `launcher` win over their labels.
+   */
+  labels?: Partial<AskDialogLabels>;
+  /** Accessible dialog title. Default `labels.title`, "Ask this site". */
   title?: string;
   placeholder?: string;
   /** Questions offered before the visitor types. */
@@ -207,10 +213,11 @@ export function AskDialog({
           {...intent}
           {...state}
         >
-          <span aria-hidden="true">✦</span> {launcher === true ? 'Ask AI' : launcher}
+          <span aria-hidden="true">✦</span>{' '}
+          {launcher === true ? (props.labels?.launcher ?? 'Ask AI') : launcher}
           {key ? (
             <kbd aria-hidden="true">
-              {mac ? '⌘' : 'Ctrl '}
+              {mac ? '⌘' : `${props.labels?.controlKey ?? 'Ctrl'} `}
               {key}
             </kbd>
           ) : null}

@@ -48,6 +48,7 @@ export default function askMySite(options: AskMySiteStarlightOptions = {}): Star
             stylesheets: ['ask-my-site/starlight/launcher.css'],
             title: `Ask ${siteTitle(config)}`,
             siteTitle: siteTitle(config),
+            localeTitles: localeTitles(config),
             ...(siteDescription(config) ? { siteDescription: siteDescription(config) } : {}),
             // Starlight plugins that write llms files, which the integration leaves them to.
             plugins: (config.plugins ?? []).map((plugin) => plugin.name),
@@ -60,6 +61,18 @@ export default function askMySite(options: AskMySiteStarlightOptions = {}): Star
       },
     },
   };
+}
+
+/** The dialog's title in each locale but the root one, from the site title in its language. */
+function localeTitles({ title, locales }: StarlightUserConfig): Record<string, string> {
+  const titles: Record<string, string> = {};
+  for (const [key, locale] of Object.entries(locales ?? {})) {
+    if (key === 'root') continue;
+    const lang = locale.lang ?? key;
+    const translated = typeof title === 'string' ? title : (title[lang] ?? title[key]);
+    if (translated) titles[key] = `Ask ${translated}`;
+  }
+  return titles;
 }
 
 /** The site title, in the default locale's language when it is translated. */

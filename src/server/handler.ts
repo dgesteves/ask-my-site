@@ -79,6 +79,12 @@ export interface AskHandlerOptions {
    * or a (possibly async) function returning any of those, called once on the first request.
    */
   index: IndexSource | (() => IndexSource | Promise<IndexSource>);
+  /**
+   * The index of each other locale, by the locale the dialog sends (`fr`, `pt-br`): the plugins
+   * build one per locale, and send the page's with each question. A question from a locale with
+   * no index here is answered from `index`.
+   */
+  indexes?: Record<string, IndexSource | (() => IndexSource | Promise<IndexSource>)>;
   /** Any AI SDK language model, e.g. `openai('gpt-5.4-mini')`, or a gateway model id. */
   model: LanguageModel;
   /**
@@ -225,8 +231,11 @@ function citesSources(text: string, sources: readonly AskSource[]): boolean {
   return false;
 }
 
+/** A locale as the dialog sends it: `fr`, `pt-br`, `zh-Hans`. Only the keys of `indexes` are used. */
+const localeSchema = z.string().max(35).optional();
+
 const requestSchema = z.union([
-  z.object({ question: z.string() }),
+  z.object({ question: z.string(), locale: localeSchema }),
   // `useChat` from @ai-sdk/react posts the conversation; the latest user message is the question.
   z.object({
     messages: z
@@ -240,6 +249,7 @@ const requestSchema = z.union([
         }),
       )
       .min(1),
+    locale: localeSchema,
   }),
 ]);
 
@@ -331,6 +341,12 @@ export function createAskHandler(
   };
 
   const getIndex = indexLoader(options.index, options.embeddingModel);
+  const localeIndexes = new Map(
+    Object.entries(options.indexes ?? {}).map(([locale, source]) => [
+      locale,
+      indexLoader(source, options.embeddingModel),
+    ]),
+  );
 
   const json = (status: number, body: AskErrorBody, headers?: Record<string, string>): Response =>
     Response.json(body, { status, headers: { ...baseHeaders, ...headers } });
@@ -527,7 +543,8 @@ export function createAskHandler(
 
     let index: LoadedIndex;
     try {
-      index = await getIndex();
+      const locale = parsed.success ? parsed.data.locale : undefined;
+      index = await ((locale ? localeIndexes.get(locale) : undefined) ?? getIndex)();
     } catch (error) {
       return misconfigured(error);
     }

@@ -78,13 +78,35 @@ Build the site once, run `npx ask-my-site dev` in its folder, which answers from
 | `chunking`                 | `{ maxChars: 1200, overlap: 150 }` | Chunk size and overlap, in characters.                                                           |
 | `indexFile`                | `ask-index.json`                   | Where the index is written in `build/` and served from.                                          |
 | `exclude`                  | `[]`                               | Path prefixes to leave out, relative to `baseUrl`.                                               |
-| `dialog`                   |                                    | `title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`.                                |
+| `dialog`                   |                                    | `title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`, `labels`, `locales`.           |
 | `mcp`                      | none                               | The [MCP endpoint](/integrations/mcp/)'s URL or path, for `<AskMySiteMcp />`.                    |
 | `llmsTxt`                  | on                                 | Write [llms.txt, llms-full.txt and .md copies](/integrations/llms-txt/); `false` turns them off. |
 
 ## Locales and versions
 
-Docusaurus builds each locale on its own, and each gets its own index under its locale path: `build/fr/ask-index.json`, served at `/fr/ask-index.json`. Versioned docs index every version, so an answer can cite an old one; leave versions out with `exclude`, as in `exclude: ['/docs/next', '/docs/1.0']`.
+Docusaurus builds each locale on its own, and each gets its own index under its locale path: `build/fr/ask-index.json`, served at `/fr/ask-index.json`. On a locale's pages, the dialog sends the locale with each question, and an endpoint with `indexes` answers from that locale's index: `npx ask-my-site init` reads the locales from `i18n` and writes that. Give the dialog its words in each language with `dialog.locales`, by Docusaurus locale, over the dialog's own options:
+
+```ts
+plugins: [
+  [
+    'ask-my-site/docusaurus',
+    {
+      dialog: {
+        suggestions: ['How do I install it?'],
+        locales: {
+          fr: {
+            title: 'Demander à Acme',
+            suggestions: ['Comment l’installer ?'],
+            labels: { launcher: 'Demander', placeholder: 'Posez une question…', newQuestion: 'Nouvelle question' },
+          },
+        },
+      },
+    },
+  ],
+],
+```
+
+Every label is listed in [The ask dialog](/reference/ask-dialog/#labels-and-languages). Versioned docs index every version, so an answer can cite an old one; leave versions out with `exclude`, as in `exclude: ['/docs/next', '/docs/1.0']`.
 
 ## When another plugin wraps Root
 

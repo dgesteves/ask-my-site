@@ -35,10 +35,23 @@ import type { LlmsPage } from '../llms';
 import { attribute, fromHtml } from '../loaders/html';
 import type { SourceDocument } from '../types';
 
+/** What the dialog shows in one locale, over the dialog's own options. */
+export type AskMySiteLocaleDialogOptions = Pick<
+  DialogOptions,
+  'labels' | 'placeholder' | 'suggestions' | 'buttonLabel'
+> & { title?: string };
+
 /** What the dialog shows; passed to `AskDialog`. */
 export interface AskMySiteDialogOptions extends DialogOptions {
-  /** The dialog's accessible name. Default "Ask {site title}". */
+  /** The dialog's accessible name. Default "Ask {site title}", or `labels.title`. */
   title?: string;
+  /**
+   * Options for each locale of the site, by its Docusaurus locale (`fr`, `pt-BR`), over these:
+   * the labels, the title and the suggestions in that language. The build for a locale uses its
+   * own, and the dialog sends the locale with each question, so an endpoint with an index per
+   * locale answers from that one.
+   */
+  locales?: Record<string, AskMySiteLocaleDialogOptions>;
 }
 
 // A type, not an interface, so it fits Docusaurus's `PluginOptions` index signature in a
@@ -81,7 +94,9 @@ export type AskMySiteOptions = IndexOptions & {
 /** What the theme reads with `useAllPluginInstancesData('ask-my-site')`. */
 export interface AskMySiteGlobalData {
   endpoint: string;
-  dialog: AskMySiteDialogOptions & { title: string };
+  dialog: Omit<AskMySiteDialogOptions, 'locales'> & { title: string };
+  /** The locale this build is for, when it is not the default one. */
+  locale?: string;
   /** The MCP endpoint, absolute, when the plugin's `mcp` option names one. */
   mcp?: { url: string; name: string };
 }
@@ -91,7 +106,7 @@ interface LoadContext {
   siteConfig: { title: string; titleDelimiter?: string; url?: string; tagline?: string };
   /** The base URL with the locale's path, e.g. `/docs/fr/`. */
   baseUrl: string;
-  i18n: { currentLocale: string };
+  i18n: { currentLocale: string; defaultLocale?: string };
 }
 
 interface PostBuildProps {
@@ -109,9 +124,18 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
   const { title: siteTitle, titleDelimiter = '|' } = context.siteConfig;
   const indexFile = (options.indexFile ?? 'ask-index.json').replace(/^\/+/, '');
   const mcp = resolveMcp(options.mcp, context.siteConfig.url, siteTitle, 'the site config');
+  // This build's locale: its own options over the dialog's, and sent with each question.
+  const { currentLocale, defaultLocale } = context.i18n;
+  const { locales: perLocale, ...base } = options.dialog ?? {};
+  const own = perLocale?.[currentLocale];
+  const labels = { ...base.labels, ...own?.labels };
+  const dialog = { ...base, ...own, ...(Object.keys(labels).length > 0 ? { labels } : {}) };
   const data: AskMySiteGlobalData = {
     endpoint: dialogEndpoint(options.endpoint),
-    dialog: { ...options.dialog, title: options.dialog?.title ?? `Ask ${siteTitle}` },
+    dialog: { ...dialog, title: dialog.title ?? labels.title ?? `Ask ${siteTitle}` },
+    ...(defaultLocale !== undefined && currentLocale !== defaultLocale
+      ? { locale: currentLocale }
+      : {}),
     ...(mcp ? { mcp } : {}),
   };
 

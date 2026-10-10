@@ -11,6 +11,8 @@ export { AskAnswer, citedSourceIds, safeHref } from './answer';
 export type { AnswerLinks, AskAnswerProps } from './answer';
 export { McpInstall } from './mcp-install';
 export type { McpInstallProps } from './mcp-install';
+export { DEFAULT_LABELS } from './labels';
+export type { AskDialogLabels } from './labels';
 export { useAsk } from './use-ask';
 export type { AskError, AskState, AskStatus, AskTurn, UseAsk, UseAskOptions } from './use-ask';
 export { readAskStream } from './stream';

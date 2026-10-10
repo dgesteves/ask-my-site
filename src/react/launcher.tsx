@@ -7,6 +7,7 @@ import { AskDialog, type AskDialogProps } from './ask-dialog';
 
 export interface AskWithLauncherProps extends AskMySiteDialogOptions {
   endpoint: string;
+  locale?: string;
   theme: 'light' | 'dark';
   headers?: Record<string, string>;
   open?: boolean;
@@ -20,10 +21,16 @@ export interface AskWithLauncherProps extends AskMySiteDialogOptions {
  */
 export function AskWithLauncher({
   shortcut = 'i',
-  buttonLabel = 'Ask AI',
+  buttonLabel,
   ...props
 }: AskWithLauncherProps): ReactNode {
-  return <AskDialog {...props} shortcut={shortcut} launcher={buttonLabel} />;
+  return (
+    <AskDialog
+      {...props}
+      shortcut={shortcut}
+      launcher={buttonLabel ?? props.labels?.launcher ?? 'Ask AI'}
+    />
+  );
 }
 
 const DARK = '(prefers-color-scheme: dark)';

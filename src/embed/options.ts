@@ -1,5 +1,12 @@
+import type { AskDialogLabels } from '../react/labels';
+
 /** What the dialog and its floating launcher show, in the embed and the framework plugins. */
 export interface AskMySiteDialogOptions {
+  /**
+   * Every string the dialog and its button show or announce, in your language, over the English
+   * defaults. `title`, `placeholder` and `buttonLabel` win over their labels.
+   */
+  labels?: Partial<AskDialogLabels>;
   /** The dialog's accessible name. */
   title?: string;
   placeholder?: string;

@@ -17,6 +17,40 @@ export interface TemplateSite {
   indexPath: string;
   /** The site's public URL, with its base path: `https://acme.github.io/docs`. */
   url?: string;
+  /** The site's other locales, each with an index of its own at `<locale>/ask-index.json`. */
+  locales?: string[];
+}
+
+/** A locale's index file, next to the default one: `build/fr/ask-index.json`. */
+const localeFile = (site: TemplateSite, locale: string): string => {
+  const slash = site.indexFile.lastIndexOf('/');
+  return `${site.indexFile.slice(0, slash + 1)}${locale}/${site.indexFile.slice(slash + 1)}`;
+};
+
+/** A locale's index path on the site: `/fr/ask-index.json`. */
+const localePath = (site: TemplateSite, locale: string): string =>
+  site.indexPath.replace(/^\/?/, `/${locale}/`);
+
+/** The index files to bundle with a function: the default one, and each locale's. */
+export const indexFiles = (site: TemplateSite): string[] => [
+  site.indexFile,
+  ...(site.locales ?? []).map((locale) => localeFile(site, locale)),
+];
+
+/**
+ * The ask handler's `indexes`, one line, when the site has other locales: each loaded as
+ * `load(fileOrPath)` writes it. Empty without.
+ */
+function indexesOption(site: TemplateSite, pad: string, load: (locale: string) => string): string {
+  if (!site.locales?.length) return '';
+  const key = (locale: string) => (/^[a-z_$][\w$]*$/i.test(locale) ? locale : quote(locale));
+  return [
+    `${pad}// Each locale's index, which the dialog asks for on that locale's pages.`,
+    `${pad}indexes: {`,
+    ...site.locales.map((locale) => `${pad}  ${key(locale)}: ${load(locale)},`),
+    `${pad}},`,
+    '',
+  ].join('\n');
 }
 
 export interface GeneratedFile {
@@ -146,7 +180,7 @@ ${imports('createAskHandler, memoryRateLimit')}
 
 const handler = createAskHandler({
   index: ${readIndex(site)},
-${askOptions(site, 'vercel', '  ')}
+${indexesOption(site, '  ', (locale) => readIndex({ ...site, indexFile: localeFile(site, locale) }))}${askOptions(site, 'vercel', '  ')}
 });
 
 export const POST = handler;
@@ -199,14 +233,18 @@ export function vercelConfig(
     typeof config.functions === 'object' && config.functions !== null
       ? { ...(config.functions as Record<string, Record<string, unknown>>) }
       : {};
+  // One glob for the default index and each locale's: `build/**/ask-index.json`.
+  const include = site.locales?.length
+    ? `${site.indexFile.slice(0, site.indexFile.lastIndexOf('/') + 1)}**/${site.indexFile.slice(site.indexFile.lastIndexOf('/') + 1)}`
+    : site.indexFile;
   for (const file of mcp ? ['api/ask.ts', 'api/mcp.ts'] : ['api/ask.ts']) {
     const included = functions[file]?.includeFiles;
-    if (included !== undefined && included !== site.indexFile) {
+    if (included !== undefined && included !== include) {
       return {
-        error: `vercel.json already sets includeFiles for ${file} (${JSON.stringify(included)}): make it include ${site.indexFile} as well`,
+        error: `vercel.json already sets includeFiles for ${file} (${JSON.stringify(included)}): make it include ${include} as well`,
       };
     }
-    functions[file] = { ...functions[file], includeFiles: site.indexFile };
+    functions[file] = { ...functions[file], includeFiles: include };
   }
   return { content: `${JSON.stringify({ ...config, functions }, null, 2)}\n` };
 }
@@ -230,7 +268,7 @@ ${imports('createAskHandler, memoryRateLimit')}
 
 export default createAskHandler({
   index: ${readIndex(site)},
-${askOptions(site, 'netlify', '  ')}
+${indexesOption(site, '  ', (locale) => readIndex({ ...site, indexFile: localeFile(site, locale) }))}${askOptions(site, 'netlify', '  ')}
 });
 
 export const config = { path: '/api/ask' };
@@ -267,8 +305,11 @@ export function netlifyConfig(
   mcp: boolean,
 ): { content: string } | { error: string } {
   const names = mcp ? ['ask', 'mcp'] : ['ask'];
+  const files = indexFiles(site)
+    .map((file) => JSON.stringify(file))
+    .join(', ');
   const tables = names
-    .map((name) => `[functions.${name}]\n  included_files = [${JSON.stringify(site.indexFile)}]`)
+    .map((name) => `[functions.${name}]\n  included_files = [${files}]`)
     .join('\n\n');
   const text = existing ?? '';
   const configured = names.filter((name) =>
@@ -282,7 +323,7 @@ export function netlifyConfig(
     );
     if (included) return { content: text };
     return {
-      error: `netlify.toml already configures ${configured.map((name) => `[functions.${name}]`).join(' and ')}; add included_files = [${JSON.stringify(site.indexFile)}] to ${configured.length === 1 ? 'it' : 'each'}`,
+      error: `netlify.toml already configures ${configured.map((name) => `[functions.${name}]`).join(' and ')}; add included_files = [${files}] to ${configured.length === 1 ? 'it' : 'each'}`,
     };
   }
   const comment = '# The index the ask-my-site functions answer from, bundled with them.';
@@ -302,6 +343,20 @@ const assetsIndex = (site: TemplateSite, pad: string) =>
   ]
     .map((line, i) => (i === 0 ? line : `${pad}${line}`))
     .join('\n');
+
+/** For a site with other locales: a loader of one locale's index from the static assets. */
+const assetHelper = (site: TemplateSite, pad: string): string =>
+  site.locales?.length
+    ? [
+        `${pad}// A locale's index, from the site's files.`,
+        `${pad}const asset = (path: string) => async () => {`,
+        `${pad}  const response = await env.ASSETS.fetch(new Request(new URL(path, request.url)));`,
+        `${pad}  if (!response.ok) throw new Error(\`\${path}: HTTP \${String(response.status)}\`);`,
+        `${pad}  return response.text();`,
+        `${pad}};`,
+        '',
+      ].join('\n')
+    : '';
 
 /**
  * `functions/api/ask.ts` and `mcp.ts`, Cloudflare Pages Functions, for a static site on Pages.
@@ -329,9 +384,9 @@ let handler: ((request: Request) => Promise<Response>) | undefined;
 
 function create(request: Request, env: Env) {
   const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
-  return createAskHandler({
+${assetHelper(site, '  ')}  return createAskHandler({
     index: ${assetsIndex(site, '    ')}
-${askOptions(site, 'cloudflare', '    ')}
+${indexesOption(site, '    ', (locale) => `asset(${quote(localePath(site, locale))})`)}${askOptions(site, 'cloudflare', '    ')}
   });
 }
 
@@ -399,10 +454,10 @@ function create(request: Request, env: Env) {
       text = undefined;
       throw error;
     }));
-  return {
+${assetHelper(site, '  ')}  return {
     ask: createAskHandler({
       index,
-${askOptions(site, 'cloudflare', '      ')}
+${indexesOption(site, '      ', (locale) => `asset(${quote(localePath(site, locale))})`)}${askOptions(site, 'cloudflare', '      ')}
     }),${
       mcp
         ? `
@@ -669,7 +724,7 @@ async function create(env: Env) {
   return {
     ask: createAskHandler({
       index,
-      model: workersai(env.CHAT_MODEL),
+${indexesOption(site, '      ', (locale) => `remoteIndex(new URL(${quote(localePath(site, locale).replace(/^\/+/, ''))}, siteOf(env)))`)}      model: workersai(env.CHAT_MODEL),
       ...(embeddingModel ? { embeddingModel } : {}),
       siteName: ${quote(site.name)},
       ${limiterComment('github-pages', '10 questions a minute')}
@@ -730,7 +785,7 @@ async function create(env: Env) {
   return {
     ask: createAskHandler({
       index,
-      model: openai('${MODEL}'),
+${indexesOption(site, '      ', (locale) => `remoteIndex(new URL(${quote(localePath(site, locale).replace(/^\/+/, ''))}, siteOf(env)))`)}      model: openai('${MODEL}'),
       ...(embeddingModel ? { embeddingModel } : {}),
       siteName: ${quote(site.name)},
       ${limiterComment('github-pages', '10 questions a minute')}

@@ -17,6 +17,12 @@ export interface AskError {
   code?: string;
   /** Seconds until a rate-limited client may retry, from `Retry-After`. */
   retryAfter?: number;
+  /**
+   * What happened, for words of your own: `unavailable` (no endpoint there, a 404), `no-body`,
+   * `interrupted` (the stream broke off), `cut-off` (it ended without finishing), or `server`
+   * (the server's own message, such as the model failing).
+   */
+  reason?: 'unavailable' | 'no-body' | 'interrupted' | 'cut-off' | 'server';
 }
 
 /** A question asked earlier in the thread, with its answer. */
@@ -66,6 +72,11 @@ export interface UseAskOptions {
   headers?: Record<string, string>;
   /** Custom fetch, e.g. for tests or instrumentation. */
   fetch?: typeof fetch;
+  /**
+   * The page's locale, sent with each question, so an endpoint with an index per locale
+   * (`indexes`) answers from this one's. The plugins set it from Docusaurus and Starlight.
+   */
+  locale?: string;
   /** Called once an answer completes or fails. */
   onFinish?: (state: AskState) => void;
   /**
@@ -109,11 +120,17 @@ const INITIAL: AskState = {
   rating: null,
 };
 
-/** The request body: the thread as `useChat` sends it, or the question alone. */
-function requestBody(question: string, turns: readonly AskTurn[]): string {
-  if (turns.length === 0) return JSON.stringify({ question });
+/** The request body: the thread as `useChat` sends it, or the question alone, and the locale. */
+function requestBody(
+  question: string,
+  turns: readonly AskTurn[],
+  locale: string | undefined,
+): string {
+  const where = locale ? { locale } : {};
+  if (turns.length === 0) return JSON.stringify({ question, ...where });
   const text = (value: string) => [{ type: 'text', text: value }];
   return JSON.stringify({
+    ...where,
     messages: [
       ...turns.slice(-MAX_TURNS).flatMap((turn) => [
         { role: 'user', parts: text(turn.question) },
@@ -160,7 +177,13 @@ async function errorFrom(response: Response, endpoint: string): Promise<AskError
       ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfter } : {}),
     };
   }
-  return { kind: 'http', message, status: response.status, ...(code ? { code } : {}) };
+  return {
+    kind: 'http',
+    message,
+    status: response.status,
+    ...(code ? { code } : {}),
+    ...(response.status === 404 ? { reason: 'unavailable' as const } : {}),
+  };
 }
 
 /** A development build (as the bundler defines `NODE_ENV`), or a page served from this machine. */
@@ -246,6 +269,7 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
       fetch: fetcher = fetch,
       onFinish,
       followUps = true,
+      locale,
     } = optionsRef.current;
 
     // The answer on screen joins the thread, if it is one: complete, or stopped with some text.
@@ -282,7 +306,7 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
       response = await fetcher(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...headers },
-        body: requestBody(question, turns),
+        body: requestBody(question, turns, locale),
         signal: controller.signal,
       });
     } catch (error) {
@@ -297,7 +321,11 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
 
     if (!response.ok || !response.body) {
       const error = response.ok
-        ? { kind: 'stream' as const, message: 'The response had no body.' }
+        ? {
+            kind: 'stream' as const,
+            message: 'The response had no body.',
+            reason: 'no-body' as const,
+          }
         : await errorFrom(response, endpoint);
       // A newer question may have started while the error body was being read.
       if (controller.signal.aborted) return;
@@ -309,6 +337,7 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     const frames = frameScheduler();
     let answer = '';
     let streamError: string | null = null;
+    let streamReason: AskError['reason'] = 'server';
     // An object, so the flags set inside the stream callback are visible to control-flow analysis.
     const progress = { finished: false, truncated: false };
     try {
@@ -337,6 +366,7 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     } catch (error) {
       if (isAbort(error) || controller.signal.aborted) return;
       streamError = 'The answer was interrupted. Please try again.';
+      streamReason = 'interrupted';
     }
     frames.flush();
     if (controller.signal.aborted) return;
@@ -344,11 +374,16 @@ export function useAsk(options: UseAskOptions = {}): UseAsk {
     // incomplete answer must not look complete.
     if (streamError === null && !progress.finished) {
       streamError = 'The answer was cut off. Please try again.';
+      streamReason = 'cut-off';
     }
     commit(
       streamError === null
         ? { status: 'done', answer, truncated: progress.truncated }
-        : { status: 'error', answer, error: { kind: 'stream', message: streamError } },
+        : {
+            status: 'error',
+            answer,
+            error: { kind: 'stream', message: streamError, reason: streamReason },
+          },
     );
     onFinish?.(current);
   }, []);

@@ -70,20 +70,22 @@ To try it locally, build the site once and start `astro dev`: with an adapter, t
 
 ## Astro and Starlight options
 
-| Option                                       | Default                            | What it does                                                                            |
-| -------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------- |
-| `endpoint`                                   | `ASK_ENDPOINT`, else `/api/ask`    | Where the dialog posts questions; `ASK_ENDPOINT` overrides it.                          |
-| `embedding`, `dimensions`                    | OpenAI when a key is set           | The embedding model, named as the CLI names it.                                         |
-| `embeddingModel`, `embeddingProviderOptions` | none                               | An AI SDK model object and its options, instead of `embedding`.                         |
-| `chunking`                                   | `{ maxChars: 1200, overlap: 150 }` | Chunk size and overlap, in characters.                                                  |
-| `indexFile`                                  | `ask-index.json`                   | Where the index is written in `dist/` and served from.                                  |
-| `exclude`                                    | `[]`                               | Path prefixes to leave out, relative to `base` and the locale.                          |
-| `dialog`                                     |                                    | `title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`, `theme`.              |
-| `route`                                      | on with an SSR adapter             | The endpoints the integration serves: `{ model, rateLimit, budget, mcp }`, or `false`.  |
-| `content`, `ignore`                          | `main`                             | Astro integration only: what to read from each page, and what to skip.                  |
-| `mcp`                                        | none                               | The [MCP endpoint](/docs/mcp)'s URL or path, for `McpInstall.astro`.                    |
-| `llmsTxt`                                    | on                                 | Write [llms.txt, llms-full.txt and .md copies](/docs/llms-txt); `false` turns them off. |
+| Option                                       | Default                            | What it does                                                                                    |
+| -------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `endpoint`                                   | `ASK_ENDPOINT`, else `/api/ask`    | Where the dialog posts questions; `ASK_ENDPOINT` overrides it.                                  |
+| `embedding`, `dimensions`                    | OpenAI when a key is set           | The embedding model, named as the CLI names it.                                                 |
+| `embeddingModel`, `embeddingProviderOptions` | none                               | An AI SDK model object and its options, instead of `embedding`.                                 |
+| `chunking`                                   | `{ maxChars: 1200, overlap: 150 }` | Chunk size and overlap, in characters.                                                          |
+| `indexFile`                                  | `ask-index.json`                   | Where the index is written in `dist/` and served from.                                          |
+| `exclude`                                    | `[]`                               | Path prefixes to leave out, relative to `base` and the locale.                                  |
+| `dialog`                                     |                                    | `title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`, `theme`, `labels`, `locales`. |
+| `route`                                      | on with an SSR adapter             | The endpoints the integration serves: `{ model, rateLimit, budget, mcp }`, or `false`.          |
+| `content`, `ignore`                          | `main`                             | Astro integration only: what to read from each page, and what to skip.                          |
+| `mcp`                                        | none                               | The [MCP endpoint](/docs/mcp)'s URL or path, for `McpInstall.astro`.                            |
+| `llmsTxt`                                    | on                                 | Write [llms.txt, llms-full.txt and .md copies](/docs/llms-txt); `false` turns them off.         |
 
 ## Locales in Starlight
 
 Starlight builds every locale at once, so the plugin writes one index per locale: `dist/ask-index.json` for the root locale and `dist/fr/ask-index.json` for French, served at `/fr/ask-index.json`. A page not yet translated is indexed with the fallback content Starlight shows for it, as Starlight's search does. The Astro integration splits the index the same way along Astro's `i18n` locales.
+
+On a locale's pages, the dialog takes the locale from the page's path and sends it with each question, and the endpoint answers from that locale's index: the routes the integration serves with an adapter do, and so do the endpoints `npx ask-my-site init` writes, which read the locales from the config. Give the dialog its words in each language with `dialog.locales`, by the locale's path (`fr`, `pt-br`), over the dialog's own options: `askMySite({ dialog: { locales: { fr: { title: 'Demander à Acme', labels: { launcher: 'Demander' } } } } })`. Without a `title` of its own, a locale's dialog is named after the site's title in its language. Every label is listed in [The ask dialog](/docs/ask-dialog#labels-and-languages).
