@@ -1,0 +1,209 @@
+// The part of the embed every page runs: the "Ask AI" button and the shortcut, in plain DOM, with
+// no React. The dialog (React, Radix, cmdk) loads on first use: a pointer over or focus on the
+// button, the shortcut, or `open()`. A shortcut pressed while it loads opens it once it has.
+import type { AskMySiteDialogOptions, AskMySiteTheme } from './options';
+
+export interface MountAskDialogOptions extends AskMySiteDialogOptions {
+  /** URL the dialog posts questions to. Default `/api/ask`. */
+  endpoint?: string;
+  /** Default `auto`: the page's `data-theme` on `<html>` if it has one, else the system's. */
+  theme?: AskMySiteTheme;
+  /** Extra request headers, e.g. an auth token. */
+  headers?: Record<string, string>;
+  /** Where to render. Default: a new `<div class="ask-my-site">` at the end of `<body>`. */
+  container?: Element;
+  /**
+   * Called when a citation or source is clicked. Call `event.preventDefault()` to route with
+   * your own router; otherwise the link navigates. The dialog closes either way.
+   */
+  onNavigate?: (url: string, event: MouseEvent) => void;
+}
+
+export interface MountedAskDialog {
+  open: () => void;
+  close: () => void;
+  /** Removes the dialog, the button and, if it created it, the container. */
+  unmount: () => void;
+}
+
+/** The dialog, rendered once its code has loaded: what `ask-my-site/embed`'s dialog module does. */
+export interface DialogRenderer {
+  render: (
+    element: Element,
+    options: DialogRenderOptions,
+  ) => { setOpen: (open: boolean) => void; unmount: () => void };
+}
+
+export interface DialogRenderOptions extends Omit<
+  MountAskDialogOptions,
+  'container' | 'shortcut' | 'buttonLabel'
+> {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+const DARK = '(prefers-color-scheme: dark)';
+
+/** The page's color scheme: `<html data-theme>` when it says light or dark, else the system's. */
+function pageScheme(): 'light' | 'dark' {
+  const theme = document.documentElement.dataset.theme;
+  if (theme === 'light' || theme === 'dark') return theme;
+  return typeof matchMedia === 'function' && matchMedia(DARK).matches ? 'dark' : 'light';
+}
+
+/** Text fields, selects and rich text editors. */
+function isEditable(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])') !==
+      null
+  );
+}
+
+/**
+ * Mounts the launcher, and the dialog through `load` when it is first wanted. What
+ * `mountAskDialog` from `ask-my-site/embed` and the script tag share; they differ in how the
+ * dialog's code arrives (a dynamic import, or a second script).
+ */
+export function mountWithLoader(
+  options: MountAskDialogOptions,
+  load: () => Promise<DialogRenderer>,
+): MountedAskDialog {
+  const {
+    container: given,
+    shortcut = 'i',
+    buttonLabel = 'Ask AI',
+    theme = 'auto',
+    ...dialogOptions
+  } = options;
+  const container = given ?? document.createElement('div');
+  // Astro's <ClientRouter /> replaces <body> on navigation, and the dialog's container with it.
+  const reattach = (): void => {
+    if (!container.isConnected) document.body.append(container);
+  };
+  if (!given) {
+    container.className = 'ask-my-site';
+    document.body.append(container);
+    document.addEventListener('astro:after-swap', reattach);
+  }
+
+  let open = false;
+  let dialog: ReturnType<DialogRenderer['render']> | null = null;
+  let loading: Promise<void> | null = null;
+  let unmounted = false;
+
+  const key = shortcut ? shortcut.toUpperCase() : '';
+  let button: HTMLButtonElement | null = null;
+  if (buttonLabel !== false) {
+    button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ask-my-site-launcher';
+    button.setAttribute('aria-haspopup', 'dialog');
+    button.setAttribute('aria-expanded', 'false');
+    if (key) button.setAttribute('aria-keyshortcuts', `Meta+${key} Control+${key}`);
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '✦';
+    button.append(icon, ` ${buttonLabel}`);
+    if (key) {
+      const kbd = document.createElement('kbd');
+      kbd.setAttribute('aria-hidden', 'true');
+      kbd.textContent = `${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl '}${key}`;
+      button.append(kbd);
+    }
+    container.append(button);
+  }
+
+  // The button follows the page's light or dark scheme, as the dialog does.
+  const applyScheme = (): void => {
+    button?.setAttribute('data-ask-theme', theme === 'auto' ? pageScheme() : theme);
+  };
+  applyScheme();
+  const observer = theme === 'auto' ? new MutationObserver(applyScheme) : null;
+  observer?.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  });
+  const media = theme === 'auto' && typeof matchMedia === 'function' ? matchMedia(DARK) : null;
+  media?.addEventListener('change', applyScheme);
+
+  const setOpen = (next: boolean): void => {
+    open = next;
+    button?.setAttribute('aria-expanded', String(next));
+    dialog?.setOpen(next);
+  };
+
+  /** Loads the dialog's code, once, and renders it closed or open as it is wanted by then. */
+  const prepare = (): Promise<void> => {
+    loading ??= load()
+      .then((renderer) => {
+        if (unmounted) return;
+        const element = document.createElement('div');
+        container.append(element);
+        dialog = renderer.render(element, {
+          ...dialogOptions,
+          theme,
+          open,
+          onOpenChange: setOpen,
+        });
+      })
+      .catch((error: unknown) => {
+        loading = null;
+        console.error('[ask-my-site] The dialog could not load.', error);
+      });
+    return loading;
+  };
+
+  const show = (): void => {
+    setOpen(true);
+    void prepare();
+  };
+
+  const onKeyDown = (event: KeyboardEvent): void => {
+    // Opened before its code has arrived, the dialog is not there to close on Escape yet.
+    if (event.key === 'Escape' && open && !dialog) {
+      setOpen(false);
+      return;
+    }
+    if (!key || !(event.metaKey || event.ctrlKey) || event.key.toUpperCase() !== key) return;
+    // In a text field the keys are often the field's own (⌘I is italic), so they are left to it.
+    // The dialog's own input still closes it.
+    if (!open && isEditable(event.target)) return;
+    event.preventDefault();
+    if (open) setOpen(false);
+    else show();
+  };
+  window.addEventListener('keydown', onKeyDown);
+
+  const prefetch = (): void => {
+    void prepare();
+  };
+  button?.addEventListener('pointerenter', prefetch);
+  button?.addEventListener('focus', prefetch);
+  button?.addEventListener('click', (event) => {
+    // Focus stays on the button (Safari does not move it there on a click), so it gets it back
+    // when the dialog closes.
+    (event.currentTarget as HTMLElement).focus({ preventScroll: true });
+    show();
+  });
+
+  return {
+    open: show,
+    close: () => {
+      setOpen(false);
+    },
+    unmount: () => {
+      unmounted = true;
+      window.removeEventListener('keydown', onKeyDown);
+      observer?.disconnect();
+      media?.removeEventListener('change', applyScheme);
+      dialog?.unmount();
+      dialog = null;
+      button?.remove();
+      if (!given) {
+        document.removeEventListener('astro:after-swap', reattach);
+        container.remove();
+      }
+    },
+  };
+}

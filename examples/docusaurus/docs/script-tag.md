@@ -22,7 +22,9 @@ The script mounts itself once the page has loaded. It opens the dialog from a fl
 
 ## Script size
 
-The embed script, `embed.global.js`, is 91 KB gzipped and 294 KB minified. It includes React, the dialog and its styles, so the page needs nothing else, and `defer` loads it without blocking the page. The Docusaurus, Astro and Starlight plugins and React apps bundle the dialog with the site's own React instead.
+The embed script, `embed.global.js`, is 2.4 KB gzipped: the button, the shortcut and their styles. The dialog, with React and its styles, is a second file next to it, `embed-dialog.global.js` (91 KB gzipped), which the script loads the first time the dialog is wanted: a pointer over or focus on the button, the shortcut, or `open()`. A shortcut pressed while it loads still opens the dialog once it arrives. The page needs nothing else, and `defer` loads the script without blocking the page.
+
+If you host the script yourself, copy both files to the same folder, or point at the dialog's file with `data-dialog-src`.
 
 ## Index a static site
 
@@ -42,17 +44,18 @@ To try it first, run `npx ask-my-site dev` beside the index and set `data-endpoi
 
 ## Script tag attributes
 
-| Attribute           | Default           | What it does                                                                    |
-| ------------------- | ----------------- | ------------------------------------------------------------------------------- |
-| `data-endpoint`     | `/api/ask`        | Where the dialog posts questions.                                               |
-| `data-title`        | "Ask this site"   | The dialog's accessible name.                                                   |
-| `data-placeholder`  | "Ask a question…" | The input's placeholder.                                                        |
-| `data-suggestions`  | none              | A JSON array, as in `data-suggestions='["How do I install it?"]'`.              |
-| `data-shortcut`     | `i`               | The key used with ⌘ or Ctrl; `"false"` turns it off.                            |
-| `data-button-label` | "Ask AI"          | The floating button's label; `"false"` hides the button.                        |
-| `data-theme`        | `auto`            | `auto` follows `data-theme` on `<html>`, then the system; or `light` or `dark`. |
-| `data-links`        | `all`             | `sources` keeps only the answer's links to its source pages.                    |
-| `data-manual`       | off               | Don't mount; wait for `window.AskMySite.mount()`.                               |
+| Attribute           | Default            | What it does                                                                    |
+| ------------------- | ------------------ | ------------------------------------------------------------------------------- |
+| `data-endpoint`     | `/api/ask`         | Where the dialog posts questions.                                               |
+| `data-title`        | "Ask this site"    | The dialog's accessible name.                                                   |
+| `data-placeholder`  | "Ask a question…"  | The input's placeholder.                                                        |
+| `data-suggestions`  | none               | A JSON array, as in `data-suggestions='["How do I install it?"]'`.              |
+| `data-shortcut`     | `i`                | The key used with ⌘ or Ctrl; `"false"` turns it off.                            |
+| `data-button-label` | "Ask AI"           | The floating button's label; `"false"` hides the button.                        |
+| `data-theme`        | `auto`             | `auto` follows `data-theme` on `<html>`, then the system; or `light` or `dark`. |
+| `data-links`        | `all`              | `sources` keeps only the answer's links to its source pages.                    |
+| `data-manual`       | off                | Don't mount; wait for `window.AskMySite.mount()`.                               |
+| `data-dialog-src`   | next to the script | Where `embed-dialog.global.js` is, for a copy hosted elsewhere.                 |
 
 ## Open it from your own search box
 

@@ -31,6 +31,12 @@ In React, the dialog opens with ⌘K on macOS and Ctrl+K elsewhere. The plugins 
 
 To change the keyboard shortcut, pass another key, as in `shortcut="j"`, or turn it off with `shortcut={false}` and open the dialog from a `trigger` element or the `launcher` button instead. In the plugins, the same option is `dialog: { shortcut: 'j' }`, and with the script tag it is `data-shortcut="j"`.
 
+## When the dialog's code loads
+
+A page carries only the dialog's shortcut and, with `launcher` or `trigger`, its button. The dialog itself, Radix Dialog, cmdk and the answer, is a separate chunk that your bundler splits off, and it loads the first time the dialog is wanted: a pointer over or focus on its button or trigger, the shortcut, or `open`. A shortcut pressed while it loads is kept, so the dialog opens, with focus in its input, once it arrives; Escape before then cancels it. Focus goes back to where it was when the dialog closes, or to the button that opened it. Call `loadAskDialog()` from `ask-my-site/react` to load it sooner, such as when the page is idle.
+
+In the plugins' sites this takes ask-my-site's share of each page from about 22 KB of JavaScript to about 3 KB with Docusaurus, and from about 88 KB to under 2 KB with Starlight, which has no React of its own; see [Benchmarks](/docs/benchmarks#bundle-size).
+
 ## The launcher button
 
 `launcher` adds a floating "Ask AI" button in the corner of the page, with the shortcut on it. Pass a string to change its label, as in `launcher="Ask the docs"`, and import `ask-my-site/embed/launcher.css` for its look, or style `.ask-my-site-launcher` yourself.

@@ -34,7 +34,7 @@ export default defineConfig([
       server: 'src/server/index.ts',
       react: 'src/react/index.ts',
       mock: 'src/mock/index.ts',
-      embed: 'src/embed/index.tsx',
+      embed: 'src/embed/index.ts',
       cli: 'src/cli/bin.ts',
       'docusaurus/index': 'src/docusaurus/index.ts',
       // The plugin finds its theme next to itself, and Docusaurus resolves theme components by
@@ -75,10 +75,26 @@ export default defineConfig([
     ],
   },
   {
-    // dist/embed.global.js, for a <script> tag on any site: production React, the dialog and its
-    // stylesheets in one minified file that mounts itself.
+    // dist/embed.global.js, for a <script> tag on any site: the button, the shortcut and their
+    // styles, in one small minified file that mounts itself and loads the dialog on first use.
     entry: { embed: 'src/embed/global.ts' },
     outputOptions: { entryFileNames: 'embed.global.js' },
+    deps: { alwaysBundle: [/./], onlyBundle: false },
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    minify: true,
+    define: { 'process.env.NODE_ENV': '"production"' },
+    plugins: [cssAsText],
+    dts: false,
+    // The first build cleans dist/.
+    clean: false,
+  },
+  {
+    // dist/embed-dialog.global.js, which dist/embed.global.js loads: production React, the dialog
+    // and its stylesheet.
+    entry: { 'embed-dialog': 'src/embed/dialog-global.ts' },
+    outputOptions: { entryFileNames: 'embed-dialog.global.js' },
     deps: { alwaysBundle: [/./], onlyBundle: false },
     format: 'iife',
     platform: 'browser',

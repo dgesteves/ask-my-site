@@ -108,7 +108,7 @@ async function setupTabs(): Promise<SetupTab[]> {
       id: 'script',
       label: 'Any site',
       summary:
-        'Hugo, Jekyll, Eleventy, MkDocs or plain HTML: index the HTML your generator built, deploy the endpoint, and add one script tag, with React and the styles bundled in.',
+        'Hugo, Jekyll, Eleventy, MkDocs or plain HTML: index the HTML your generator built, deploy the endpoint, and add one script tag. The dialog loads the first time it is wanted.',
       docs: { href: '/docs/script-tag', label: 'Script tag guide' },
       steps: [
         {
@@ -148,9 +148,9 @@ const NUMBERS = [
     note: 'Parse, decode and build the inverted index, once. 339 ms at 10,000 chunks.',
   },
   {
-    value: '91 KB',
-    label: 'script-tag embed, gzipped',
-    note: 'React, the dialog and its styles in one file. The plugins share your own React.',
+    value: '2.4 KB',
+    label: 'script tag on each page, gzipped',
+    note: 'The button and shortcut. The dialog loads the first time it is wanted.',
   },
   {
     value: '0',

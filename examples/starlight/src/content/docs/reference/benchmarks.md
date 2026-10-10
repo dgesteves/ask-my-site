@@ -40,7 +40,15 @@ In a real request, retrieval is the small part: nearly all of the time goes to t
 
 ## Bundle size
 
-The script tag's file, `embed.global.js`, is 91 KB gzipped, with React, the dialog and its styles included; CI fails if it grows past 110 KB. With the plugins or React, the dialog is bundled with your own React instead. The handler adds no client code at all.
+Each page carries only the dialog's button and shortcut; the dialog loads the first time it is wanted (see [when the dialog's code loads](/reference/ask-dialog/#when-the-dialogs-code-loads)). Measured in headless Chrome on the example sites, as the JavaScript a docs page loads before any interaction, gzipped:
+
+| Site                       | The site on its own | With ask-my-site | When the dialog opens |
+| -------------------------- | ------------------: | ---------------: | --------------------: |
+| Docusaurus 3.10            |            170.4 KB |         173.2 KB |              +21.2 KB |
+| Starlight 0.42             |             33.7 KB |          35.1 KB |              +87.2 KB |
+| Script tag on a plain page |                   0 |           2.4 KB |              +91.2 KB |
+
+Starlight's dialog brings its own React, as the script tag's does; Docusaurus's shares the site's. Before the dialog loaded on demand, these pages carried 192.7 KB, 121.2 KB and 91.2 KB. CI measures the example sites the same way, with `node scripts/js-weight.mjs --check`, and fails a change that goes over each site's budget, or that stops a shortcut pressed while the dialog loads from opening it with focus in its input, or focus from coming back when it closes. The handler adds no client code at all.
 
 ## Run it yourself
 
