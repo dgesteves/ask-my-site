@@ -37,7 +37,7 @@ The CLI reads `.env` and `.env.local` from the working directory, without overri
 
 ## ask-my-site dev
 
-`ask-my-site dev [options]` serves `POST /api/ask` on 127.0.0.1, answering from a built index, for the dialog on your site's dev server.
+`ask-my-site dev [options]` serves `POST /api/ask` on 127.0.0.1, answering from a built index, for the dialog on your site's dev server. It serves the same index as an [MCP server](/integrations/mcp/) at `/api/mcp`, keyword-only, for your editor's agent.
 
 | Flag                      | Default                                                              | What it does                                            |
 | ------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------- |

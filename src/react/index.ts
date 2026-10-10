@@ -9,6 +9,8 @@ export { AskDialog } from './ask-dialog';
 export type { AskDialogProps, AskDialogSlot } from './ask-dialog';
 export { AskAnswer, citedSourceIds, safeHref } from './answer';
 export type { AnswerLinks, AskAnswerProps } from './answer';
+export { McpInstall } from './mcp-install';
+export type { McpInstallProps } from './mcp-install';
 export { useAsk } from './use-ask';
 export type { AskError, AskState, AskStatus, UseAsk, UseAskOptions } from './use-ask';
 export { readAskStream } from './stream';

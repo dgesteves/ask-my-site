@@ -59,6 +59,7 @@ type Format = 'directory' | 'file' | 'preserve';
 type TrailingSlash = 'always' | 'never' | 'ignore';
 
 interface SiteOptions {
+  site?: string;
   format?: Format;
   trailingSlash?: TrailingSlash;
   base?: string;
@@ -73,7 +74,7 @@ interface SiteOptions {
 async function build(
   integration: AstroIntegration,
   pages: Record<string, string>,
-  { format = 'directory', trailingSlash = 'ignore', base = '/', i18n }: SiteOptions = {},
+  { site, format = 'directory', trailingSlash = 'ignore', base = '/', i18n }: SiteOptions = {},
 ) {
   const outDir = join(root, 'dist');
   const reported: { pathname: string }[] = [];
@@ -96,6 +97,7 @@ async function build(
   const updateConfig = vi.fn();
   const hooks = integration.hooks as Record<string, (options: unknown) => unknown>;
   await hooks['astro:config:setup']?.({
+    config: { site },
     injectScript: (stage: string, content: string) => injected.push([stage, content]),
     updateConfig,
     logger,
@@ -318,10 +320,51 @@ describe('ask-my-site/starlight', () => {
     );
     expect(updateConfig).toHaveBeenCalledWith({
       vite: {
-        plugins: [expect.objectContaining({ name: 'ask-my-site:quiet-use-client' })],
+        plugins: [
+          expect.objectContaining({ name: 'ask-my-site:quiet-use-client' }),
+          expect.objectContaining({ name: 'ask-my-site:virtual-module' }),
+        ],
         optimizeDeps: { include: ['ask-my-site/embed'] },
       },
     });
+  });
+
+  it('gives McpInstall.astro the MCP endpoint, resolved against site', async () => {
+    const mcpModule = async (options: Parameters<typeof starlightAskMySite>[0], site?: string) => {
+      const { updateConfig } = await build(starlightIntegration(options), STARLIGHT_PAGES, {
+        ...(site ? { site } : {}),
+      });
+      const { plugins } = (updateConfig.mock.calls[0]?.[0] as { vite: { plugins: unknown[] } })
+        .vite;
+      const plugin = plugins[1] as {
+        resolveId: (id: string) => string | null;
+        load: (id: string) => string | null;
+      };
+      const id = plugin.resolveId('virtual:ask-my-site/mcp');
+      expect(plugin.resolveId('other')).toBeNull();
+      return id === null ? null : plugin.load(id);
+    };
+    expect(await mcpModule({ mcp: '/api/mcp' }, 'https://docs.acme.dev')).toBe(
+      'export default {"url":"https://docs.acme.dev/api/mcp","name":"acme-docs"};',
+    );
+    expect(await mcpModule({})).toBe('export default null;');
+    await expect(mcpModule({ mcp: '/api/mcp' })).rejects.toThrow(/astro.config's site/);
+  });
+
+  it('ships McpInstall.astro next to the integration, importing what exists', async () => {
+    const source = await readFile(
+      join(import.meta.dirname, '..', 'src/astro/McpInstall.astro'),
+      'utf8',
+    );
+    expect(source).toContain("from 'virtual:ask-my-site/mcp'");
+    // Resolved from dist/astro/, where the build copies it: dist/index.js is the root entry.
+    expect(source).toContain("import { mcpInstallLinks } from '../index.js';");
+    const manifest = JSON.parse(
+      await readFile(join(import.meta.dirname, '..', 'package.json'), 'utf8'),
+    ) as {
+      exports: Record<string, unknown>;
+    };
+    expect(manifest.exports['./astro/McpInstall.astro']).toBe('./dist/astro/McpInstall.astro');
   });
 });
 
@@ -435,6 +478,7 @@ describe('ask-my-site/astro', () => {
       const hooks = integration.hooks as Record<string, (options: unknown) => unknown>;
       const injected: string[] = [];
       await hooks['astro:config:setup']?.({
+        config: {},
         command: 'dev',
         injectScript: (_: string, content: string) => injected.push(content),
         updateConfig: vi.fn(),

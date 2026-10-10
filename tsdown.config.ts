@@ -38,9 +38,10 @@ export default defineConfig([
       cli: 'src/cli/bin.ts',
       'docusaurus/index': 'src/docusaurus/index.ts',
       // The plugin finds its theme next to itself, and Docusaurus resolves theme components by
-      // file name: dist/docusaurus/theme/Root.js and AskMySite.js.
+      // file name: dist/docusaurus/theme/Root.js, AskMySite.js and AskMySiteMcp.js.
       'docusaurus/theme/Root': 'src/docusaurus/theme/Root.tsx',
       'docusaurus/theme/AskMySite': 'src/docusaurus/theme/AskMySite.tsx',
+      'docusaurus/theme/AskMySiteMcp': 'src/docusaurus/theme/AskMySiteMcp.tsx',
       'astro/index': 'src/astro/index.ts',
       'starlight/index': 'src/starlight/index.ts',
     },
@@ -69,6 +70,8 @@ export default defineConfig([
       { from: 'src/starlight/launcher.css', to: 'dist/starlight' },
       { from: 'src/docusaurus/launcher.css', to: 'dist/docusaurus' },
       { from: 'src/docusaurus/theme.d.ts', to: 'dist/docusaurus' },
+      // Compiled by the site's Astro, as Astro components in packages are.
+      { from: 'src/astro/McpInstall.astro', to: 'dist/astro' },
     ],
   },
   {

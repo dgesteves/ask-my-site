@@ -12,9 +12,11 @@ import {
   dialogEndpoint,
   excluder,
   hintDevEndpoint,
+  resolveMcp,
   warnMissingDialogPeers,
   writeSiteIndex,
   type IndexOptions,
+  type McpOption,
 } from '../integrations/build';
 import { fromHtml } from '../loaders/html';
 import type { SourceDocument } from '../types';
@@ -52,7 +54,18 @@ export interface AskMySiteOptions extends IndexOptions {
    */
   exclude?: string[];
   dialog?: AskMySiteDialogOptions;
+  /**
+   * The site's MCP endpoint (`createMcpHandler` from `ask-my-site/server`), as an absolute URL or a
+   * path on the site such as `/api/mcp` (then `site` must be set), and optionally the name clients
+   * list it under (default: from the site title). `McpInstall` from
+   * `ask-my-site/astro/McpInstall.astro` then shows how to add it to Cursor, VS Code, Claude and
+   * ChatGPT.
+   */
+  mcp?: McpOption;
 }
+
+/** The module `McpInstall.astro` reads the `mcp` option from. */
+const MCP_MODULE = 'virtual:ask-my-site/mcp';
 
 /** What a framework built on Astro, such as Starlight, sets on top of the site's options. */
 export interface IntegrationPreset {
@@ -64,6 +77,8 @@ export interface IntegrationPreset {
   locales?: string[];
   /** The dialog's title unless the site sets one. */
   title?: string;
+  /** The site's title, which names the MCP server in clients unless `mcp.name` does. */
+  siteTitle?: string;
   /** Stylesheets for the dialog, after its own and the launcher's. */
   stylesheets?: string[];
 }
@@ -81,8 +96,14 @@ export function createIntegration(
   return {
     name: 'ask-my-site',
     hooks: {
-      'astro:config:setup': ({ injectScript, updateConfig, logger, command }) => {
+      'astro:config:setup': ({ config: astro, injectScript, updateConfig, logger, command }) => {
         dev = command === 'dev';
+        const mcp = resolveMcp(
+          options.mcp,
+          astro.site,
+          preset.siteTitle ?? 'docs',
+          "astro.config's site",
+        );
         warnMissingDialogPeers(logger);
         // The stylesheets go into every page's CSS: a `page` script's CSS is built but not linked.
         injectScript(
@@ -96,7 +117,7 @@ export function createIntegration(
         injectScript('page', pageScript(endpoint, options, preset));
         updateConfig({
           vite: {
-            plugins: [quietUseClient()],
+            plugins: [quietUseClient(), virtualModule(MCP_MODULE, mcp ?? null)],
             // Vite's dev server does not see injected scripts when it scans for dependencies to
             // prebundle, and would find the dialog's on the first page load, then reload it.
             optimizeDeps: { include: ['ask-my-site/embed'] },
@@ -172,6 +193,17 @@ function quietUseClient() {
       );
       return blanked === code ? null : { code: blanked, map: null };
     },
+  };
+}
+
+/** A Vite plugin serving `id` as a module whose default export is `value`. */
+function virtualModule(id: string, value: unknown) {
+  const resolved = `\0${id}`;
+  return {
+    name: 'ask-my-site:virtual-module',
+    resolveId: (source: string) => (source === id ? resolved : null),
+    load: (module: string) =>
+      module === resolved ? `export default ${JSON.stringify(value)};` : null,
   };
 }
 

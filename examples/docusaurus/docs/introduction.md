@@ -13,6 +13,8 @@ At build time, `ask-my-site index` (or the Docusaurus, Astro or Starlight plugin
 
 At request time, a function you deploy loads that file into memory once and searches it for each question: BM25 keyword search and cosine similarity over the vectors, merged with reciprocal rank fusion. A relevance gate then decides whether anything found is good enough to answer from. If it is, your model streams an answer that cites its sources as `[1]`, `[2]`. If it is not, the answer is "I don't know", and the model is never called.
 
+The same index is also an [MCP server](./mcp.md) for agents, such as Claude Code, Cursor and ChatGPT: they search and read your docs with their own model, so that traffic costs you no model call.
+
 ## What you need
 
 - Content in Markdown, MDX or HTML: a docs folder, or the HTML your static site generator builds.

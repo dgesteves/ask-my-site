@@ -91,3 +91,10 @@
     display: none;
   }
 }
+
+/* <McpInstall />: its links in a row. */
+.ask-mcp-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

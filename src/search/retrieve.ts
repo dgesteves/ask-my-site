@@ -3,6 +3,8 @@ import {
   AskIndexError,
   parseIndexFile,
   validateIndexFile,
+  type AskIndexFile,
+  type IndexDocument,
   type IndexEmbedding,
 } from '../index-file';
 import { decodeVector } from '../quantize';
@@ -24,7 +26,12 @@ export interface RetrievedChunk {
 
 /** An index ready to query: chunks, the BM25 inverted index and the int8 matrix, in memory. */
 export interface LoadedIndex {
+  /** The pages, sorted by id; a chunk's `documentId` names one. */
+  readonly documents: readonly IndexDocument[];
+  /** The chunks, page by page in `documents` order, each page's in reading order. */
   readonly chunks: readonly RetrievedChunk[];
+  /** What the chunks were cut with: consecutive chunks of a section share up to `overlap` characters. */
+  readonly chunking: AskIndexFile['chunking'];
   readonly embedding: IndexEmbedding | null;
   readonly contentHash: string;
   readonly bm25: Bm25Index;
@@ -132,7 +139,15 @@ export function loadIndex(input: unknown): LoadedIndex {
     vectors = new VectorIndex(matrix, dimensions);
   }
 
-  return { chunks, embedding: file.embedding, contentHash: file.contentHash, bm25, vectors };
+  return {
+    documents: file.documents.map(({ id, url, title }) => ({ id, url, title })),
+    chunks,
+    chunking: { maxChars: file.chunking.maxChars, overlap: file.chunking.overlap },
+    embedding: file.embedding,
+    contentHash: file.contentHash,
+    bm25,
+    vectors,
+  };
 }
 
 /**

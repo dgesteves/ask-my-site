@@ -88,6 +88,7 @@ Build the site once, run `npx ask-my-site dev` in its folder, which answers from
 | `indexFile`                | `ask-index.json`                   | Where the index is written in `build/` and served from.             |
 | `exclude`                  | `[]`                               | Path prefixes to leave out, relative to `baseUrl`.                  |
 | `dialog`                   |                                    | `title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`.   |
+| `mcp`                      | none                               | The [MCP endpoint](./mcp.md)'s URL or path, for `<AskMySiteMcp />`. |
 
 ## Locales and versions
 

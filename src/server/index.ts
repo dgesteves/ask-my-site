@@ -1,9 +1,12 @@
 /**
- * ask-my-site/server: the ask endpoint as a Web-standard request handler.
+ * ask-my-site/server: the ask endpoint and the MCP endpoint, as Web-standard request handlers.
  */
 
 export { createAskHandler } from './handler';
 export type { AskFinishEvent, AskHandlerOptions, GenerationOptions, IndexSource } from './handler';
+export { createMcpHandler, MCP_PROTOCOL_VERSIONS } from './mcp';
+export type { McpHandlerOptions, McpToolCallEvent } from './mcp';
+export type { McpSearchResult } from './mcp-tools';
 export { memoryBudgetStore, upstashBudgetStore } from './budget';
 export type {
   BudgetOptions,

@@ -15,3 +15,6 @@ examples/nextjs/next-env.d.ts
 
 # Original README while `npm pack` swaps in the npm version (scripts/npm-readme.mjs)
 .npm-readme-backup.md
+
+# Real-world docs for test/corpus.test.ts (scripts/corpus.mjs)
+.corpus
