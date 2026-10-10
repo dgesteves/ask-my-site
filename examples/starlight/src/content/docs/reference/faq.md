@@ -76,4 +76,4 @@ Yes. Docusaurus and Starlight sites get one index per locale. Versioned Docusaur
 
 ## How is the ask-my-site website built?
 
-The website is a Next.js app that uses ask-my-site on these docs. `ask-my-site index` builds the index from the Markdown pages before every build, `createAskHandler` serves `/api/ask`, and `<AskDialog />` is the dialog. It runs in mock mode, so its answers are quotes picked from the pages rather than written by a model. The repository's Docusaurus and Starlight examples build the same pages with their plugins.
+The website is a Next.js app that uses ask-my-site on these docs. `ask-my-site index` builds the index from the Markdown pages before every build, `createAskHandler` serves `/api/ask`, and `<AskDialog />` is the dialog. In production it answers with OpenAI; its preview deployments, and the example run locally without a key, use mock mode, where answers are quotes picked from the pages rather than written by a model. The repository's Docusaurus and Starlight examples build the same pages with their plugins.

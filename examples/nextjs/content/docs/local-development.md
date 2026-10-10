@@ -43,4 +43,4 @@ The CLI and `ask-my-site dev` read `.env` and `.env.local` in the working direct
 
 ## The demo website
 
-The ask-my-site website runs in mock mode. It is a Next.js app that indexes these pages with `ask-my-site index` at build time and answers through `createAskHandler` with `mockLanguageModel()`, so its answers are quotes from these docs, picked by the words they share with the question. With a real model, answers are written in full sentences from the same sources. The Docusaurus and Starlight examples in the repository answer the same way through `ask-my-site dev`.
+The ask-my-site website is a Next.js app that indexes these pages with `ask-my-site index` at build time and answers through `createAskHandler`. In production it answers with OpenAI, under a rate limit. Its preview deployments, and the example when you run it without a key, use mock mode: `mockLanguageModel()` answers with quotes from these docs, picked by the words they share with the question, where a real model writes full sentences from the same sources. The Docusaurus and Starlight examples in the repository answer the same way through `ask-my-site dev`.

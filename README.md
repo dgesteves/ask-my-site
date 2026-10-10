@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-22d3ee?style=flat-square&labelColor=181c22)](./LICENSE)
 [![Types](https://img.shields.io/badge/types-included-22d3ee?style=flat-square&labelColor=181c22)](#api)
 
-**Website: [ask-my-site-demo.vercel.app](https://ask-my-site-demo.vercel.app)**, with the [docs](https://ask-my-site-demo.vercel.app/docs) and a live demo: the docs answer questions about this library. The demo runs in mock mode (offline embeddings, answers quoted from the docs), so no API key is involved.
+**Website: [ask-my-site-demo.vercel.app](https://ask-my-site-demo.vercel.app)**, with the [docs](https://ask-my-site-demo.vercel.app/docs) and a live demo: the docs answer questions about this library. The site answers with OpenAI, under a rate limit; its preview deployments, and the example when you run it yourself without a key, use mock mode (offline embeddings, answers quoted from the docs).
 
 <!-- npm-readme:video -->
 
@@ -55,7 +55,7 @@ Render the dialog in your layout, with `import 'ask-my-site/react/styles.css'` a
 
 It opens from a floating "Ask AI" button, as on the plugins' sites, and from <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>K</kbd>. Leave `launcher` out to open it from your own button (`trigger`) or the shortcut alone.
 
-That is the whole integration: five lines, imports aside. [Full setup](#full-setup) is below, and no API key is needed to [try it](#try-it-in-2-minutes-no-api-key).
+That is the code: five lines, imports aside. The endpoint still has to run somewhere your site can reach, as a route in your app or a function next to a static site (see the [Vercel, Netlify and Cloudflare recipes](#docusaurus)), and it needs a [rate limit](#rate-limits-and-client-ips), because every answer is a model call on your key. [Full setup](#full-setup) is below, and no API key is needed to [try it](#try-it-in-2-minutes-no-api-key).
 
 ## Try it in 2 minutes, no API key
 
@@ -557,7 +557,7 @@ Also exported: `fromHtml` (`root` picks the part of a page to read, as a selecto
 
 **Untrusted output stays text.** The answer is rendered from a small Markdown subset into React nodes, never HTML. Links are allow-listed to http(s), mailto and relative URLs, and `[n]` becomes a link only if the server actually sent source `n`. Sources and the question go to the model verbatim, inside tags that end in a random suffix drawn per request (`<sources-3f9a…>`), so no text on your site or in a question can close the sources block or pose as the question, however it spells a tag; the instructions tell the model to treat both as data. That keeps prompt injection from forging structure, not from being attempted: a page that says "ignore your rules" is still text the model reads, so index only content you trust.
 
-**Where it stops scaling.** Everything is linear in corpus size: roughly 1.6 MB of index, 34 ms of cold load and 0.7 ms per query per 1,000 chunks of ~800 characters at 512 dimensions. That is comfortable to about 10,000 chunks and workable to about 50,000 (79 MB, 1.7 s cold start, 37 ms per query). Beyond that, or for content that changes per request or per user, use a vector database. If your platform limits function bundle size, load the index from a static URL instead of importing it: `index: () => fetch(url).then((r) => r.text())`.
+**Where it stops scaling.** Everything is linear in corpus size: roughly 1.6 MB of index, 34 ms of cold load, 0.7 ms per query and 24 MB of process memory (31 MB at the peak of loading) per 1,000 chunks of ~800 characters at 512 dimensions. That is comfortable to about 10,000 chunks (240 MB of memory, so not on a 128 MB Cloudflare Worker) and workable to about 50,000 (79 MB, 1.7 s cold start, 37 ms per query, about 760 MB of memory). Beyond that, or for content that changes per request or per user, use a vector database. If your platform limits function bundle size, load the index from a static URL instead of importing it: `index: () => fetch(url).then((r) => r.text())`.
 
 **Other limits.** The keyword side is English-leaning (stopwords, plural stripping); other languages rely on the embedding model. Answers are single-turn. MDX is reduced to text, so components that render content from props are invisible to the index. The HTML loader is a tag stripper that expects static-site-generator output, not arbitrary markup. `memoryRateLimit` is per instance, and either limiter keys on a client IP header that only your platform can vouch for (see [rate limits and client IPs](#rate-limits-and-client-ips)).
 
@@ -567,13 +567,13 @@ Also exported: `fromHtml` (`root` picks the part of a page to read, as a selecto
 
 Apple M1 Max, Node 24.18, 1,000 queries per size after warm-up:
 
-| Chunks |   Index |    gzip | Same index, float JSON | Cold load |   Memory | Query p50 |      p95 |      p99 | Recall@10 |
-| -----: | ------: | ------: | ---------------------: | --------: | -------: | --------: | -------: | -------: | --------: |
-|  1,000 |  1.6 MB |  0.9 MB |                 7.5 MB |     32 ms |   3.2 MB |   0.71 ms |  0.76 ms |  0.91 ms |     99.9% |
-| 10,000 | 15.7 MB |  8.5 MB |                75.4 MB |    339 ms |  25.2 MB |   6.96 ms |  7.32 ms |  7.84 ms |     99.1% |
-| 50,000 | 78.7 MB | 42.6 MB |               377.1 MB |    1.72 s | 123.9 MB |  37.11 ms | 39.01 ms | 44.03 ms |     98.5% |
+| Chunks |   Index |    gzip | Same index, float JSON | Cold load | Heap retained | Process memory (peak) | Query p50 |      p95 |      p99 | Recall@10 |
+| -----: | ------: | ------: | ---------------------: | --------: | ------------: | --------------------: | --------: | -------: | -------: | --------: |
+|  1,000 |  1.6 MB |  0.9 MB |                 7.5 MB |     32 ms |        3.2 MB |       +23 MB (+31 MB) |   0.71 ms |  0.76 ms |  0.91 ms |     99.9% |
+| 10,000 | 15.7 MB |  8.5 MB |                75.4 MB |    339 ms |       25.2 MB |     +238 MB (+294 MB) |   6.96 ms |  7.32 ms |  7.84 ms |     99.1% |
+| 50,000 | 78.7 MB | 42.6 MB |               377.1 MB |    1.72 s |      123.9 MB |   +759 MB (+1,130 MB) |  37.11 ms | 39.01 ms | 44.03 ms |     98.5% |
 
-At 10,000 chunks, the BM25 half of a query takes 2.3 ms and the vector scan 4.6 ms (p50). Cold load is a one-time cost per server instance: parse, decode vectors, build the inverted index. "Recall@10" is the overlap between int8 and exact float32 top-10 results. The [benchmark source](./bench/run.mjs) documents the method.
+At 10,000 chunks, the BM25 half of a query takes 2.3 ms and the vector scan 4.6 ms (p50). Cold load is a one-time cost per server instance: parse, decode vectors, build the inverted index. "Heap retained" is what the loaded index itself holds. "Process memory" is how much a fresh Node.js process's RSS grows to load the index from its JSON text, as `index: () => readFile(…)` does: once the text is collected, and at the peak of parsing. That growth, not the heap, is what a platform's memory limit counts, because V8 keeps the pages it used to parse and build. Process memory was measured later than the other columns, on the same machine (`pnpm bench` reports both). "Recall@10" is the overlap between int8 and exact float32 top-10 results. The [benchmark source](./bench/run.mjs) documents the method.
 
 ## Roadmap
 
@@ -594,7 +594,7 @@ pnpm bench       # benchmarks
 pnpm assets      # regenerate the architecture diagram
 ```
 
-Requires Node 24 and pnpm (via Corepack). Releases are managed with [Changesets](./.changeset/README.md).
+Requires Node.js 22.12 or later (CI runs 22 and 24) and pnpm (via Corepack). Releases are managed with [Changesets](./.changeset/README.md).
 
 ## License
 

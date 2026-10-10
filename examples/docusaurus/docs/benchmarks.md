@@ -14,11 +14,11 @@ The corpora have a Zipf-distributed vocabulary and chunks of 600 to 1,000 charac
 
 Size and load, per server instance:
 
-| Chunks |   Index |    gzip | As float JSON | Cold load |   Memory |
-| -----: | ------: | ------: | ------------: | --------: | -------: |
-|  1,000 |  1.6 MB |  0.9 MB |        7.5 MB |     32 ms |   3.2 MB |
-| 10,000 | 15.7 MB |  8.5 MB |       75.4 MB |    339 ms |  25.2 MB |
-| 50,000 | 78.7 MB | 42.6 MB |      377.1 MB |    1.72 s | 123.9 MB |
+| Chunks |   Index |    gzip | As float JSON | Cold load | Heap retained | Process memory (peak) |
+| -----: | ------: | ------: | ------------: | --------: | ------------: | --------------------: |
+|  1,000 |  1.6 MB |  0.9 MB |        7.5 MB |     32 ms |        3.2 MB |       +23 MB (+31 MB) |
+| 10,000 | 15.7 MB |  8.5 MB |       75.4 MB |    339 ms |       25.2 MB |     +238 MB (+294 MB) |
+| 50,000 | 78.7 MB | 42.6 MB |      377.1 MB |    1.72 s |      123.9 MB |   +759 MB (+1,130 MB) |
 
 Query latency and recall:
 
@@ -28,7 +28,7 @@ Query latency and recall:
 | 10,000 |  6.96 ms |  7.32 ms |  7.84 ms |     99.1% |
 | 50,000 | 37.11 ms | 39.01 ms | 44.03 ms |     98.5% |
 
-At 10,000 chunks, the BM25 half of a query takes 2.3 ms and the vector scan 4.6 ms at the median. Cold load is a one-time cost per server instance: parse the file, decode the vectors and build the inverted index. Recall@10 is the overlap between the int8 top 10 and the exact float32 top 10.
+At 10,000 chunks, the BM25 half of a query takes 2.3 ms and the vector scan 4.6 ms at the median. Cold load is a one-time cost per server instance: parse the file, decode the vectors and build the inverted index. Heap retained is what the loaded index holds. Process memory is how much a fresh Node.js process grows to load the index from its JSON text, once the text is collected and at the peak of parsing: that, not the heap, counts against a platform's memory limit, so on a 128 MB Cloudflare Worker keep the index to a few thousand chunks. Process memory was measured later, on the same machine. Recall@10 is the overlap between the int8 top 10 and the exact float32 top 10.
 
 ## How fast is search
 
