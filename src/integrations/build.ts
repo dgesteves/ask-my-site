@@ -35,13 +35,17 @@ export type IndexOptions = {
    * for a keyword-only index. The endpoint must use the same model. Instead of `embeddingModel`.
    */
   embedding?: EmbeddingSpec;
-  /** The vector size for `embedding` or the default model, e.g. 512, as the CLI's `--dimensions`. */
+  /**
+   * The vector size for `embedding` or the default model, as the CLI's `--dimensions`. The default
+   * model is built at 512 unless this (or `embeddingProviderOptions`) says otherwise; with
+   * `embedding`, the default is the model's own size.
+   */
   dimensions?: number;
   /**
    * The embedding model for the index, as an AI SDK model; the endpoint must use the same one.
-   * Default: OpenAI's `text-embedding-3-small` when `OPENAI_API_KEY` is set at build time, the
-   * same model through AI Gateway when only `AI_GATEWAY_API_KEY` is, else `null`: a keyword-only
-   * index, with a warning.
+   * Default: OpenAI's `text-embedding-3-small` at 512 dimensions when `OPENAI_API_KEY` is set at
+   * build time, the same model through AI Gateway when only `AI_GATEWAY_API_KEY` is, else `null`:
+   * a keyword-only index, with a warning.
    */
   embeddingModel?: EmbeddingModel | null;
   /** Passed to the embedding model, default or not, e.g. `{ openai: { dimensions: 512 } }`. */
@@ -82,6 +86,16 @@ export function checkIndexOptions(options: IndexOptions): void {
 }
 
 const DEFAULT_MODEL = 'text-embedding-3-small';
+/**
+ * The default model's vector size: a third of its full 1,536, for a third of the index, which
+ * keeps a large site's index small enough to bundle with a function or serve as a static asset.
+ * The endpoint reads the size from the index.
+ */
+export const DEFAULT_DIMENSIONS = 512;
+
+/** Whether provider options already set a vector size, under any provider. */
+const setsDimensions = (options: EmbeddingProviderOptions | undefined): boolean =>
+  Object.values(options ?? {}).some((values) => 'dimensions' in values);
 
 /**
  * The embedding model a build uses, with its provider options: `embeddingModel` or `embedding`
@@ -101,6 +115,7 @@ export async function buildEmbedding(
   }
 
   let spec: string | undefined = options.embedding;
+  let dimensions = options.dimensions;
   if (spec === undefined) {
     const { OPENAI_API_KEY, AI_GATEWAY_API_KEY } = process.env;
     if (!OPENAI_API_KEY && !AI_GATEWAY_API_KEY) {
@@ -111,6 +126,7 @@ export async function buildEmbedding(
       return { model: null };
     }
     spec = OPENAI_API_KEY ? `openai:${DEFAULT_MODEL}` : `openai/${DEFAULT_MODEL}`;
+    if (dimensions === undefined && !setsDimensions(given)) dimensions = DEFAULT_DIMENSIONS;
   }
   const name =
     options.embedding === undefined
@@ -120,7 +136,7 @@ export async function buildEmbedding(
   let choice: EmbeddingChoice;
   try {
     choice = await embeddingFromSpec(spec, {
-      ...(options.dimensions ? { dimensions: options.dimensions } : {}),
+      ...(dimensions ? { dimensions } : {}),
       name,
     });
   } catch (error) {
@@ -131,7 +147,10 @@ export async function buildEmbedding(
       process.env.AI_GATEWAY_API_KEY
     ) {
       log.warn(`${error.message.replace(/\.?$/, '.')} Embedding through AI Gateway instead.`);
-      return buildEmbedding({ ...options, embedding: `openai/${DEFAULT_MODEL}` }, log);
+      return buildEmbedding(
+        { ...options, embedding: `openai/${DEFAULT_MODEL}`, ...(dimensions ? { dimensions } : {}) },
+        log,
+      );
     }
     const message = (error as Error).message.replace(/\.?$/, '.');
     const hint =

@@ -156,9 +156,11 @@ describe('the Docusaurus plugin under jiti', () => {
       await stub.close();
     }
     expect(stub.requests).toEqual(['POST /v1/embeddings']);
+    // The default model is built at 512 dimensions.
     expect((await readIndex()).embedding).toEqual({
       model: 'text-embedding-3-small',
-      dimensions: 1536,
+      dimensions: 512,
+      settings: expect.any(String) as string,
     });
   }, 60_000);
 });
@@ -229,6 +231,36 @@ describe('the plugins’ embedding options', () => {
     await askMySite(s.context, { embedding: 'none' }).postBuild(s);
     expect((await readIndex()).embedding).toBeNull();
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('build the default model at 512 dimensions, unless told another size', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const requests = stubEmbeddings(8);
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
+    const s = await site();
+    await askMySite(s.context, {}).postBuild(s);
+    expect(requests.at(-1)?.body).toMatchObject({
+      model: 'text-embedding-3-small',
+      dimensions: 512,
+    });
+
+    await askMySite(s.context, { dimensions: 1536 }).postBuild(s);
+    expect(requests.at(-1)?.body).toMatchObject({ dimensions: 1536 });
+    await askMySite(s.context, {
+      embeddingProviderOptions: { openai: { dimensions: 256 } },
+    }).postBuild(s);
+    expect(requests.at(-1)?.body).toMatchObject({ dimensions: 256 });
+    // A model you name keeps its own size unless you give one.
+    await askMySite(s.context, { embedding: 'openai:text-embedding-3-large' }).postBuild(s);
+    expect(requests.at(-1)?.body).not.toHaveProperty('dimensions');
+
+    // Through AI Gateway as well, when only its key is set.
+    vi.stubEnv('OPENAI_API_KEY', '');
+    vi.stubEnv('AI_GATEWAY_API_KEY', 'gateway-test');
+    await askMySite(s.context, {}).postBuild(s);
+    expect(requests.at(-1)?.body).toMatchObject({
+      providerOptions: { openai: { dimensions: 512 } },
+    });
   });
 
   it('reject contradictory or unknown options when the plugin is created', async () => {

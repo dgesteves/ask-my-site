@@ -134,7 +134,8 @@ export function Ask() {
     install: PEERS,
     build: [['npx', 'docusaurus', 'build']],
     index: 'build/ask-index.json',
-    dimensions: 1536,
+    // The plugin's default model, at its default size.
+    dimensions: 512,
   },
   // The plugin with the model named as a string, as the CLI's --embedding names it.
   starlight: {

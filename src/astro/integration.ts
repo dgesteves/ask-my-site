@@ -1,6 +1,6 @@
 // The Astro integration behind ask-my-site/astro and ask-my-site/starlight. Node.js only.
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { AstroConfig, AstroIntegration } from 'astro';
@@ -147,7 +147,8 @@ export function createIntegration(
               'ask-my-site',
               `astro-${locale || 'root'}.json`,
             ),
-            name,
+            // With an adapter, Astro serves static files from `dist/client/`: say so.
+            name: relative(fileURLToPath(config.root), join(outDir, name)) || name,
             log: logger,
           });
         }

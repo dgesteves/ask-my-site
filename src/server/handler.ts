@@ -72,7 +72,12 @@ export interface AskHandlerOptions {
    * query fails at runtime, that request falls back to keywords instead of failing.
    */
   embeddingModel?: EmbeddingModel;
-  /** Must match what the index was built with, e.g. `{ openai: { dimensions: 512 } }`. */
+  /**
+   * Passed to the embedding model with each question; must match what the index was built with.
+   * For OpenAI's `text-embedding-3` models (directly or through AI Gateway), the vector size comes
+   * from the index, so only other options, or another provider's size option (such as Google's
+   * `outputDimensionality`), need setting here.
+   */
   embeddingProviderOptions?: EmbeddingProviderOptions;
   /** Used in the default instructions and the "I don't know" message. Default `"this site"`. */
   siteName?: string;
@@ -687,6 +692,21 @@ function isLoadedIndex(value: unknown): value is LoadedIndex {
   return typeof value === 'object' && value !== null && 'bm25' in value && 'chunks' in value;
 }
 
+/**
+ * The provider options a question is embedded with: `given`, plus, for OpenAI's
+ * `text-embedding-3` models (whose size is an option), the size the index was built at, unless
+ * `given` sets one. So an index built at 512 dimensions, or at the model's full 1,536, is queried
+ * at its own size without the endpoint repeating it.
+ */
+function queryProviderOptions(
+  embedding: NonNullable<LoadedIndex['embedding']>,
+  given: EmbeddingProviderOptions | undefined,
+): EmbeddingProviderOptions | undefined {
+  if (!/(?:^|\/)text-embedding-3-/.test(embedding.model)) return given;
+  if (given?.openai && 'dimensions' in given.openai) return given;
+  return { ...given, openai: { dimensions: embedding.dimensions, ...given?.openai } };
+}
+
 async function embedQuery(
   question: string,
   index: LoadedIndex,
@@ -695,6 +715,7 @@ async function embedQuery(
   reportError: (error: unknown) => void,
 ): Promise<number[] | null> {
   if (!options.embeddingModel || !index.vectors || !index.embedding) return null;
+  const providerOptions = queryProviderOptions(index.embedding, options.embeddingProviderOptions);
   let embedding: number[];
   try {
     ({ embedding } = await embed({
@@ -702,9 +723,7 @@ async function embedQuery(
       value: question,
       maxRetries: 1,
       abortSignal,
-      ...(options.embeddingProviderOptions
-        ? { providerOptions: options.embeddingProviderOptions }
-        : {}),
+      ...(providerOptions ? { providerOptions } : {}),
     }));
   } catch (error) {
     if (abortSignal.aborted) throw error;

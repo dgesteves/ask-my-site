@@ -44,9 +44,9 @@ DocSearch's own Ask AI panel also opens with ⌘I. Pick another key with `dialog
 
 ## Embeddings in Docusaurus
 
-The plugin embeds with OpenAI's `text-embedding-3-small` when `OPENAI_API_KEY` is set at build time, or with the same model through AI Gateway when only `AI_GATEWAY_API_KEY` is. Without either key it builds a keyword-only index and prints a warning. If a key is set but the provider cannot load, the build fails with the reason instead of quietly going keyword-only.
+The plugin embeds with OpenAI's `text-embedding-3-small` at 512 dimensions when `OPENAI_API_KEY` is set at build time, or with the same model through AI Gateway when only `AI_GATEWAY_API_KEY` is. Without either key it builds a keyword-only index and prints a warning. If a key is set but the provider cannot load, the build fails with the reason instead of quietly going keyword-only.
 
-Choose the model with `embedding`, named the way the CLI names it, so the config imports no provider: `'openai:text-embedding-3-large'`, `'cohere/embed-v4.0'` through AI Gateway, `'mock'` for offline builds, or `'none'` for keyword-only. `dimensions: 512` shrinks vectors for models that support it.
+Choose the model with `embedding`, named the way the CLI names it, so the config imports no provider: `'openai:text-embedding-3-large'`, `'cohere/embed-v4.0'` through AI Gateway, `'mock'` for offline builds, or `'none'` for keyword-only. `dimensions` sets the vector size for models that support it, and the endpoint reads it from the index.
 
 ```ts
 plugins: [['ask-my-site/docusaurus', { embedding: 'openai:text-embedding-3-small', dimensions: 512 }]],

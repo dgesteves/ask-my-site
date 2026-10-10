@@ -132,8 +132,11 @@ describe('ask-my-site dev', () => {
 
   it('finds the index the CLI, Docusaurus or Astro wrote, or says how to make one', async () => {
     expect(() => findIndexFile(root)).toThrow(
-      /No index found: looked for ask-index.json, build\/ask-index.json, dist\/ask-index.json/,
+      /No index found: looked for ask-index.json, build\/ask-index.json, dist\/ask-index.json, dist\/client\/ask-index.json/,
     );
+    // An Astro site with an adapter: its static files, the index among them, go to dist/client.
+    await indexAt('dist/client/ask-index.json');
+    expect(findIndexFile(root)).toBe(join(root, 'dist/client/ask-index.json'));
     await indexAt('dist/ask-index.json');
     expect(findIndexFile(root)).toBe(join(root, 'dist/ask-index.json'));
     await indexAt('build/ask-index.json');

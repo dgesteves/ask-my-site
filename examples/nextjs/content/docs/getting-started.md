@@ -46,8 +46,7 @@ import index from './ask-index.json';
 export const POST = createAskHandler({
   index,
   model: openai('gpt-5.4-mini'),
-  embeddingModel: openai.embedding('text-embedding-3-small'),
-  embeddingProviderOptions: { openai: { dimensions: 512 } },
+  embeddingModel: openai.embedding('text-embedding-3-small'), // at the index's 512 dimensions
 });
 ```
 

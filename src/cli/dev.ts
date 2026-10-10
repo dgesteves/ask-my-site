@@ -26,7 +26,7 @@ index. Answers come from OpenAI when OPENAI_API_KEY is set, else from the mock m
 
 Options:
       --index <file>           Index file (default: ask-index.json, then build/ask-index.json,
-                               then dist/ask-index.json)
+                               dist/ask-index.json, or dist/client/ask-index.json)
       --port <n>               Port on 127.0.0.1 (default: 8787)
       --allow-origin <origin>  Another origin allowed to call it, such as https://docs.example.com;
                                repeatable, or * for any (default: localhost, 127.0.0.1 and [::1]
@@ -37,8 +37,17 @@ Options:
 .env and .env.local in the working directory are loaded first. A rebuilt index is picked up on
 the next question. Up to 30 questions a minute are answered.`;
 
-/** Where `dev` looks for an index: the CLI's output, then Docusaurus's and Astro's build output. */
-export const INDEX_FILES = ['ask-index.json', 'build/ask-index.json', 'dist/ask-index.json'];
+/**
+ * Where `dev` looks for an index: the CLI's output, then Docusaurus's and Astro's build output.
+ * Astro writes a static site to `dist/`, and a site with an adapter (server output) to
+ * `dist/client/`.
+ */
+export const INDEX_FILES = [
+  'ask-index.json',
+  'build/ask-index.json',
+  'dist/ask-index.json',
+  'dist/client/ask-index.json',
+];
 
 /** A setup problem to explain, rather than a crash. */
 export class DevError extends Error {}
