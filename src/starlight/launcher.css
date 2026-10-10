@@ -23,3 +23,25 @@
 :root:not([data-has-toc]) .main-frame {
   padding-bottom: 4.5rem;
 }
+
+/* McpInstall.astro: its links as buttons, in Starlight's colors. */
+.ask-mcp-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.ask-mcp-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 999rem;
+  color: var(--sl-color-white);
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+.ask-mcp-link:hover {
+  border-color: var(--sl-color-text-accent);
+  color: var(--sl-color-white);
+}

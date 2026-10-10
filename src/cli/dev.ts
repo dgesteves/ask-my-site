@@ -14,13 +14,13 @@ import { MOCK_MIN_SIMILARITY, mockEmbeddingModel, mockLanguageModel } from '../m
 import { readIndexFile } from '../node';
 import { importOptional } from '../node/optional';
 import type { RetrievalOptions } from '../search/retrieve';
-import { createAskHandler, memoryRateLimit } from '../server';
+import { createAskHandler, createMcpHandler, memoryRateLimit } from '../server';
 import type { CliIO } from './main';
 
 export const DEV_USAGE = `Usage: ask-my-site dev [options]
 
 Serves POST /api/ask on this machine, answering from an index, for the dialog on a site's dev
-server. Questions are embedded as the index was: with the mock model, with OpenAI or AI Gateway
+server, and the same index as an MCP server at /api/mcp, for your editor's agent. Questions are embedded as the index was: with the mock model, with OpenAI or AI Gateway
 when the index was (set OPENAI_API_KEY or AI_GATEWAY_API_KEY), or not at all for a keyword-only
 index. Answers come from OpenAI when OPENAI_API_KEY is set, else from the mock model.
 
@@ -183,6 +183,8 @@ export interface DevServerOptions {
 export interface DevServer {
   /** `http://localhost:<port>/api/ask` */
   endpoint: string;
+  /** `http://localhost:<port>/api/mcp` */
+  mcp: string;
   /** How questions are embedded and answered. */
   description: string;
   chunks: number;
@@ -244,7 +246,26 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
         options.error(`  ✗ ${error instanceof Error ? error.message : String(error)}`);
       },
     });
-    return { handler, description, chunks: index.chunks.length };
+    // The MCP endpoint, keyword-only as by default: it calls no model, so it spends nothing.
+    const mcp = createMcpHandler({
+      index,
+      siteName: 'the docs',
+      // The site runs on another port, which this server does not know: keep the index's paths.
+      siteUrl: false,
+      rateLimit: memoryRateLimit({ limit: 120, windowMs: 60_000, key: () => 'local' }),
+      // The server checks Host and Origin itself, before the request gets here.
+      allowedOrigins: '*',
+      onToolCall: ({ tool, arguments: args, isError }) => {
+        const detail = [args.query, args.id, args.prefix].find(
+          (value) => typeof value === 'string',
+        );
+        options.log(`  mcp ${tool}${isError ? ' (error)' : ''}: ${detail ?? ''}`);
+      },
+      onError: (error) => {
+        options.error(`  ✗ ${error instanceof Error ? error.message : String(error)}`);
+      },
+    });
+    return { handler, mcp, description, chunks: index.chunks.length };
   };
 
   let current = await load();
@@ -257,7 +278,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
       current = await load();
       options.log(`Reloaded the index (${String(current.chunks)} chunks).`);
     }
-    return current.handler;
+    return current;
   };
 
   const cors = (request: IncomingMessage): Record<string, string> => {
@@ -266,7 +287,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     return {
       ...(allowed ? { 'access-control-allow-origin': allowed } : {}),
       'access-control-allow-methods': 'POST, OPTIONS',
-      'access-control-allow-headers': 'content-type',
+      'access-control-allow-headers': 'content-type, mcp-protocol-version',
       ...(allowed === '*' ? {} : { vary: 'origin' }),
     };
   };
@@ -316,11 +337,14 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
       return;
     }
     const url = new URL(request.url ?? '/', 'http://localhost');
-    if (url.pathname !== '/api/ask') {
+    if (url.pathname !== '/api/ask' && url.pathname !== '/api/mcp') {
       response.writeHead(404, { 'content-type': 'application/json', ...cors(request) });
       response.end(
         JSON.stringify({
-          error: { code: 'not_found', message: 'ask-my-site dev answers POST /api/ask.' },
+          error: {
+            code: 'not_found',
+            message: 'ask-my-site dev answers POST /api/ask, and MCP at /api/mcp.',
+          },
         }),
       );
       return;
@@ -353,9 +377,8 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     for (const [name, value] of Object.entries(request.headers)) {
       if (typeof value === 'string') headers.set(name, value);
     }
-    const answer = await (
-      await handlerFor()
-    )(
+    const handlers = await handlerFor();
+    const answer = await (url.pathname === '/api/mcp' ? handlers.mcp : handlers.handler)(
       new Request(url, {
         method,
         headers,
@@ -386,6 +409,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 
   return {
     endpoint: `http://localhost:${String(port)}/api/ask`,
+    mcp: `http://localhost:${String(port)}/api/mcp`,
     description: current.description,
     chunks: current.chunks,
     close: () =>
@@ -500,6 +524,7 @@ export async function dev(args: string[], io: CliIO): Promise<number> {
       `ask-my-site dev: ${label} (${String(server.chunks)} chunks), ${server.description}`,
       '',
       `  Endpoint  ${endpoint}  (CORS: ${cors})`,
+      `  MCP       ${server.mcp}  (claude mcp add --transport http docs ${server.mcp})`,
       '',
       'Point the dialog at it:',
       `  Docusaurus, Astro, Starlight  start the site with ASK_ENDPOINT=${endpoint}`,

@@ -73,6 +73,7 @@
       "default": "./dist/starlight/index.js"
     },
     "./starlight/launcher.css": "./dist/starlight/launcher.css",
+    "./astro/McpInstall.astro": "./dist/astro/McpInstall.astro",
     "./package.json": "./package.json"
   },
   "unpkg": "./dist/embed.global.js",
@@ -93,7 +94,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:package": "publint --strict && attw --pack . --profile esm-only --exclude-entrypoints ./react/styles.css ./embed/launcher.css ./starlight/launcher.css",
+    "check:package": "publint --strict && attw --pack . --profile esm-only --exclude-entrypoints ./react/styles.css ./embed/launcher.css ./starlight/launcher.css ./astro/McpInstall.astro",
     "bench": "pnpm build && node --expose-gc bench/run.mjs",
     "assets": "node scripts/assets/architecture.mjs",
     "screenshot": "node scripts/assets/screenshot.mjs",
@@ -121,6 +122,7 @@
     "@docusaurus/module-type-aliases": "3.10.2",
     "@docusaurus/types": "3.10.2",
     "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/client": "^2.3.1",
     "@radix-ui/react-dialog": "^1.1.23",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",

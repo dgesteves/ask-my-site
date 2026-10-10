@@ -19,9 +19,11 @@ import {
   dialogEndpoint,
   excluder,
   hintDevEndpoint,
+  resolveMcp,
   warnMissingDialogPeers,
   writeSiteIndex,
   type IndexOptions,
+  type McpOption,
 } from '../integrations/build';
 import { attribute, fromHtml } from '../loaders/html';
 import type { SourceDocument } from '../types';
@@ -52,17 +54,26 @@ export type AskMySiteOptions = IndexOptions & {
    */
   exclude?: string[];
   dialog?: AskMySiteDialogOptions;
+  /**
+   * The site's MCP endpoint (`createMcpHandler` from `ask-my-site/server`), as an absolute URL or a
+   * path on the site such as `/api/mcp`, and optionally the name clients list it under (default:
+   * from the site title). `<AskMySiteMcp />` from `@theme/AskMySiteMcp` then shows how to add it
+   * to Cursor, VS Code, Claude and ChatGPT.
+   */
+  mcp?: McpOption;
 };
 
 /** What the theme reads with `useAllPluginInstancesData('ask-my-site')`. */
 export interface AskMySiteGlobalData {
   endpoint: string;
   dialog: AskMySiteDialogOptions & { title: string };
+  /** The MCP endpoint, absolute, when the plugin's `mcp` option names one. */
+  mcp?: { url: string; name: string };
 }
 
 interface LoadContext {
   siteDir: string;
-  siteConfig: { title: string; titleDelimiter?: string };
+  siteConfig: { title: string; titleDelimiter?: string; url?: string };
   /** The base URL with the locale's path, e.g. `/docs/fr/`. */
   baseUrl: string;
   i18n: { currentLocale: string };
@@ -80,9 +91,11 @@ export default function askMySite(context: LoadContext, options: AskMySiteOption
   warnMissingDialogPeers(consoleLogger());
   const { title: siteTitle, titleDelimiter = '|' } = context.siteConfig;
   const indexFile = (options.indexFile ?? 'ask-index.json').replace(/^\/+/, '');
+  const mcp = resolveMcp(options.mcp, context.siteConfig.url, siteTitle, 'the site config');
   const data: AskMySiteGlobalData = {
     endpoint: dialogEndpoint(options.endpoint),
     dialog: { ...options.dialog, title: options.dialog?.title ?? `Ask ${siteTitle}` },
+    ...(mcp ? { mcp } : {}),
   };
 
   return {

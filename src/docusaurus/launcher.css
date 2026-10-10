@@ -56,3 +56,10 @@
     display: none;
   }
 }
+
+/* <AskMySiteMcp />: its links are Infima buttons; space them like a button group. */
+.ask-mcp-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

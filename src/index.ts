@@ -61,6 +61,8 @@ export { VectorIndex } from './search/vectors';
 export { reciprocalRankFusion } from './search/rrf';
 export type { FusedResult } from './search/rrf';
 export { DEFAULT_RETRIEVAL, loadIndex, retrieve } from './search/retrieve';
+export { mcpInstallLinks, mcpServerName } from './mcp-install';
+export type { McpInstallLinks, McpInstallOptions } from './mcp-install';
 export type {
   LoadedIndex,
   RetrievalHit,

@@ -39,6 +39,8 @@ node scripts/consumer-site.mjs docusaurus /tmp/ask-my-site-*.tgz /tmp/site
 
 The docs live in `examples/nextjs/content/docs`, and the Docusaurus and Starlight examples' pages are generated from them: after editing a page, run `pnpm build && pnpm examples:sync` and commit the result. CI fails when they drift.
 
+`test/corpus.test.ts` checks search on real docs: docusaurus.io's, at a pinned commit. Fetch them once with `node scripts/corpus.mjs` (a few MB, into the git-ignored `.corpus/`); without them the file is skipped locally, and CI always fetches them. A change that moves its counts has to say why.
+
 Parsers must stay linear on hostile input: if you touch `src/loaders` or `src/chunk.ts`, add a case to `test/robustness.test.ts`.
 
 ## Changesets

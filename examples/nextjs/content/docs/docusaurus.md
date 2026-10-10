@@ -78,17 +78,18 @@ Build the site once, run `npx ask-my-site dev` in its folder, which answers from
 
 ## Docusaurus plugin options
 
-| Option                     | Default                            | What it does                                                        |
-| -------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
-| `endpoint`                 | `ASK_ENDPOINT`, else `/api/ask`    | Where the dialog posts questions; `ASK_ENDPOINT` overrides it.      |
-| `embedding`                | OpenAI when a key is set           | Model spec: `openai:<model>`, `<provider>/<model>`, `mock`, `none`. |
-| `dimensions`               | the model's                        | Vector size, for models that support it.                            |
-| `embeddingModel`           | none                               | An AI SDK embedding model object, instead of `embedding`.           |
-| `embeddingProviderOptions` | none                               | Passed to the embedding model.                                      |
-| `chunking`                 | `{ maxChars: 1200, overlap: 150 }` | Chunk size and overlap, in characters.                              |
-| `indexFile`                | `ask-index.json`                   | Where the index is written in `build/` and served from.             |
-| `exclude`                  | `[]`                               | Path prefixes to leave out, relative to `baseUrl`.                  |
-| `dialog`                   |                                    | `title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`.   |
+| Option                     | Default                            | What it does                                                         |
+| -------------------------- | ---------------------------------- | -------------------------------------------------------------------- |
+| `endpoint`                 | `ASK_ENDPOINT`, else `/api/ask`    | Where the dialog posts questions; `ASK_ENDPOINT` overrides it.       |
+| `embedding`                | OpenAI when a key is set           | Model spec: `openai:<model>`, `<provider>/<model>`, `mock`, `none`.  |
+| `dimensions`               | the model's                        | Vector size, for models that support it.                             |
+| `embeddingModel`           | none                               | An AI SDK embedding model object, instead of `embedding`.            |
+| `embeddingProviderOptions` | none                               | Passed to the embedding model.                                       |
+| `chunking`                 | `{ maxChars: 1200, overlap: 150 }` | Chunk size and overlap, in characters.                               |
+| `indexFile`                | `ask-index.json`                   | Where the index is written in `build/` and served from.              |
+| `exclude`                  | `[]`                               | Path prefixes to leave out, relative to `baseUrl`.                   |
+| `dialog`                   |                                    | `title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`.    |
+| `mcp`                      | none                               | The [MCP endpoint](/docs/mcp)'s URL or path, for `<AskMySiteMcp />`. |
 
 ## Locales and versions
 

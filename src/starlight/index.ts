@@ -47,6 +47,7 @@ export default function askMySite(options: AskMySiteStarlightOptions = {}): Star
             ignore: '[data-pagefind-ignore], .sr-only',
             stylesheets: ['ask-my-site/starlight/launcher.css'],
             title: `Ask ${siteTitle(config)}`,
+            siteTitle: siteTitle(config),
             // Starlight serves each locale but the root one under its key: /fr/, /pt-br/.
             ...(config.locales
               ? { locales: Object.keys(config.locales).filter((key) => key !== 'root') }

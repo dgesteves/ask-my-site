@@ -81,6 +81,7 @@ Then point the dialog at `http://localhost:8787/api/ask`: start a site that uses
 - **Accessible ⌘K dialog.** Radix Dialog and cmdk; focus management, `aria-live` answer, reduced motion, light and dark themes, unstyled-friendly.
 - **Plugins and a script tag.** [Docusaurus](#docusaurus), [Astro and Starlight](#astro-and-starlight) plugins index the built site at the URLs it serves and add the dialog; [one `<script>` tag](#any-static-site-script-embed) adds it to Hugo, Jekyll, Eleventy, MkDocs or plain HTML.
 - **Production hygiene.** zod-validated input, body-size cap, pluggable rate limiting (in-memory or Upstash) keyed on the one client IP header your platform controls, a daily budget of questions and model tokens, an answer cache for repeated questions, masked model errors, keyword fallback when the embedding provider is down.
+- **An MCP server for agents.** The same index as `search`, `fetch` and `list_pages` tools over MCP, with no model call on your side ([below](#for-agents-an-mcp-server-from-the-same-index)).
 - **Offline mock mode.** A deterministic embedder and a scripted extractive model run the whole pipeline with no key, for demos and tests.
 
 ## How it works
@@ -360,6 +361,25 @@ It mounts itself once the page has loaded, with its tag's attributes: `data-endp
 
 In an app with a bundler, `mountAskDialog(options)` from `ask-my-site/embed` does the same with your own React (install `react`, `react-dom`, `@radix-ui/react-dialog` and `cmdk`); import `ask-my-site/react/styles.css` and `ask-my-site/embed/launcher.css` with it.
 
+## For agents: an MCP server from the same index
+
+`createMcpHandler` serves the index to agents (Claude Code, Cursor, VS Code, ChatGPT, Claude) as an MCP server with three read-only tools: `search` (ranked sections with a snippet and a URL to the anchor), `fetch` (a page or section as Markdown) and `list_pages`. The agent brings its own model, so the endpoint never calls a language model; without an `embeddingModel`, search is keyword-only and it calls no model at all.
+
+```ts
+// app/api/mcp/route.ts
+import { createMcpHandler } from 'ask-my-site/server';
+import index from '../../../ask-index.json';
+
+const handler = createMcpHandler({ index, siteName: 'the Acme docs' });
+export { handler as POST, handler as GET, handler as DELETE, handler as OPTIONS };
+```
+
+```sh
+claude mcp add --transport http acme-docs https://docs.acme.dev/api/mcp
+```
+
+It speaks MCP 2026-07-28 (stateless, `server/discover`) and, for clients that start with `initialize`, 2025-11-25 back to 2024-11-05, without sessions. It is rate-limited to 60 tool calls a minute per client IP by default and takes a `budget` of tool calls a day. On docusaurus.io's own docs, keyword search puts the right page in the top three for 22 of 22 agent-style queries, checked in CI. The plugins' `mcp` option feeds an "Add to Cursor / VS Code / Claude" block for your docs (`<AskMySiteMcp />` in Docusaurus, `McpInstall.astro` in Astro and Starlight). `npx ask-my-site dev` serves it locally at `/api/mcp`. See the [MCP server docs](https://ask-my-site-demo.vercel.app/docs/mcp).
+
 ## Example site
 
 The [Next.js example](./examples/nextjs) is [the website](https://ask-my-site-demo.vercel.app): a landing page and docs about ask-my-site that index themselves.
@@ -382,7 +402,7 @@ Nine imports and a CLI. Each import is tree-shakeable, and only `ask-my-site/nod
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | `ask-my-site`            | Loaders, chunking, `buildIndex`, `checkIndex`, `loadIndex`, `retrieve`                                            |
 | `ask-my-site/node`       | `loadDirectory`, `readIndexFile`, `writeIndexFile`, config types                                                  |
-| `ask-my-site/server`     | `createAskHandler`, rate limiters, prompt helpers                                                                 |
+| `ask-my-site/server`     | `createAskHandler`, `createMcpHandler`, rate limiters, prompt helpers                                             |
 | `ask-my-site/react`      | `AskDialog`, `useAsk`, `AskAnswer`; needs `@radix-ui/react-dialog` and `cmdk`                                     |
 | `ask-my-site/embed`      | `mountAskDialog`: the dialog and its button without writing React ([script embed](#any-static-site-script-embed)) |
 | `ask-my-site/docusaurus` | The [Docusaurus](#docusaurus) plugin                                                                              |

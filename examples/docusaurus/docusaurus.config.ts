@@ -8,6 +8,9 @@ import { themes as prismThemes } from 'prism-react-renderer';
 // dialog posts to ASK_ENDPOINT when it is set, else to /api/ask.
 const askMySite: AskMySiteOptions = {
   ...(process.env.OPENAI_API_KEY ? {} : { embedding: 'mock' as const }),
+  // The same docs, served to agents by the website's MCP endpoint; src/pages/ai-tools.mdx shows
+  // how to connect to it.
+  mcp: { url: 'https://ask-my-site-demo.vercel.app/api/mcp', name: 'ask-my-site' },
   dialog: {
     suggestions: ['How do I add it to Docusaurus?', 'Do I need a vector database?'],
   },

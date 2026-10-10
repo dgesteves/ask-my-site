@@ -1,7 +1,6 @@
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
-  embed,
   generateId,
   streamText,
   toUIMessageStream,
@@ -11,7 +10,7 @@ import {
 } from 'ai';
 import { z } from 'zod';
 
-import { embeddingModelId, sameEmbeddingModel, type EmbeddingProviderOptions } from '../build';
+import type { EmbeddingProviderOptions } from '../build';
 import { sha256 } from '../hash';
 import {
   SOURCE_METADATA_KEY,
@@ -20,7 +19,6 @@ import {
   type AskSource,
 } from '../protocol';
 import {
-  loadIndex,
   retrieve,
   type LoadedIndex,
   type RetrievalOptions,
@@ -35,7 +33,17 @@ import {
   type CachedAnswer,
 } from './cache';
 import { buildSources, defaultInstructions, formatPrompt } from './prompt';
-import { memoryRateLimit, type RateLimiter, type RateLimitResult } from './rate-limit';
+import type { RateLimiter, RateLimitResult } from './rate-limit';
+import {
+  CLIENT_CLOSED,
+  defaultRateLimit,
+  embedQuery,
+  indexLoader,
+  isJson,
+  rateLimitHeaders,
+  readBody,
+  type IndexSource,
+} from './shared';
 
 type StreamTextOptions = Parameters<typeof streamText>[0];
 
@@ -53,11 +61,7 @@ export type GenerationOptions = Pick<
   | 'telemetry'
 >;
 
-/**
- * The index in any form `loadIndex` accepts: the parsed JSON (`import index from
- * './ask-index.json'`), its text, or an already loaded index.
- */
-export type IndexSource = object | string;
+export type { IndexSource } from './shared';
 
 export interface AskHandlerOptions {
   /**
@@ -148,41 +152,6 @@ export interface AskFinishEvent {
   cached: boolean;
 }
 
-/** Status for a request the client abandoned (nginx's convention); nobody reads the body. */
-const CLIENT_CLOSED = 499;
-
-/**
- * Reads the body as UTF-8, giving up as soon as it exceeds `limit` bytes. `Content-Length` is
- * advisory (chunked requests have none), so the bytes are counted as they arrive.
- */
-async function readBody(request: Request, limit: number): Promise<string | null> {
-  if (!request.body) return '';
-  const reader = request.body.getReader();
-  const parts: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > limit) {
-      await reader.cancel().catch(() => undefined);
-      return null;
-    }
-    parts.push(value);
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const part of parts) {
-    bytes.set(part, offset);
-    offset += part.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
-}
-
-/** `application/json`, with any parameters (`; charset=utf-8`). */
-const isJson = (contentType: string | null): boolean =>
-  contentType?.split(';')[0]?.trim().toLowerCase() === 'application/json';
-
 const MODEL_ERROR_MESSAGE = 'The answer could not be generated. Please try again.';
 
 const requestSchema = z.union([
@@ -243,7 +212,9 @@ export function createAskHandler(
       console.error('[ask-my-site]', error);
     });
   const rateLimit =
-    options.rateLimit === undefined ? defaultRateLimit(reportError) : options.rateLimit || null;
+    options.rateLimit === undefined
+      ? defaultRateLimit(DEFAULT_RATE_LIMIT, 'questions', reportError)
+      : options.rateLimit || null;
   const baseHeaders = { 'cache-control': 'no-store', ...options.headers };
   // The answer has already streamed when `onFinish` runs, so its failure (an analytics write,
   // say) is reported, never turned into an error part the visitor sees.
@@ -255,15 +226,7 @@ export function createAskHandler(
     }
   };
 
-  let indexPromise: Promise<LoadedIndex> | null = null;
-  const getIndex = (): Promise<LoadedIndex> => {
-    indexPromise ??= resolveIndex(options).catch((error: unknown) => {
-      // A failed load (a network blip fetching the file) should not poison every later request.
-      indexPromise = null;
-      throw error;
-    });
-    return indexPromise;
-  };
+  const getIndex = indexLoader(options.index, options.embeddingModel);
 
   const json = (status: number, body: AskErrorBody, headers?: Record<string, string>): Response =>
     Response.json(body, { status, headers: { ...baseHeaders, ...headers } });
@@ -354,18 +317,10 @@ export function createAskHandler(
         limit = { success: true };
       }
       if (!limit.success) {
-        const headers: Record<string, string> = {};
-        if (limit.reset !== undefined) {
-          const seconds = Math.max(1, Math.ceil((limit.reset - Date.now()) / 1000));
-          headers['retry-after'] = String(seconds);
-          headers['ratelimit-reset'] = String(seconds);
-        }
-        if (limit.limit !== undefined) headers['ratelimit-limit'] = String(limit.limit);
-        if (limit.remaining !== undefined) headers['ratelimit-remaining'] = String(limit.remaining);
         return json(
           429,
           { error: { code: 'rate_limited', message: 'Too many questions. Try again shortly.' } },
-          headers,
+          rateLimitHeaders(limit),
         );
       }
     }
@@ -596,6 +551,9 @@ export function createAskHandler(
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 800;
 
+/** What `rateLimit` defaults to: 10 questions a minute per client IP, per instance. */
+const DEFAULT_RATE_LIMIT = 10;
+
 /** How retrieval runs when nothing fails: hybrid with an embedding model and vectors. */
 function expectedMode(index: LoadedIndex, options: AskHandlerOptions): 'hybrid' | 'keyword' {
   return options.embeddingModel && index.vectors && index.embedding ? 'hybrid' : 'keyword';
@@ -658,113 +616,5 @@ function answerCache(
         report(error);
       }
     },
-  };
-}
-
-async function resolveIndex(options: AskHandlerOptions): Promise<LoadedIndex> {
-  const source: unknown =
-    typeof options.index === 'function' ? await options.index() : options.index;
-  const index = isLoadedIndex(source) ? source : loadIndex(unwrapModule(source));
-
-  const model = options.embeddingModel;
-  if (
-    index.embedding &&
-    model &&
-    !sameEmbeddingModel(index.embedding.model, embeddingModelId(model))
-  ) {
-    throw new Error(
-      `The index was embedded with "${index.embedding.model}" but the handler embeds queries with ` +
-        `"${embeddingModelId(model)}". Rebuild the index or pass the same embeddingModel.`,
-    );
-  }
-  return index;
-}
-
-/** `import('./ask-index.json')` resolves to a module namespace with the JSON as `default`. */
-function unwrapModule(value: unknown): unknown {
-  if (value && typeof value === 'object' && !('format' in value) && 'default' in value) {
-    return value.default;
-  }
-  return value;
-}
-
-function isLoadedIndex(value: unknown): value is LoadedIndex {
-  return typeof value === 'object' && value !== null && 'bm25' in value && 'chunks' in value;
-}
-
-/**
- * The provider options a question is embedded with: `given`, plus, for OpenAI's
- * `text-embedding-3` models (whose size is an option), the size the index was built at, unless
- * `given` sets one. So an index built at 512 dimensions, or at the model's full 1,536, is queried
- * at its own size without the endpoint repeating it.
- */
-function queryProviderOptions(
-  embedding: NonNullable<LoadedIndex['embedding']>,
-  given: EmbeddingProviderOptions | undefined,
-): EmbeddingProviderOptions | undefined {
-  if (!/(?:^|\/)text-embedding-3-/.test(embedding.model)) return given;
-  if (given?.openai && 'dimensions' in given.openai) return given;
-  return { ...given, openai: { dimensions: embedding.dimensions, ...given?.openai } };
-}
-
-async function embedQuery(
-  question: string,
-  index: LoadedIndex,
-  options: AskHandlerOptions,
-  abortSignal: AbortSignal,
-  reportError: (error: unknown) => void,
-): Promise<number[] | null> {
-  if (!options.embeddingModel || !index.vectors || !index.embedding) return null;
-  const providerOptions = queryProviderOptions(index.embedding, options.embeddingProviderOptions);
-  let embedding: number[];
-  try {
-    ({ embedding } = await embed({
-      model: options.embeddingModel,
-      value: question,
-      maxRetries: 1,
-      abortSignal,
-      ...(providerOptions ? { providerOptions } : {}),
-    }));
-  } catch (error) {
-    if (abortSignal.aborted) throw error;
-    // Degrade to keyword retrieval rather than failing the request.
-    reportError(error);
-    return null;
-  }
-  if (embedding.length !== index.embedding.dimensions) {
-    throw new Error(
-      `Query embeddings have ${String(embedding.length)} dimensions but the index has ` +
-        `${String(index.embedding.dimensions)}. Pass the same embeddingProviderOptions used to ` +
-        'build it, e.g. { openai: { dimensions: 512 } }.',
-    );
-  }
-  return embedding;
-}
-
-/** What `rateLimit` defaults to: 10 questions a minute per client IP, per instance. */
-const DEFAULT_RATE_LIMIT = { limit: 10, windowMs: 60_000 } as const;
-
-/**
- * The limiter used when `rateLimit` is not given. A request without an `X-Forwarded-For` header
- * has no client IP to key on, so all such requests share one bucket: on a platform that does not
- * set the header, that is one 10-a-minute limit for every visitor, which errs on the side of the
- * bill rather than letting them through unlimited. The first one is reported, with the fix.
- */
-function defaultRateLimit(report: (error: unknown) => void): RateLimiter {
-  const limiter = memoryRateLimit(DEFAULT_RATE_LIMIT);
-  let reported = false;
-  return (request) => {
-    if (!reported && !request.headers.get('x-forwarded-for')?.trim()) {
-      reported = true;
-      report(
-        new Error(
-          'The default rate limit found no X-Forwarded-For header, so every request without one ' +
-            `shares a single bucket of ${String(DEFAULT_RATE_LIMIT.limit)} questions a minute. ` +
-            "Pass rateLimit: memoryRateLimit({ trustedHeader: '<the client IP header your " +
-            "platform sets>' }), or rateLimit: false if something else limits this endpoint.",
-        ),
-      );
-    }
-    return limiter(request);
   };
 }

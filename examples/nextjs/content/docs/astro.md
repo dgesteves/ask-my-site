@@ -78,6 +78,7 @@ To try it locally, build the site once, run `npx ask-my-site dev`, which answers
 | `exclude`                                    | `[]`                               | Path prefixes to leave out, relative to `base` and the locale.             |
 | `dialog`                                     |                                    | `title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`, `theme`. |
 | `content`, `ignore`                          | `main`                             | Astro integration only: what to read from each page, and what to skip.     |
+| `mcp`                                        | none                               | The [MCP endpoint](/docs/mcp)'s URL or path, for `McpInstall.astro`.       |
 
 ## Locales in Starlight
 

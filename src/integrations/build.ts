@@ -15,6 +15,7 @@ import {
   type EmbeddingChoice,
   type EmbeddingSpec,
 } from '../node/embedding';
+import { mcpServerName } from '../mcp-install';
 import type { ChunkingOptions, SourceDocument } from '../types';
 
 export interface Logger {
@@ -291,4 +292,32 @@ export async function writeSiteIndex({
   log.info(
     `Indexed ${String(documents.length)} pages into ${String(stats.chunks)} chunks${reuse} → ${name} (${String(Math.round(json.length / 1024))} KB, ${((Date.now() - started) / 1000).toFixed(1)}s)`,
   );
+}
+
+/** The plugins' `mcp` option: the MCP endpoint's URL or path, and optionally its name. */
+export type McpOption = string | { url: string; name?: string };
+
+/**
+ * The `mcp` option as an absolute URL and a name: a path is resolved against the site's own URL
+ * (`where` names the setting that holds it, for the error), and the name defaults to the site
+ * title's slug. Throws on a path when the site has no URL.
+ */
+export function resolveMcp(
+  option: McpOption | undefined,
+  siteUrl: string | undefined,
+  siteTitle: string,
+  where: string,
+): { url: string; name: string } | undefined {
+  if (option === undefined) return undefined;
+  const { url, name } = typeof option === 'string' ? { url: option, name: undefined } : option;
+  let absolute: string;
+  if (/^https?:\/\//i.test(url)) absolute = url;
+  else if (siteUrl && URL.canParse(siteUrl)) absolute = new URL(url, siteUrl).href;
+  else {
+    throw new Error(
+      `ask-my-site: mcp: '${url}' is a path, so the site's URL is needed to make it absolute. ` +
+        `Set it in ${where}, or give the MCP endpoint as an absolute URL.`,
+    );
+  }
+  return { url: absolute, name: mcpServerName(name ?? siteTitle) };
 }

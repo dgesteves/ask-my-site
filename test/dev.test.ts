@@ -94,7 +94,9 @@ describe('ask-my-site dev', () => {
     });
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get('access-control-allow-origin')).toBe('http://localhost:3000');
-    expect(preflight.headers.get('access-control-allow-headers')).toBe('content-type');
+    expect(preflight.headers.get('access-control-allow-headers')).toBe(
+      'content-type, mcp-protocol-version',
+    );
     expect(preflight.headers.get('access-control-allow-methods')).toContain('POST');
     expect(preflight.headers.get('vary')).toBe('origin');
 
@@ -112,6 +114,33 @@ describe('ask-my-site dev', () => {
     const anywhere = await ask(any.server.endpoint, 'int8', { origin: 'http://evil.example' });
     expect(anywhere.headers.get('access-control-allow-origin')).toBe('*');
     await anywhere.body?.cancel();
+  });
+
+  it('serves the same index as an MCP server at /api/mcp, with the index’s own paths', async () => {
+    await indexAt('ask-index.json');
+    const { server, logs } = await serve('ask-index.json');
+    expect(server.mcp).toBe(server.endpoint.replace('/api/ask', '/api/mcp'));
+    const call = async (method: string, params: Record<string, unknown>) =>
+      (await (
+        await fetch(server.mcp, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+        })
+      ).json()) as { result: { structuredContent: { results: { url: string }[] } } };
+    const { result } = await call('tools/call', { name: 'search', arguments: { query: 'int8' } });
+    expect(result.structuredContent.results[0]?.url).toMatch(/^\/docs\/quantization/);
+    expect(logs).toContain('  mcp search: int8');
+    // A page on another site cannot reach it any more than the ask endpoint.
+    const foreign = await fetch(server.mcp, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'http://evil.example' },
+      body: '{}',
+    });
+    expect(foreign.status).toBe(403);
   });
 
   it('picks up a rebuilt index on the next question', async () => {

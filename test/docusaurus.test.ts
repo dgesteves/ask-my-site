@@ -359,6 +359,27 @@ describe('ask-my-site/docusaurus', () => {
     );
   });
 
+  it('resolves the MCP endpoint against the site URL, for <AskMySiteMcp />', async () => {
+    const { context } = await site();
+    const withUrl = {
+      ...context,
+      siteConfig: { ...context.siteConfig, url: 'https://docs.acme.dev' },
+    };
+    const setGlobalData = vi.fn();
+    askMySite(withUrl, { mcp: '/api/mcp' }).contentLoaded({ actions: { setGlobalData } });
+    expect(setGlobalData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ mcp: { url: 'https://docs.acme.dev/api/mcp', name: 'acme-docs' } }),
+    );
+    askMySite(context, { mcp: { url: 'https://mcp.acme.dev/', name: 'Acme' } }).contentLoaded({
+      actions: { setGlobalData },
+    });
+    expect(setGlobalData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ mcp: { url: 'https://mcp.acme.dev/', name: 'acme' } }),
+    );
+    // A path needs the site's URL to become one a client can reach.
+    expect(() => askMySite(context, { mcp: '/api/mcp' })).toThrow(/needed to make it absolute/);
+  });
+
   it('hands the dialog its settings, and points Docusaurus at files that exist', async () => {
     const { context } = await site();
     const plugin = askMySite(context, {
@@ -372,7 +393,7 @@ describe('ask-my-site/docusaurus', () => {
       dialog: { shortcut: false, title: 'Ask Acme Docs' },
     });
     // Root renders AskMySite, which a site can also render from its own swizzled Root.
-    for (const component of ['Root.tsx', 'AskMySite.tsx']) {
+    for (const component of ['Root.tsx', 'AskMySite.tsx', 'AskMySiteMcp.tsx']) {
       expect(existsSync(join(plugin.getThemePath(), component))).toBe(true);
     }
     expect(existsSync(plugin.getClientModules()[1]!)).toBe(true);
