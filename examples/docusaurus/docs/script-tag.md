@@ -38,7 +38,7 @@ The output folder is `public` after `hugo`, `_site` after Jekyll or Eleventy, an
 
 ## Deploy the endpoint for a static site
 
-Write the endpoint with `npx ask-my-site init` in the site's folder: a Vercel, Netlify or Cloudflare function that reads the index next to the site's files, or, for GitHub Pages, S3 or any host that only serves files, a Cloudflare Worker of its own that reads the index from the live site and answers it across origins. Then set `data-endpoint` to the Worker's URL plus `/api/ask`. See [Deploying](./deployment.md).
+Write the endpoint with `npx ask-my-site init` in the site's folder: a Vercel, Netlify or Cloudflare function that reads the index next to the site's files, or, for GitHub Pages, S3 or any host that only serves files, a Cloudflare Worker of its own that reads the index from the live site, answers it across origins and needs no API key: see [Workers AI](./workers-ai.md). Then set `data-endpoint` to the Worker's URL plus `/api/ask`. See [Deploying](./deployment.md).
 
 To try it first, run `npx ask-my-site dev` beside the index and set `data-endpoint="http://localhost:8787/api/ask"`.
 

@@ -23,7 +23,7 @@ npx ask-my-site init --dry-run   # prints every file it would write, and writes 
 | Netlify                                | `netlify.toml` or `.netlify/`                                                       | `netlify/functions/ask.mts` and `mcp.mts`, and `included_files` for the index in `netlify.toml`                         |
 | Cloudflare Pages                       | a wrangler config with `pages_build_output_dir`, or `--host cloudflare` without one | `functions/api/ask.ts` and `mcp.ts`, which read the index through the `ASSETS` binding                                  |
 | Cloudflare Workers with static assets  | a wrangler config with `assets`                                                     | `worker/ask-my-site.ts`, which answers `/api/*` and serves the files, and `main` and the `ASSETS` binding in the config |
-| GitHub Pages, or any other static host | a Pages workflow, a `gh-pages` script or `docusaurus deploy`                        | `ask-my-site-worker/`, a Cloudflare Worker of its own that reads the index from the live site                           |
+| GitHub Pages, or any other static host | a Pages workflow, a `gh-pages` script or `docusaurus deploy`                        | `ask-my-site-worker/`, a Cloudflare Worker of its own that reads the index from the live site and needs no API key      |
 
 For a Next.js app it writes `app/api/ask/route.ts` and `app/api/mcp/route.ts` instead, which import the index, with the client IP header of the host. An Astro site with an SSR adapter needs no file at all: see [Astro with an adapter](#astro-with-an-adapter).
 
@@ -52,13 +52,13 @@ A route file the site already has at `src/pages/api/ask.ts` or `src/pages/api/mc
 
 ## GitHub Pages and other static hosts
 
-A host that serves only files, such as GitHub Pages, S3, Read the Docs or a plain web server, cannot run the endpoint. `init --host github-pages` writes `ask-my-site-worker/`, a Cloudflare Worker of its own, that answers for the site from another origin:
+A host that serves only files, such as GitHub Pages, S3, Read the Docs or a plain web server, cannot run the endpoint. `init --host github-pages` writes `ask-my-site-worker/`, a Cloudflare Worker of its own, that answers for the site from another origin with Workers AI, so there is no API key to set (`--provider openai` answers with OpenAI instead):
 
 - It fetches `ask-index.json` from the live site, at the site's URL from your config (or `--site-url`), keeps it in memory, and checks it again every five minutes with a conditional request, so it follows the site's deploys without being redeployed.
 - It sends CORS headers for the site's origin, and only for it, so other sites' pages cannot spend your model budget through their visitors' browsers.
 - The MCP endpoint's results link to the pages on the site, not on the Worker.
 
-Deploy it with `cd ask-my-site-worker && npm install && npx wrangler secret put OPENAI_API_KEY && npx wrangler deploy`, then set the dialog's `endpoint` (or the script tag's `data-endpoint`) to the URL Wrangler prints, plus `/api/ask`. The site keeps deploying as it does today.
+Deploy it with `cd ask-my-site-worker && npm install && npx wrangler deploy`, then set the dialog's `endpoint` (or the script tag's `data-endpoint`) to the URL Wrangler prints, plus `/api/ask`. The site keeps deploying as it does today. The same Worker is a template for `npm create cloudflare`; [Workers AI](/guides/workers-ai/) has both ways in, the models and what they cost, and how large a site fits.
 
 The Worker uses `remoteIndex` from `ask-my-site/server`, which any endpoint deployed apart from its site can use: `createAskHandler({ index: remoteIndex('https://acme.github.io/docs/ask-index.json'), … })`. A check that fails keeps the index it has; only the first fetch's failure fails a request.
 

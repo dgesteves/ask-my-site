@@ -7,7 +7,9 @@ import tseslint from 'typescript-eslint';
 
 // The example app is linted by its own `lint` script, after it is built: type-aware rules need
 // the package's dist types, the generated index and Next's route types, which a fresh clone lacks.
-// It reuses this file, and from its directory the `examples/**` ignore no longer matches.
+// It reuses this file, and from its directory the `examples/**` ignore no longer matches. The
+// Cloudflare Worker template is checked with its own dependencies (tsc and its tests), in the
+// workers-ai deploy recipe.
 export default defineConfig(
   globalIgnores([
     '**/dist',
@@ -17,6 +19,7 @@ export default defineConfig(
     'bench/results',
     'test/fixtures',
     'examples/**',
+    'templates/**',
   ]),
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,

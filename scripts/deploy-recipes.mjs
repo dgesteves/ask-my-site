@@ -16,11 +16,20 @@
 //
 //   npm pack && node scripts/deploy-recipes.mjs <recipe> ask-my-site-x.y.z.tgz [dir]
 //
-// Recipes: vercel, netlify, cloudflare-pages, cloudflare-workers, github-pages, astro-node,
-// astro-vercel, astro-cloudflare.
+// Recipes: vercel, netlify, cloudflare-pages, cloudflare-workers, github-pages (with OpenAI),
+// workers-ai (the zero-key Worker template, in workerd), astro-node, astro-vercel,
+// astro-cloudflare.
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { extname, join, resolve } from 'node:path';
@@ -57,7 +66,15 @@ const RECIPES = {
         '{\n  // A static site on Workers.\n  "name": "recipe-docs",\n  "compatibility_date": "2026-09-01",\n  "assets": { "directory": "./build" }\n}\n',
     },
   },
-  'github-pages': { host: 'github-pages', files: {}, scripts: { deploy: 'docusaurus deploy' } },
+  // The Worker init writes with OpenAI, as `wrangler dev` cannot run Workers AI offline; the
+  // workers-ai recipe tests the zero-key Worker in workerd instead.
+  'github-pages': {
+    host: 'github-pages',
+    provider: 'openai',
+    files: {},
+    scripts: { deploy: 'docusaurus deploy' },
+  },
+  'workers-ai': { template: true },
   'astro-node': { adapter: '@astrojs/node', call: "node({ mode: 'standalone' })", import: 'node' },
   'astro-vercel': { adapter: '@astrojs/vercel', call: 'vercel()', import: 'vercel' },
   'astro-cloudflare': {
@@ -244,7 +261,8 @@ const model = {
 };
 const stops = [];
 try {
-  if (recipe.adapter) await astroRecipe();
+  if (recipe.template) await templateRecipe();
+  else if (recipe.adapter) await astroRecipe();
   else await docusaurusRecipe();
 } finally {
   for (const stop of stops) await stop();
@@ -296,7 +314,14 @@ async function docusaurusRecipe() {
     ],
     { env: model },
   );
-  await run('npx', ['ask-my-site', 'init', '--host', recipe.host, '--yes']);
+  await run('npx', [
+    'ask-my-site',
+    'init',
+    '--host',
+    recipe.host,
+    ...(recipe.provider ? ['--provider', recipe.provider] : []),
+    '--yes',
+  ]);
 
   if (name === 'vercel') {
     mkdirSync(join(dir, '.vercel'), { recursive: true });
@@ -448,6 +473,28 @@ async function docusaurusRecipe() {
 }
 
 /**
+ * The zero-key Worker, templates/cloudflare-worker (what init writes for GitHub Pages), as a user
+ * gets it from `npm create cloudflare`: typechecked, bundled by `wrangler deploy --dry-run`, and
+ * its own tests run in workerd, with stand-ins for the site and the AI binding. `wrangler dev`
+ * cannot run Workers AI without an account, so this is as far as offline goes.
+ */
+async function templateRecipe() {
+  cpSync(new URL('../templates/cloudflare-worker', import.meta.url), dir, {
+    recursive: true,
+    filter: (source) => !/[\\/](?:node_modules|\.wrangler)(?:[\\/]|$)/.test(source),
+  });
+  // The package as it is about to be released, in place of the published version.
+  const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  manifest.dependencies['ask-my-site'] = `file:${resolve(tarball)}`;
+  writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  await run('npm', ['install', '--no-audit', '--no-fund']);
+  await run('npx', ['tsc']);
+  await run('npx', ['tsc', '-p', 'test']);
+  await run('npx', ['wrangler', 'deploy', '--dry-run', '--outdir', 'out'], { env: isolated });
+  await run('npx', ['vitest', 'run'], { env: isolated });
+}
+
+/**
  * An Astro site of this repo's docs, with an SSR adapter and no route file: init says there is
  * nothing to write, and the integration serves the endpoints through the adapter.
  */
@@ -574,13 +621,17 @@ async function astroRecipe() {
 const strays = stub.requests.filter(
   (request) => request !== 'POST /v1/embeddings' && request !== 'POST /v1/responses',
 );
-expect(stub.requests.includes('POST /v1/responses'), 'the endpoint never called the model');
+if (!recipe.template) {
+  expect(stub.requests.includes('POST /v1/responses'), 'the endpoint never called the model');
+}
 expect(strays.length === 0, `the stub received ${strays.join(', ')}`);
 if (problems.length > 0) {
   console.error(`\n✗ ${name}:\n  ${problems.join('\n  ')}`);
   process.exit(1);
 }
 console.log(
-  `\n✓ ${name}: ${recipe.adapter ? `the integration's endpoints (${recipe.adapter}, no route file)` : "init's endpoints"} built with the host's tooling and answered (sources, a streamed answer, a refusal, a preflight, an MCP search), with ${String(stub.requests.length)} requests to the stub.`,
+  recipe.template
+    ? `\n✓ ${name}: the template typechecked, bundled with wrangler deploy --dry-run, and passed its tests in workerd.`
+    : `\n✓ ${name}: ${recipe.adapter ? `the integration's endpoints (${recipe.adapter}, no route file)` : "init's endpoints"} built with the host's tooling and answered (sources, a streamed answer, a refusal, a preflight, an MCP search), with ${String(stub.requests.length)} requests to the stub.`,
 );
 process.exit(0);

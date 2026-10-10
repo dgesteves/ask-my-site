@@ -44,7 +44,7 @@ DocSearch's own Ask AI panel also opens with ⌘I. Pick another key with `dialog
 
 The plugin embeds with OpenAI's `text-embedding-3-small` at 512 dimensions when `OPENAI_API_KEY` is set at build time, or with the same model through AI Gateway when only `AI_GATEWAY_API_KEY` is. Without either key it builds a keyword-only index and prints a warning. If a key is set but the provider cannot load, the build fails with the reason instead of quietly going keyword-only.
 
-Choose the model with `embedding`, named the way the CLI names it, so the config imports no provider: `'openai:text-embedding-3-large'`, `'cohere/embed-v4.0'` through AI Gateway, `'mock'` for offline builds, or `'none'` for keyword-only. `dimensions` sets the vector size for models that support it, and the endpoint reads it from the index.
+Choose the model with `embedding`, named the way the CLI names it, so the config imports no provider: `'openai:text-embedding-3-large'`, `'cohere/embed-v4.0'` through AI Gateway, `'workers-ai:@cf/baai/bge-small-en-v1.5'` for the [Workers AI Worker](./workers-ai.md), `'mock'` for offline builds, or `'none'` for keyword-only. `dimensions` sets the vector size for models that support it, and the endpoint reads it from the index.
 
 ```ts
 plugins: [['ask-my-site/docusaurus', { embedding: 'openai:text-embedding-3-small', dimensions: 512 }]],
@@ -58,7 +58,7 @@ A Docusaurus site is static, so the endpoint runs as a function on your host and
 npx ask-my-site init
 ```
 
-On Vercel it writes `api/ask.ts` and `api/mcp.ts` and bundles `build/ask-index.json` with them in `vercel.json`; on Netlify and Cloudflare, their equivalents. On GitHub Pages, where Docusaurus sites often live and nothing runs but files, it writes a Cloudflare Worker that reads the index from the live site, and the dialog posts to it: set `endpoint` to its URL. Each embeds questions with OpenAI's `text-embedding-3-small`, the plugin's default, and has a rate limit and a daily budget. See [Deploying](./deployment.md) for what it writes on each host.
+On Vercel it writes `api/ask.ts` and `api/mcp.ts` and bundles `build/ask-index.json` with them in `vercel.json`; on Netlify and Cloudflare, their equivalents. On GitHub Pages, where Docusaurus sites often live and nothing runs but files, it writes a Cloudflare Worker that reads the index from the live site and answers with Workers AI, with no API key, and the dialog posts to it: set `endpoint` to its URL. See [Workers AI](./workers-ai.md). The endpoints on Vercel, Netlify and Cloudflare embed questions with OpenAI's `text-embedding-3-small`, the plugin's default; each has a rate limit and a daily budget. See [Deploying](./deployment.md) for what it writes on each host.
 
 ## Try the Docusaurus plugin locally
 
@@ -66,19 +66,19 @@ Build the site once, run `npx ask-my-site dev` in its folder, which answers from
 
 ## Docusaurus plugin options
 
-| Option                     | Default                            | What it does                                                                           |
-| -------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------- |
-| `endpoint`                 | `ASK_ENDPOINT`, else `/api/ask`    | Where the dialog posts questions; `ASK_ENDPOINT` overrides it.                         |
-| `embedding`                | OpenAI when a key is set           | Model spec: `openai:<model>`, `<provider>/<model>`, `mock`, `none`.                    |
-| `dimensions`               | the model's                        | Vector size, for models that support it.                                               |
-| `embeddingModel`           | none                               | An AI SDK embedding model object, instead of `embedding`.                              |
-| `embeddingProviderOptions` | none                               | Passed to the embedding model.                                                         |
-| `chunking`                 | `{ maxChars: 1200, overlap: 150 }` | Chunk size and overlap, in characters.                                                 |
-| `indexFile`                | `ask-index.json`                   | Where the index is written in `build/` and served from.                                |
-| `exclude`                  | `[]`                               | Path prefixes to leave out, relative to `baseUrl`.                                     |
-| `dialog`                   |                                    | `title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`.                      |
-| `mcp`                      | none                               | The [MCP endpoint](./mcp.md)'s URL or path, for `<AskMySiteMcp />`.                    |
-| `llmsTxt`                  | on                                 | Write [llms.txt, llms-full.txt and .md copies](./llms-txt.md); `false` turns them off. |
+| Option                     | Default                            | What it does                                                                                  |
+| -------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| `endpoint`                 | `ASK_ENDPOINT`, else `/api/ask`    | Where the dialog posts questions; `ASK_ENDPOINT` overrides it.                                |
+| `embedding`                | OpenAI when a key is set           | Model spec: `openai:<model>`, `workers-ai:@cf/<model>`, `<provider>/<model>`, `mock`, `none`. |
+| `dimensions`               | the model's                        | Vector size, for models that support it.                                                      |
+| `embeddingModel`           | none                               | An AI SDK embedding model object, instead of `embedding`.                                     |
+| `embeddingProviderOptions` | none                               | Passed to the embedding model.                                                                |
+| `chunking`                 | `{ maxChars: 1200, overlap: 150 }` | Chunk size and overlap, in characters.                                                        |
+| `indexFile`                | `ask-index.json`                   | Where the index is written in `build/` and served from.                                       |
+| `exclude`                  | `[]`                               | Path prefixes to leave out, relative to `baseUrl`.                                            |
+| `dialog`                   |                                    | `title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`.                             |
+| `mcp`                      | none                               | The [MCP endpoint](./mcp.md)'s URL or path, for `<AskMySiteMcp />`.                           |
+| `llmsTxt`                  | on                                 | Write [llms.txt, llms-full.txt and .md copies](./llms-txt.md); `false` turns them off.        |
 
 ## Locales and versions
 

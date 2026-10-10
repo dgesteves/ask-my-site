@@ -68,7 +68,7 @@ Pagefind is static search: it builds an index at build time and returns matching
 
 ## Can I host the endpoint somewhere other than my site?
 
-Yes. `npx ask-my-site init --host github-pages` writes a Cloudflare Worker that reads the index from the live site and answers it across origins, with CORS for the site's origin only; point the dialog's `endpoint`, or the script tag's `data-endpoint`, at it. See [Deploying](/guides/deployment/#github-pages-and-other-static-hosts). An endpoint on Vercel or Netlify works the same way: set `access-control-allow-origin` for your site's origin in the handler's `headers`.
+Yes. `npx ask-my-site init --host github-pages` writes a Cloudflare Worker that reads the index from the live site and answers it across origins with Workers AI, with no API key and CORS for the site's origin only; point the dialog's `endpoint`, or the script tag's `data-endpoint`, at it. See [Deploying](/guides/deployment/#github-pages-and-other-static-hosts). An endpoint on Vercel or Netlify works the same way: set `access-control-allow-origin` for your site's origin in the handler's `headers`.
 
 ## Does it work with versioned docs and several languages?
 

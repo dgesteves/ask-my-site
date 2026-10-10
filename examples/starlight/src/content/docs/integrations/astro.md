@@ -59,7 +59,7 @@ Pick another key with `dialog: { shortcut: 'j' }`, turn the shortcut off with `s
 
 ## Embeddings in Astro
 
-Embeddings work as in the Docusaurus plugin. OpenAI's `text-embedding-3-small` at 512 dimensions is the default when `OPENAI_API_KEY` is set at build time, or the same model through AI Gateway with `AI_GATEWAY_API_KEY`; without either key, the index is keyword-only and the build prints a warning. Choose the model with `embedding` and `dimensions`, for example `askMySite({ embedding: 'openai:text-embedding-3-small', dimensions: 512 })`, or `embedding: 'mock'` to build without a key.
+Embeddings work as in the Docusaurus plugin. OpenAI's `text-embedding-3-small` at 512 dimensions is the default when `OPENAI_API_KEY` is set at build time, or the same model through AI Gateway with `AI_GATEWAY_API_KEY`; without either key, the index is keyword-only and the build prints a warning. Choose the model with `embedding` and `dimensions`, for example `askMySite({ embedding: 'openai:text-embedding-3-small', dimensions: 512 })`, `embedding: 'workers-ai:@cf/baai/bge-small-en-v1.5'` for the [Workers AI Worker](/guides/workers-ai/), or `embedding: 'mock'` to build without a key.
 
 ## Deploy the endpoint for Astro
 

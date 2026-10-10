@@ -2,7 +2,7 @@
 title: Rate limits and security
 description: Rate limiting, client IPs, CORS, prompt injection and what data leaves your servers.
 section: Guides
-order: 23
+order: 24
 ---
 
 A public ask endpoint spends your model budget on every question, so it needs a rate limit, and it reads untrusted input on both sides: the question and your own pages. This page covers what the handler does about each.

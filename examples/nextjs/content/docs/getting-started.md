@@ -50,7 +50,7 @@ export const POST = createAskHandler({
 });
 ```
 
-`npx ask-my-site init` writes this for your host, with a rate limit and a daily budget: Vercel, Netlify, Cloudflare, or a Cloudflare Worker for a site on GitHub Pages. An Astro site with an SSR adapter needs nothing: the integration serves it. See [Deploying](/docs/deployment).
+`npx ask-my-site init` writes this for your host, with a rate limit and a daily budget: Vercel, Netlify, Cloudflare, or a Cloudflare Worker with Workers AI and no API key for a site on GitHub Pages. An Astro site with an SSR adapter needs nothing: the integration serves it. See [Deploying](/docs/deployment).
 
 ## Add the dialog
 

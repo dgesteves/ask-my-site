@@ -17,7 +17,7 @@ The `ask-my-site` command has three subcommands: `index` builds or checks the in
 | `-o, --out <file>`                                        | `ask-index.json`         | Where to write the index.                                                                    |
 | `--check`                                                 | off                      | Exit 1 if the index is stale. Never calls a model.                                           |
 | `--base-url <url>`                                        | `/`                      | URL prefix for pages, such as `/docs` or a full origin.                                      |
-| `-e, --embedding <spec>`                                  | OpenAI when a key is set | `openai:<model>`, `<provider>/<model>`, `mock[:<dims>]` or `none`.                           |
+| `-e, --embedding <spec>`                                  | OpenAI when a key is set | `openai:<model>`, `workers-ai:@cf/<model>`, `<provider>/<model>`, `mock[:<dims>]` or `none`. |
 | `--dimensions <n>`                                        | the model's              | Vector size, for models that support it. With `--check`, the size the index must have.       |
 | `--chunk-size <chars>`                                    | `1200`                   | Maximum characters per chunk.                                                                |
 | `--chunk-overlap <chars>`                                 | `150`                    | Characters shared by consecutive chunks of a section.                                        |
@@ -34,7 +34,7 @@ The `ask-my-site` command has three subcommands: `index` builds or checks the in
 
 ## Choosing the embedding model
 
-Without `--embedding`, the CLI uses `openai:text-embedding-3-small` when `OPENAI_API_KEY` is set, or `openai/text-embedding-3-small` through AI Gateway when only `AI_GATEWAY_API_KEY` is. With neither, it fails rather than quietly building a keyword-only index, and suggests `-e mock` to try it without a key. `-e none` builds a keyword-only index on purpose.
+Without `--embedding`, the CLI uses `openai:text-embedding-3-small` when `OPENAI_API_KEY` is set, or `openai/text-embedding-3-small` through AI Gateway when only `AI_GATEWAY_API_KEY` is. With neither, it fails rather than quietly building a keyword-only index, and suggests `-e mock` to try it without a key. `-e none` builds a keyword-only index on purpose. `-e workers-ai:@cf/baai/bge-small-en-v1.5` embeds with Workers AI over Cloudflare's REST API, with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, for the [Workers AI Worker](/guides/workers-ai/); its vector size is fixed, so `--dimensions` does not apply.
 
 ## Environment and exit codes
 
@@ -44,16 +44,17 @@ The CLI reads `.env` and `.env.local` from the working directory, without overri
 
 `ask-my-site init [options]` writes the ask endpoint and the MCP endpoint for the site in the working directory and the host it deploys to: Vercel, Netlify, Cloudflare (Pages, or a Worker with static assets) or GitHub Pages, whose endpoint is a Cloudflare Worker of its own. It detects the site from its config (Docusaurus, Starlight, Astro, Next.js, VitePress, Hugo, MkDocs, Jekyll or Eleventy) and the host from `vercel.json`, `netlify.toml`, a wrangler config or a GitHub Pages workflow, and asks for the host when it cannot tell. [Deploying](/guides/deployment/#write-the-endpoint-with-init) shows what it writes for each.
 
-| Flag               | Default                | What it does                                                                   |
-| ------------------ | ---------------------- | ------------------------------------------------------------------------------ |
-| `--host <name>`    | detected, else asked   | `vercel`, `netlify`, `cloudflare` or `github-pages`.                           |
-| `--site-url <url>` | from the site's config | The site's public URL with its base path, which the GitHub Pages Worker reads. |
-| `--name <text>`    | the site's title       | The site's name, in the model's instructions.                                  |
-| `--out <dir>`      | detected               | A static site's build folder, where the index goes.                            |
-| `--no-mcp`         | the MCP endpoint is on | Write the ask endpoint only.                                                   |
-| `--dry-run`        | off                    | Print every file it would write, and write nothing.                            |
-| `-y, --yes`        | asks                   | Overwrite files that differ without asking.                                    |
-| `-h, --help`       |                        | Print the help.                                                                |
+| Flag                | Default                | What it does                                                                   |
+| ------------------- | ---------------------- | ------------------------------------------------------------------------------ |
+| `--host <name>`     | detected, else asked   | `vercel`, `netlify`, `cloudflare` or `github-pages`.                           |
+| `--provider <name>` | `workers-ai`           | For `github-pages`: `workers-ai`, with no API key, or `openai`.                |
+| `--site-url <url>`  | from the site's config | The site's public URL with its base path, which the GitHub Pages Worker reads. |
+| `--name <text>`     | the site's title       | The site's name, in the model's instructions.                                  |
+| `--out <dir>`       | detected               | A static site's build folder, where the index goes.                            |
+| `--no-mcp`          | the MCP endpoint is on | Write the ask endpoint only.                                                   |
+| `--dry-run`         | off                    | Print every file it would write, and write nothing.                            |
+| `-y, --yes`         | asks                   | Overwrite files that differ without asking.                                    |
+| `-h, --help`        |                        | Print the help.                                                                |
 
 It prints each file it created, updated or left unchanged, the environment variables to set and where, and the steps left: the packages to install, the dialog to add and the deploy. It exits with 0 when everything is written, 1 when it left a file as it was or an edit for you to make by hand, and 2 on a usage error. It reads no `.env` file and no credential, and it deploys nothing. An Astro site with an SSR adapter gets no file: its integration serves the endpoints.
 

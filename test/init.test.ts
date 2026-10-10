@@ -269,6 +269,38 @@ describe('ask-my-site init', () => {
     );
   });
 
+  it('answers GitHub Pages with Workers AI and no key, or with OpenAI when asked', async () => {
+    await site({
+      'docusaurus.config.ts': "export default { title: 'Acme', url: 'https://a.dev' };\n",
+    });
+    const zeroKey = await run(['--host', 'github-pages']);
+    expect(zeroKey.code).toBe(0);
+    const worker = await readFile(join(cwd, 'ask-my-site-worker/src/index.ts'), 'utf8');
+    expect(worker).toContain("import { createWorkersAI } from 'workers-ai-provider';");
+    expect(worker).not.toContain('OPENAI_API_KEY');
+    expect(await readFile(join(cwd, 'ask-my-site-worker/wrangler.jsonc'), 'utf8')).toContain(
+      '"ai": { "binding": "AI" },',
+    );
+    expect(zeroKey.stdout).not.toContain('wrangler secret put');
+
+    const openai = await run(['--host', 'github-pages', '--provider', 'openai', '--yes']);
+    expect(openai.code).toBe(0);
+    expect(await readFile(join(cwd, 'ask-my-site-worker/src/index.ts'), 'utf8')).toContain(
+      "import { createOpenAI } from '@ai-sdk/openai';",
+    );
+    expect(openai.stdout).toContain('npx wrangler secret put OPENAI_API_KEY');
+  });
+
+  it('runs Workers AI only in the Worker it writes for GitHub Pages', async () => {
+    await site({ ...DOCUSAURUS, 'vercel.json': '{}' });
+    const result = await run(['--provider', 'workers-ai']);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('--provider workers-ai is for --host github-pages');
+    expect((await run(['--provider', 'anthropic'])).stderr).toContain(
+      '--provider must be workers-ai or openai.',
+    );
+  });
+
   it('says what to add by hand when a config file already configures the function', async () => {
     await site({
       ...DOCUSAURUS,
