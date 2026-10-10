@@ -346,6 +346,17 @@ describe('ask-my-site/docusaurus', () => {
     expect(setGlobalData).toHaveBeenLastCalledWith(
       expect.objectContaining({ endpoint: 'http://localhost:8787/api/ask' }),
     );
+    // Over a configured endpoint too: the README's config sets one, and its local-dev steps
+    // start the site with ASK_ENDPOINT, which must win or the dialog posts to a 404.
+    load({ endpoint: '/api/ask' });
+    expect(setGlobalData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ endpoint: 'http://localhost:8787/api/ask' }),
+    );
+    vi.stubEnv('ASK_ENDPOINT', '');
+    load({ endpoint: 'https://api.example.com/ask' });
+    expect(setGlobalData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ endpoint: 'https://api.example.com/ask' }),
+    );
   });
 
   it('hands the dialog its settings, and points Docusaurus at files that exist', async () => {

@@ -157,9 +157,13 @@ function mergeProviderOptions(
   return merged;
 }
 
-/** Where the dialog posts: `endpoint`, else `ASK_ENDPOINT` at build or dev time, else `/api/ask`. */
+/**
+ * Where the dialog posts: `ASK_ENDPOINT` when it is set at build or dev time, else `endpoint`,
+ * else `/api/ask`. The variable wins so that `ASK_ENDPOINT=http://localhost:8787/api/ask npm start`
+ * points any site at `ask-my-site dev`, whatever its config says, without editing it.
+ */
 export function dialogEndpoint(endpoint: string | undefined): string {
-  return endpoint ?? (process.env.ASK_ENDPOINT || '/api/ask');
+  return process.env.ASK_ENDPOINT?.trim() || (endpoint ?? '/api/ask');
 }
 
 const HINTED = Symbol.for('ask-my-site.devEndpointHint');

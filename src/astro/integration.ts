@@ -29,9 +29,9 @@ export interface AskMySiteDialogOptions extends DialogOptions {
 
 export interface AskMySiteOptions extends IndexOptions {
   /**
-   * URL the dialog posts questions to. Default: `ASK_ENDPOINT` when it is set as the site builds
-   * or starts (`ASK_ENDPOINT=http://localhost:8787/api/ask` for `ask-my-site dev`), else
-   * `/api/ask`.
+   * URL the dialog posts questions to. Default `/api/ask`. The `ASK_ENDPOINT` environment
+   * variable, when it is set as the site builds or starts, takes precedence over it:
+   * `ASK_ENDPOINT=http://localhost:8787/api/ask` points the dialog at `ask-my-site dev`.
    */
   endpoint?: string;
   /**

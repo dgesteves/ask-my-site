@@ -24,11 +24,11 @@ To add ask-my-site to Docusaurus, put the plugin in the `plugins` array of `docu
 // docusaurus.config.ts
 export default {
   // …
-  plugins: [['ask-my-site/docusaurus', { endpoint: '/api/ask' }]],
+  plugins: ['ask-my-site/docusaurus'],
 };
 ```
 
-`endpoint` is the URL the dialog posts questions to. It defaults to `ASK_ENDPOINT` when that variable is set as the site builds or starts, and to `/api/ask` otherwise.
+The dialog posts questions to `/api/ask` on your site. Set `endpoint` for another path or host, as in `['ask-my-site/docusaurus', { endpoint: 'https://ask.example.com/api/ask' }]`. The `ASK_ENDPOINT` environment variable, when it is set as the site builds or starts, overrides both, which is how [local development](/get-started/local-development/) points the dialog at `ask-my-site dev`.
 
 ## What the plugin indexes
 
@@ -81,7 +81,7 @@ Build the site once, run `npx ask-my-site dev` in its folder, which answers from
 
 | Option                     | Default                            | What it does                                                        |
 | -------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
-| `endpoint`                 | `ASK_ENDPOINT`, else `/api/ask`    | Where the dialog posts questions.                                   |
+| `endpoint`                 | `ASK_ENDPOINT`, else `/api/ask`    | Where the dialog posts questions; `ASK_ENDPOINT` overrides it.      |
 | `embedding`                | OpenAI when a key is set           | Model spec: `openai:<model>`, `<provider>/<model>`, `mock`, `none`. |
 | `dimensions`               | the model's                        | Vector size, for models that support it.                            |
 | `embeddingModel`           | none                               | An AI SDK embedding model object, instead of `embedding`.           |

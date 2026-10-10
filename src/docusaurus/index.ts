@@ -38,9 +38,9 @@ export type AskMySiteOptions = IndexOptions & {
   /** The plugin instance's id, set by Docusaurus. Default `"default"`. */
   id?: string;
   /**
-   * URL the dialog posts questions to. Default: `ASK_ENDPOINT` when it is set as the site builds
-   * or starts (`ASK_ENDPOINT=http://localhost:8787/api/ask` for `ask-my-site dev`), else
-   * `/api/ask`.
+   * URL the dialog posts questions to. Default `/api/ask`. The `ASK_ENDPOINT` environment
+   * variable, when it is set as the site builds or starts, takes precedence over it:
+   * `ASK_ENDPOINT=http://localhost:8787/api/ask` points the dialog at `ask-my-site dev`.
    */
   endpoint?: string;
   /** Where the index is written in the build output, and served from. Default `ask-index.json`. */
