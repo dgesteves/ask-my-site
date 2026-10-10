@@ -28,8 +28,8 @@ export function SiteFooter() {
             ask-my-site
           </p>
           <p>
-            A self-hosted Ask AI box for docs sites. Version {VERSION}, MIT licensed, built by{' '}
-            <a href="https://github.com/dgesteves">Diogo Esteves</a>.
+            Docs answerable by people and by agents, from one static index. Version {VERSION}, MIT
+            licensed, built by <a href="https://github.com/dgesteves">Diogo Esteves</a>.
           </p>
         </div>
         <nav aria-label="Project" className="footer-column">

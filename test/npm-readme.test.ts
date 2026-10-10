@@ -35,7 +35,7 @@ describe('the README on npm', () => {
       expect(npmReadme).not.toContain('github.com/user-attachments');
       expect(npmReadme).not.toContain('npm-readme:');
       expect(npmReadme).toContain('<img src=".github/assets/demo.webp"');
-      expect(npmReadme).toContain('## Why');
+      expect(npmReadme).toContain('## What you get');
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

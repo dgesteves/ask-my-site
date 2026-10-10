@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { getSections } from '../../lib/docs';
 
 const description =
-  'Set up ask-my-site with Docusaurus, Astro, Starlight, Next.js or a script tag, choose a model provider, deploy the endpoint, and tune retrieval.';
+  'Set up ask-my-site with Docusaurus, Astro, Starlight, Next.js or a script tag, deploy the endpoint, serve the same index to agents over MCP and llms.txt, and tune retrieval.';
 
 export const metadata: Metadata = {
   title: 'Documentation',

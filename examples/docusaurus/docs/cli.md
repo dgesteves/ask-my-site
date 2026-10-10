@@ -28,6 +28,7 @@ The `ask-my-site` command has two subcommands: `index` builds or checks the inde
 | `--site-url`, `--mcp-url`                                 | none                     | The site's origin, for absolute links, and its MCP endpoint, for `llms.txt`.           |
 | `-c, --config <file>`                                     | none                     | A module whose default export is an `AskConfig`.                                       |
 | `-q, --quiet`                                             | off                      | Only print errors.                                                                     |
+| `-h, --help`, `-v, --version`                             |                          | Print the help, or the version.                                                        |
 
 ## Choosing the embedding model
 
@@ -47,6 +48,7 @@ The CLI reads `.env` and `.env.local` from the working directory, without overri
 | `--port <n>`              | `8787`                                                               | Port to listen on.                                      |
 | `--allow-origin <origin>` | localhost                                                            | Another origin allowed to call it, or `*`. Repeatable.  |
 | `--model <id>`            | `gpt-5.4-mini`                                                       | OpenAI model for answers, when `OPENAI_API_KEY` is set. |
+| `-h, --help`              |                                                                      | Print the help.                                         |
 
 It embeds questions with the model the index records, answers with OpenAI when `OPENAI_API_KEY` is set and with the mock model otherwise, and reloads the index when the file changes. It only answers pages on this machine (localhost, 127.0.0.1 and [::1] origins, on any port) and requests addressed to localhost, so a site you visit cannot spend your key through it, and it caps request bodies at 64 KiB. [Try it locally](./local-development.md) shows it with each integration.
 

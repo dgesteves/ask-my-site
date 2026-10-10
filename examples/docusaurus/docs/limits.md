@@ -45,3 +45,12 @@ Text on your pages reaches the model as data inside tags it cannot forge, but it
 - Search results without any server code: Pagefind.
 - Answers over content that changes per user or per request: a vector database with a write path.
 - Multi-turn chat with a hosted dashboard and analytics, and no endpoint of your own to run: a hosted assistant such as Kapa or Inkeep.
+
+## What is planned
+
+- **Follow-up questions:** condense the conversation into a standalone question before retrieval.
+- **A reranking hook:** an optional AI SDK reranking model over the fused candidates.
+- **Retrieval evals in CI for your site:** a golden question set scored for hit rate and refusal precision, next to `--check`.
+- **Bigger corpora:** sharded indexes loaded per section, and binary quantization with int8 rescoring.
+- **More framework plugins:** VitePress, after the Docusaurus, Astro and Starlight ones.
+- **Language-aware keyword search:** stopwords and stemming per language.

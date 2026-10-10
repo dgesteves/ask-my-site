@@ -25,7 +25,16 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Reference',
       collapsible: false,
-      items: ['cli', 'ask-endpoint', 'ask-dialog', 'index-format', 'benchmarks', 'limits', 'faq'],
+      items: [
+        'api',
+        'cli',
+        'ask-endpoint',
+        'ask-dialog',
+        'index-format',
+        'benchmarks',
+        'limits',
+        'faq',
+      ],
     },
   ],
 };

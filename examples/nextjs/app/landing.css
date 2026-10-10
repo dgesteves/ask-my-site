@@ -1298,3 +1298,9 @@
     flex: 1;
   }
 }
+
+/* For agents: the Claude Code command, above the three points. */
+.agents-code {
+  max-width: 820px;
+  margin: 0 0 32px;
+}

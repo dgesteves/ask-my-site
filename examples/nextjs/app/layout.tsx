@@ -13,9 +13,9 @@ import { mono, sans } from '../lib/fonts';
 import { SITE_URL } from '../lib/site';
 
 const description =
-  'A self-hosted Ask AI box for docs sites: a build-time index, in-memory hybrid search and streamed answers with citations, from your own model key. No vector database, no hosted service.';
+  'Make your docs answerable by people and by agents, from one static index: a cited Ask box, an MCP server and llms.txt, on your own function and key, with no vector database and no vendor. Agent traffic costs you no model tokens.';
 
-const title = 'ask-my-site: a self-hosted Ask AI box for docs sites';
+const title = 'ask-my-site: make your docs answerable by people and by agents';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -25,6 +25,8 @@ export const metadata: Metadata = {
   authors: [{ name: 'Diogo Esteves', url: 'https://github.com/dgesteves' }],
   keywords: [
     'Ask AI',
+    'MCP server',
+    'llms.txt',
     'docs search',
     'RAG',
     'Docusaurus plugin',

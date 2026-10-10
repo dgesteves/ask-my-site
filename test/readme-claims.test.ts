@@ -34,10 +34,19 @@ describe('what the README claims', () => {
   });
 
   it('calls the benchmark’s memory figure heap, next to what the process grows by', () => {
-    for (const file of ['README.md', 'examples/nextjs/content/docs/benchmarks.md']) {
-      const header = read(file)
+    // The README no longer has the table; the benchmarks page does, and must say it right.
+    const files = ['README.md', 'examples/nextjs/content/docs/benchmarks.md'];
+    const headers = files.map((file) => [
+      file,
+      read(file)
         .split('\n')
-        .find((line) => line.startsWith('| Chunks |') && line.includes('Cold load'));
+        .find((line) => line.startsWith('| Chunks |') && line.includes('Cold load')),
+    ]);
+    expect(headers.filter(([, header]) => header !== undefined).map(([file]) => file)).toContain(
+      'examples/nextjs/content/docs/benchmarks.md',
+    );
+    for (const [file, header] of headers) {
+      if (header === undefined) continue;
       expect([file, header]).toEqual([
         file,
         expect.stringMatching(/Heap retained \|\s+Process memory \(peak\)/),
@@ -47,8 +56,34 @@ describe('what the README claims', () => {
 
   it('says the integration needs a deployed endpoint and a rate limit, not five lines alone', () => {
     expect(readme).not.toContain('That is the whole integration');
-    const quickstart = readme.slice(readme.indexOf('## Quickstart'), readme.indexOf('## Try it'));
-    expect(quickstart).toMatch(/endpoint still has to run somewhere/);
-    expect(quickstart).toMatch(/rate limit/);
+    const setup = readme.slice(
+      readme.indexOf('## Pick your setup'),
+      readme.indexOf('## For agents'),
+    );
+    expect(setup).toMatch(/endpoint you deploy as one function/);
+    expect(setup).toMatch(/rate-limited by default/);
+  });
+
+  it('stays one screen: about 800 to 1,200 words of prose', () => {
+    const prose = readme
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/<!-- npm-readme:image[\s\S]*?-->/g, '');
+    const words = prose.match(/\S+/g)?.length ?? 0;
+    expect(words).toBeGreaterThan(800);
+    expect(words).toBeLessThan(1200);
+  });
+
+  it('leads with what it is now: people and agents, from one static index', () => {
+    expect(readme.split('\n')[2]).toBe(
+      '**Make your docs answerable by people and by agents, from one static index: a cited Ask box, an MCP server and llms.txt, on your own function and key, with no vector database and no vendor. Agent traffic costs you no model tokens.**',
+    );
+    const manifest = JSON.parse(read('package.json')) as {
+      description: string;
+      keywords: string[];
+    };
+    expect(manifest.description).toMatch(/people and by agents/);
+    expect(manifest.keywords).toEqual(
+      expect.arrayContaining(['mcp', 'mcp-server', 'llms-txt', 'ask-ai', 'ai-search', 'utility']),
+    );
   });
 });
