@@ -11,7 +11,7 @@ The package has one CLI and these imports. Each is tree-shakeable, and only `ask
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
 | `ask-my-site`                        | Loaders, chunking, `buildIndex`, `checkIndex`, `loadIndex`, `retrieve`, `buildLlmsFiles`, `mcpInstallLinks`     |
 | `ask-my-site/node`                   | `loadDirectory`, `readIndexFile`, `writeIndexFile`, and the config module's types                               |
-| `ask-my-site/server`                 | `createAskHandler`, `createMcpHandler`, the rate limiters, the budget and answer cache stores                   |
+| `ask-my-site/server`                 | `createAskHandler`, `createMcpHandler`, `remoteIndex`, the rate limiters, the budget and answer cache stores    |
 | `ask-my-site/react`                  | `AskDialog`, `useAsk`, `AskAnswer`, `McpInstall` and `loadAskDialog`; needs `@radix-ui/react-dialog` and `cmdk` |
 | `ask-my-site/embed`                  | `mountAskDialog`: the dialog and its button without writing React                                               |
 | `ask-my-site/docusaurus`             | The [Docusaurus plugin](/docs/docusaurus)                                                                       |
@@ -19,7 +19,7 @@ The package has one CLI and these imports. Each is tree-shakeable, and only `ask
 | `ask-my-site/starlight`              | The [Starlight plugin](/docs/astro)                                                                             |
 | `ask-my-site/astro/McpInstall.astro` | The "Add to Cursor / VS Code / Claude" block for an Astro or Starlight page                                     |
 | `ask-my-site/mock`                   | `mockEmbeddingModel` and `mockLanguageModel`, for tests and offline demos                                       |
-| `ask-my-site` (bin)                  | [`ask-my-site index` and `ask-my-site dev`](/docs/cli)                                                          |
+| `ask-my-site` (bin)                  | [`ask-my-site index`, `init` and `dev`](/docs/cli)                                                              |
 
 The handlers are documented in [The ask endpoint](/docs/ask-endpoint) and [MCP server](/docs/mcp), and the React components in [The ask dialog](/docs/ask-dialog).
 

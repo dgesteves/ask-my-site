@@ -1,0 +1,779 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ask-my-site init: what it writes per host > Docusaurus on Cloudflare Pages, without a wrangler config 1`] = `
+{
+  "functions/api/ask.ts": "// The ask endpoint, POST /api/ask, as a Cloudflare Pages Function. Written by \`npx ask-my-site
+// init\`: edit it as you like, and init asks before it overwrites it.
+//
+// It answers from /ask-index.json, which the build writes into the site's files, read through the
+// ASSETS binding. Set OPENAI_API_KEY as a secret, for production and previews: in the dashboard
+// (Settings, Variables and Secrets) or with \`npx wrangler pages secret put OPENAI_API_KEY\`. Set it
+// as a build variable too: the build embeds the pages with it.
+import { createOpenAI } from '@ai-sdk/openai';
+import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+
+interface Env {
+  OPENAI_API_KEY: string;
+  ASSETS: { fetch: (request: Request) => Promise<Response> };
+}
+
+let handler: ((request: Request) => Promise<Response>) | undefined;
+
+function create(request: Request, env: Env) {
+  const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+  return createAskHandler({
+    index: async () => {
+      const response = await env.ASSETS.fetch(new Request(new URL('/ask-index.json', request.url)));
+      if (!response.ok) throw new Error(\`/ask-index.json: HTTP \${String(response.status)}\`);
+      return response.text();
+    },
+    model: openai('gpt-5.4-mini'),
+    // The model the plugins and the CLI embed pages with when OPENAI_API_KEY is set as the site
+    // builds. The index records its model, and a different one here fails loudly. An index built
+    // without a key has no vectors: it is searched by keywords, and this model is never called.
+    embeddingModel: openai.embedding('text-embedding-3-small'),
+    siteName: 'Acme Docs',
+    // 10 questions a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
+    rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
+    // A daily cap for the endpoint, counted per instance: about 500 answers. Set a spend limit
+    // with your model provider as well; it is the only hard cap.
+    budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+    // A question asked again is answered from memory, without a model call.
+    answerCache: true,
+  });
+}
+
+export const onRequest = ({ request, env }: { request: Request; env: Env }): Promise<Response> => {
+  handler ??= create(request, env);
+  return handler(request);
+};
+",
+  "functions/api/mcp.ts": "// The MCP endpoint, /api/mcp, as a Cloudflare Pages Function. Written by \`npx ask-my-site init\`:
+// edit it as you like, and init asks before it overwrites it.
+//
+// It serves /ask-index.json to agents as search, fetch and list_pages tools. Search is
+// keyword-only, so it calls no model: the agent brings its own.
+import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+
+interface Env {
+  ASSETS: { fetch: (request: Request) => Promise<Response> };
+}
+
+let handler: ((request: Request) => Promise<Response>) | undefined;
+
+export const onRequest = ({ request, env }: { request: Request; env: Env }): Promise<Response> => {
+  handler ??= createMcpHandler({
+    index: async () => {
+      const response = await env.ASSETS.fetch(new Request(new URL('/ask-index.json', request.url)));
+      if (!response.ok) throw new Error(\`/ask-index.json: HTTP \${String(response.status)}\`);
+      return response.text();
+    },
+    siteName: 'Acme Docs',
+    // 60 tool calls a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
+    rateLimit: memoryRateLimit({ limit: 60, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
+  });
+  return handler(request);
+};
+",
+}
+`;
+
+exports[`ask-my-site init: what it writes per host > Docusaurus on Cloudflare Pages, without a wrangler config 2`] = `
+"a Docusaurus site on Cloudflare.
+
+  created    functions/api/ask.ts  POST /api/ask: answers questions from the index
+  created    functions/api/mcp.ts  /api/mcp: the same index as an MCP server for agents, keyword-only
+
+Set (init reads none of these):
+  OPENAI_API_KEY, for the functions: npx wrangler pages secret put OPENAI_API_KEY, or the project's Variables and Secrets
+  OPENAI_API_KEY, for the site’s build: a build variable; without it there, the index is keyword-only, which works too
+
+Next:
+  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  2. Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']
+  3. Deploy as you do now. init has deployed nothing."
+`;
+
+exports[`ask-my-site init: what it writes per host > Docusaurus on GitHub Pages 1`] = `
+{
+  "ask-my-site-worker/package.json": "{
+  "name": "acme-docs-ask",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.0",
+    "ai": "^7.0.0",
+    "ask-my-site": "^<version>"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
+",
+  "ask-my-site-worker/src/index.ts": "// The Worker that answers questions for Acme Docs. Written by \`npx ask-my-site init\`: edit it as
+// you like, and init asks before it overwrites it.
+//
+// It fetches the index from the live site, SITE_URL/ask-index.json, and checks it again every five
+// minutes, so it follows the site's deploys. The site's pages call it across origins, so it sends
+// CORS headers for SITE_URL's origin, and only for it.
+//
+// Set the key with \`npx wrangler secret put OPENAI_API_KEY\`, and deploy with \`npx wrangler deploy\`.
+import { createOpenAI } from '@ai-sdk/openai';
+import {
+  createAskHandler,
+  createMcpHandler,
+  memoryRateLimit,
+  remoteIndex,
+} from 'ask-my-site/server';
+
+interface Env {
+  SITE_URL: string;
+  OPENAI_API_KEY: string;
+}
+
+type Handler = (request: Request) => Promise<Response>;
+let handlers: { ask: Handler; mcp: Handler } | undefined;
+
+function create(env: Env) {
+  const site = new URL(\`\${env.SITE_URL.replace(/\\/+$/, '')}/\`);
+  const index = remoteIndex(new URL('ask-index.json', site));
+  const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+  return {
+    ask: createAskHandler({
+      index,
+      model: openai('gpt-5.4-mini'),
+      // The model the plugins and the CLI embed pages with when OPENAI_API_KEY is set as the site
+      // builds. The index records its model, and a different one here fails loudly. An index built
+      // without a key has no vectors: it is searched by keywords, and this model is never called.
+      embeddingModel: openai.embedding('text-embedding-3-small'),
+      siteName: 'Acme Docs',
+      // 10 questions a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
+      rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
+      // A daily cap for the endpoint, counted per instance: about 500 answers. Set a spend limit
+      // with your model provider as well; it is the only hard cap.
+      budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+      // A question asked again is answered from memory, without a model call.
+      answerCache: true,
+      // The site's pages post here from their own origin.
+      headers: {
+        'access-control-allow-origin': site.origin,
+        'access-control-allow-methods': 'POST, OPTIONS',
+        'access-control-allow-headers': 'content-type',
+        'access-control-max-age': '86400',
+        vary: 'origin',
+      },
+    }),
+    mcp: createMcpHandler({
+      index,
+      siteName: 'Acme Docs',
+      // 60 tool calls a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
+      rateLimit: memoryRateLimit({ limit: 60, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
+      // Results link to the pages on the site, not on this Worker.
+      siteUrl: site.origin,
+    }),
+  };
+}
+
+export default {
+  fetch(request: Request, env: Env): Promise<Response> {
+    handlers ??= create(env);
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/ask') return handlers.ask(request);
+    if (pathname === '/api/mcp') return handlers.mcp(request);
+    return Promise.resolve(new Response('Not found', { status: 404 }));
+  },
+};
+",
+  "ask-my-site-worker/wrangler.jsonc": "// The Worker that answers questions for Acme Docs. Written by \`npx ask-my-site init\`.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "acme-docs-ask",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    // The site the Worker answers for: it reads the index at https://acme.github.io/docs/ask-index.json.
+    "SITE_URL": "https://acme.github.io/docs"
+  }
+}
+",
+}
+`;
+
+exports[`ask-my-site init: what it writes per host > Docusaurus on GitHub Pages 2`] = `
+"a Docusaurus site on GitHub Pages, answered by a Cloudflare Worker.
+
+  created    ask-my-site-worker/package.json    the Worker’s dependencies and scripts
+  created    ask-my-site-worker/wrangler.jsonc  the Worker’s configuration, with the site’s URL
+  created    ask-my-site-worker/src/index.ts    the Worker: POST /api/ask and /api/mcp, from the live site’s index
+
+Set (init reads none of these):
+  OPENAI_API_KEY, for the Worker: cd ask-my-site-worker && npx wrangler secret put OPENAI_API_KEY
+  OPENAI_API_KEY, for the site’s build: a repository secret, for a GitHub Actions build; without it there, the index is keyword-only, which works too
+
+Next:
+  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  2. cd ask-my-site-worker && npm install && npx wrangler deploy (it prints the Worker's URL, https://acme-docs-ask.<your-subdomain>.workers.dev)
+  3. Add the plugin to docusaurus.config: plugins: [['ask-my-site/docusaurus', { endpoint: 'https://acme-docs-ask.<your-subdomain>.workers.dev/api/ask' }]]
+  4. Deploy as you do now. init has deployed nothing."
+`;
+
+exports[`ask-my-site init: what it writes per host > Docusaurus on Netlify 1`] = `
+{
+  "netlify.toml": "[build]
+  publish = "build"
+
+# The index the ask-my-site functions answer from, bundled with them.
+[functions.ask]
+  included_files = ["build/ask-index.json"]
+
+[functions.mcp]
+  included_files = ["build/ask-index.json"]
+",
+  "netlify/functions/ask.mts": "// The ask endpoint, POST /api/ask, as a Netlify Function. Written by \`npx ask-my-site init\`: edit
+// it as you like, and init asks before it overwrites it.
+//
+// It answers from build/ask-index.json, which the build writes and netlify.toml bundles with this
+// function. Set OPENAI_API_KEY in the site's environment variables: the build embeds the pages with
+// it, and this function embeds questions and calls the model.
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { openai } from '@ai-sdk/openai';
+import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+
+export default createAskHandler({
+  index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
+  model: openai('gpt-5.4-mini'),
+  // The model the plugins and the CLI embed pages with when OPENAI_API_KEY is set as the site
+  // builds. The index records its model, and a different one here fails loudly. An index built
+  // without a key has no vectors: it is searched by keywords, and this model is never called.
+  embeddingModel: openai.embedding('text-embedding-3-small'),
+  siteName: 'Acme Docs',
+  // 10 questions a minute per client, keyed on x-nf-client-connection-ip, the client IP Netlify sets.
+  rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000, trustedHeader: 'x-nf-client-connection-ip' }),
+  // A daily cap for the endpoint, counted per instance: about 500 answers. Set a spend limit
+  // with your model provider as well; it is the only hard cap.
+  budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+  // A question asked again is answered from memory, without a model call.
+  answerCache: true,
+});
+
+export const config = { path: '/api/ask' };
+",
+  "netlify/functions/mcp.mts": "// The MCP endpoint, /api/mcp, as a Netlify Function. Written by \`npx ask-my-site init\`: edit it as
+// you like, and init asks before it overwrites it.
+//
+// It serves build/ask-index.json to agents as search, fetch and list_pages tools. Search is
+// keyword-only, so it calls no model: the agent brings its own.
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+
+export default createMcpHandler({
+  index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
+  siteName: 'Acme Docs',
+  // 60 tool calls a minute per client, keyed on x-nf-client-connection-ip, the client IP Netlify sets.
+  rateLimit: memoryRateLimit({ limit: 60, windowMs: 60_000, trustedHeader: 'x-nf-client-connection-ip' }),
+});
+
+export const config = { path: '/api/mcp' };
+",
+}
+`;
+
+exports[`ask-my-site init: what it writes per host > Docusaurus on Netlify 2`] = `
+"a Docusaurus site on Netlify.
+
+  created    netlify/functions/ask.mts  POST /api/ask: answers questions from the index
+  created    netlify/functions/mcp.mts  /api/mcp: the same index as an MCP server for agents, keyword-only
+  updated    netlify.toml               bundles build/ask-index.json with the functions
+
+Set (init reads none of these):
+  OPENAI_API_KEY, for the functions and the site’s build: in the site's Environment variables, or netlify env:set OPENAI_API_KEY; without it there, the index is keyword-only, which works too
+
+Next:
+  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  2. npm i -D @types/node (the functions' types)
+  3. Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']
+  4. Deploy as you do now. init has deployed nothing."
+`;
+
+exports[`ask-my-site init: what it writes per host > Docusaurus on Vercel 1`] = `
+{
+  "api/ask.ts": "// The ask endpoint, POST /api/ask, as a Vercel Function. Written by \`npx ask-my-site init\`: edit it
+// as you like, and init asks before it overwrites it.
+//
+// It answers from build/ask-index.json, which the build writes and vercel.json bundles with this
+// function. Set OPENAI_API_KEY in the project's environment variables: the build embeds the pages
+// with it, and this function embeds questions and calls the model.
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { openai } from '@ai-sdk/openai';
+import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+
+const handler = createAskHandler({
+  index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
+  model: openai('gpt-5.4-mini'),
+  // The model the plugins and the CLI embed pages with when OPENAI_API_KEY is set as the site
+  // builds. The index records its model, and a different one here fails loudly. An index built
+  // without a key has no vectors: it is searched by keywords, and this model is never called.
+  embeddingModel: openai.embedding('text-embedding-3-small'),
+  siteName: 'Acme Docs',
+  // 10 questions a minute per client, keyed on the client IP Vercel sets in X-Forwarded-For.
+  rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000 }),
+  // A daily cap for the endpoint, counted per instance: about 500 answers. Set a spend limit
+  // with your model provider as well; it is the only hard cap.
+  budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+  // A question asked again is answered from memory, without a model call.
+  answerCache: true,
+});
+
+export const POST = handler;
+// CORS preflights, for a dialog on another origin (add access-control-* headers with \`headers\`).
+export const OPTIONS = handler;
+",
+  "api/mcp.ts": "// The MCP endpoint, /api/mcp, as a Vercel Function. Written by \`npx ask-my-site init\`: edit it as
+// you like, and init asks before it overwrites it.
+//
+// It serves build/ask-index.json to agents as search, fetch and list_pages tools. Search is
+// keyword-only, so it calls no model: the agent brings its own.
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+
+const handler = createMcpHandler({
+  index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
+  siteName: 'Acme Docs',
+  // 60 tool calls a minute per client, keyed on the client IP Vercel sets in X-Forwarded-For.
+  rateLimit: memoryRateLimit({ limit: 60, windowMs: 60_000 }),
+});
+
+export const GET = handler;
+export const POST = handler;
+export const DELETE = handler;
+export const OPTIONS = handler;
+",
+  "vercel.json": "{
+  "cleanUrls": true,
+  "functions": {
+    "api/ask.ts": {
+      "includeFiles": "build/ask-index.json"
+    },
+    "api/mcp.ts": {
+      "includeFiles": "build/ask-index.json"
+    }
+  }
+}
+",
+}
+`;
+
+exports[`ask-my-site init: what it writes per host > Docusaurus on Vercel 2`] = `
+"a Docusaurus site on Vercel.
+
+  created    api/ask.ts   POST /api/ask: answers questions from the index
+  created    api/mcp.ts   /api/mcp: the same index as an MCP server for agents, keyword-only
+  updated    vercel.json  bundles build/ask-index.json with the functions
+
+Set (init reads none of these):
+  OPENAI_API_KEY, for the functions and the site’s build: in the project's Settings, Environment Variables; without it there, the index is keyword-only, which works too
+
+Next:
+  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  2. npm i -D @types/node (the functions' types)
+  3. Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']
+  4. Deploy as you do now. init has deployed nothing."
+`;
+
+exports[`ask-my-site init: what it writes per host > Docusaurus on a Cloudflare Worker with static assets (wrangler.toml) 1`] = `
+{
+  "worker/ask-my-site.ts": "// The Worker's entry point: the ask endpoint and the MCP endpoint, then the site's files. Written
+// by \`npx ask-my-site init\`: edit it as you like, and init asks before it overwrites it.
+//
+// It answers from /ask-index.json, which the build writes into the static assets, read through the
+// ASSETS binding. Set OPENAI_API_KEY with \`npx wrangler secret put OPENAI_API_KEY\`, and in the
+// build's environment: the build embeds the pages with it.
+//
+// A Worker that has its own entry point already can call \`askMySite(request, env)\` from it: it
+// answers the endpoints' paths and returns null for every other request.
+import { createOpenAI } from '@ai-sdk/openai';
+import { createAskHandler, createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+
+interface Env {
+  OPENAI_API_KEY: string;
+  ASSETS: { fetch: (request: Request) => Promise<Response> };
+}
+
+type Handler = (request: Request) => Promise<Response>;
+let handlers: { ask: Handler; mcp: Handler } | undefined;
+
+function create(request: Request, env: Env) {
+  const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+  // One copy of the index for both endpoints, loaded on the first request.
+  let text: Promise<string> | undefined;
+  const index = () =>
+    (text ??= (async () => {
+      const response = await env.ASSETS.fetch(new Request(new URL('/ask-index.json', request.url)));
+      if (!response.ok) throw new Error(\`/ask-index.json: HTTP \${String(response.status)}\`);
+      return response.text();
+    })().catch((error: unknown) => {
+      text = undefined;
+      throw error;
+    }));
+  return {
+    ask: createAskHandler({
+      index,
+      model: openai('gpt-5.4-mini'),
+      // The model the plugins and the CLI embed pages with when OPENAI_API_KEY is set as the site
+      // builds. The index records its model, and a different one here fails loudly. An index built
+      // without a key has no vectors: it is searched by keywords, and this model is never called.
+      embeddingModel: openai.embedding('text-embedding-3-small'),
+      siteName: 'Acme Docs',
+      // 10 questions a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
+      rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
+      // A daily cap for the endpoint, counted per instance: about 500 answers. Set a spend limit
+      // with your model provider as well; it is the only hard cap.
+      budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+      // A question asked again is answered from memory, without a model call.
+      answerCache: true,
+    }),
+    mcp: createMcpHandler({
+      index,
+      siteName: 'Acme Docs',
+      // 60 tool calls a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
+      rateLimit: memoryRateLimit({ limit: 60, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
+    }),
+  };
+}
+
+/** Answers the endpoints' paths, or returns null for any other request. */
+export function askMySite(request: Request, env: Env): Promise<Response> | null {
+  const { pathname } = new URL(request.url);
+  if (pathname !== '/api/ask' && pathname !== '/api/mcp') return null;
+  handlers ??= create(request, env);
+  return pathname === '/api/ask' ? handlers.ask(request) : handlers.mcp(request);
+}
+
+export default {
+  fetch(request: Request, env: Env): Promise<Response> {
+    return askMySite(request, env) ?? env.ASSETS.fetch(request);
+  },
+};
+",
+  "wrangler.toml": "name = "acme-docs"
+main = "worker/ask-my-site.ts"
+compatibility_date = "2026-09-01"
+
+[assets]
+binding = "ASSETS"
+directory = "./build"
+",
+}
+`;
+
+exports[`ask-my-site init: what it writes per host > Docusaurus on a Cloudflare Worker with static assets (wrangler.toml) 2`] = `
+"a Docusaurus site on Cloudflare.
+
+  created    worker/ask-my-site.ts  the Worker: POST /api/ask and /api/mcp; other requests get the static files
+  updated    wrangler.toml          sets main to worker/ask-my-site.ts, and the static assets' binding to ASSETS
+
+Set (init reads none of these):
+  OPENAI_API_KEY, for the Worker: npx wrangler secret put OPENAI_API_KEY
+  OPENAI_API_KEY, for the site’s build: a build variable; without it there, the index is keyword-only, which works too
+
+Next:
+  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  2. Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']
+  3. Deploy as you do now. init has deployed nothing."
+`;
+
+exports[`ask-my-site init: what it writes per host > Hugo on a GitHub Pages workflow 1`] = `
+{
+  "ask-my-site-worker/package.json": "{
+  "name": "acme-ask",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.0",
+    "ai": "^7.0.0",
+    "ask-my-site": "^<version>"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
+",
+  "ask-my-site-worker/src/index.ts": "// The Worker that answers questions for Acme. Written by \`npx ask-my-site init\`: edit it as you
+// like, and init asks before it overwrites it.
+//
+// It fetches the index from the live site, SITE_URL/ask-index.json, and checks it again every five
+// minutes, so it follows the site's deploys. The site's pages call it across origins, so it sends
+// CORS headers for SITE_URL's origin, and only for it.
+//
+// Set the key with \`npx wrangler secret put OPENAI_API_KEY\`, and deploy with \`npx wrangler deploy\`.
+import { createOpenAI } from '@ai-sdk/openai';
+import {
+  createAskHandler,
+  createMcpHandler,
+  memoryRateLimit,
+  remoteIndex,
+} from 'ask-my-site/server';
+
+interface Env {
+  SITE_URL: string;
+  OPENAI_API_KEY: string;
+}
+
+type Handler = (request: Request) => Promise<Response>;
+let handlers: { ask: Handler; mcp: Handler } | undefined;
+
+function create(env: Env) {
+  const site = new URL(\`\${env.SITE_URL.replace(/\\/+$/, '')}/\`);
+  const index = remoteIndex(new URL('ask-index.json', site));
+  const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY });
+  return {
+    ask: createAskHandler({
+      index,
+      model: openai('gpt-5.4-mini'),
+      // The model the plugins and the CLI embed pages with when OPENAI_API_KEY is set as the site
+      // builds. The index records its model, and a different one here fails loudly. An index built
+      // without a key has no vectors: it is searched by keywords, and this model is never called.
+      embeddingModel: openai.embedding('text-embedding-3-small'),
+      siteName: 'Acme',
+      // 10 questions a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
+      rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
+      // A daily cap for the endpoint, counted per instance: about 500 answers. Set a spend limit
+      // with your model provider as well; it is the only hard cap.
+      budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+      // A question asked again is answered from memory, without a model call.
+      answerCache: true,
+      // The site's pages post here from their own origin.
+      headers: {
+        'access-control-allow-origin': site.origin,
+        'access-control-allow-methods': 'POST, OPTIONS',
+        'access-control-allow-headers': 'content-type',
+        'access-control-max-age': '86400',
+        vary: 'origin',
+      },
+    }),
+    mcp: createMcpHandler({
+      index,
+      siteName: 'the Acme docs',
+      // 60 tool calls a minute per client, keyed on cf-connecting-ip, the client IP Cloudflare sets.
+      rateLimit: memoryRateLimit({ limit: 60, windowMs: 60_000, trustedHeader: 'cf-connecting-ip' }),
+      // Results link to the pages on the site, not on this Worker.
+      siteUrl: site.origin,
+    }),
+  };
+}
+
+export default {
+  fetch(request: Request, env: Env): Promise<Response> {
+    handlers ??= create(env);
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/ask') return handlers.ask(request);
+    if (pathname === '/api/mcp') return handlers.mcp(request);
+    return Promise.resolve(new Response('Not found', { status: 404 }));
+  },
+};
+",
+  "ask-my-site-worker/wrangler.jsonc": "// The Worker that answers questions for Acme. Written by \`npx ask-my-site init\`.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "acme-ask",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    // The site the Worker answers for: it reads the index at https://acme.github.io/site/ask-index.json.
+    "SITE_URL": "https://acme.github.io/site"
+  }
+}
+",
+}
+`;
+
+exports[`ask-my-site init: what it writes per host > Hugo on a GitHub Pages workflow 2`] = `
+"a Hugo site on GitHub Pages, answered by a Cloudflare Worker.
+
+  created    ask-my-site-worker/package.json    the Worker’s dependencies and scripts
+  created    ask-my-site-worker/wrangler.jsonc  the Worker’s configuration, with the site’s URL
+  created    ask-my-site-worker/src/index.ts    the Worker: POST /api/ask and /api/mcp, from the live site’s index
+
+Set (init reads none of these):
+  OPENAI_API_KEY, for the Worker: cd ask-my-site-worker && npx wrangler secret put OPENAI_API_KEY
+  OPENAI_API_KEY, for where the index is built: a repository secret, for a GitHub Actions build; without it there, the index is keyword-only, which works too
+
+Next:
+  1. Build the index with the site: npx ask-my-site index public -o public/ask-index.json (it embeds with OPENAI_API_KEY; -e none builds a keyword-only index without it)
+  2. cd ask-my-site-worker && npm install && npx wrangler deploy (it prints the Worker's URL, https://acme-ask.<your-subdomain>.workers.dev)
+  3. Add to your base template: <script src="https://cdn.jsdelivr.net/npm/ask-my-site@<minor>/dist/embed.global.js" data-endpoint="https://acme-ask.<your-subdomain>.workers.dev/api/ask" defer></script>
+  4. Deploy as you do now. init has deployed nothing."
+`;
+
+exports[`ask-my-site init: what it writes per host > Next.js on Netlify 1`] = `
+{
+  "src/app/api/ask/route.ts": "// The ask endpoint, POST /api/ask, as a Next.js route handler. Written by \`npx ask-my-site init\`:
+// edit it as you like, and init asks before it overwrites it.
+//
+// It answers from ask-index.json, which \`ask-my-site index\` writes before the build, imported so it
+// is bundled with the route. Set OPENAI_API_KEY where the app builds and runs.
+import { openai } from '@ai-sdk/openai';
+import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+
+import index from '../../../../ask-index.json';
+
+const handler = createAskHandler({
+  index,
+  model: openai('gpt-5.4-mini'),
+  // The model the plugins and the CLI embed pages with when OPENAI_API_KEY is set as the site
+  // builds. The index records its model, and a different one here fails loudly. An index built
+  // without a key has no vectors: it is searched by keywords, and this model is never called.
+  embeddingModel: openai.embedding('text-embedding-3-small'),
+  siteName: 'acme',
+  // 10 questions a minute per client, keyed on x-nf-client-connection-ip, the client IP Netlify sets.
+  rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000, trustedHeader: 'x-nf-client-connection-ip' }),
+  // A daily cap for the endpoint, counted per instance: about 500 answers. Set a spend limit
+  // with your model provider as well; it is the only hard cap.
+  budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+  // A question asked again is answered from memory, without a model call.
+  answerCache: true,
+});
+
+export { handler as OPTIONS, handler as POST };
+",
+  "src/app/api/mcp/route.ts": "// The MCP endpoint, /api/mcp, as a Next.js route handler. Written by \`npx ask-my-site init\`: edit
+// it as you like, and init asks before it overwrites it.
+//
+// It serves ask-index.json to agents as search, fetch and list_pages tools. Search is keyword-only,
+// so it calls no model: the agent brings its own. Importing the same file as the ask route keeps
+// one copy of the index in memory.
+import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+
+import index from '../../../../ask-index.json';
+
+const handler = createMcpHandler({
+  index,
+  siteName: 'the acme docs',
+  // 60 tool calls a minute per client, keyed on x-nf-client-connection-ip, the client IP Netlify sets.
+  rateLimit: memoryRateLimit({ limit: 60, windowMs: 60_000, trustedHeader: 'x-nf-client-connection-ip' }),
+});
+
+export { handler as DELETE, handler as GET, handler as OPTIONS, handler as POST };
+",
+}
+`;
+
+exports[`ask-my-site init: what it writes per host > Next.js on Netlify 2`] = `
+"a Next.js site on Netlify.
+
+  created    src/app/api/ask/route.ts  POST /api/ask: answers questions from the index
+  created    src/app/api/mcp/route.ts  /api/mcp: the same index as an MCP server for agents, keyword-only
+
+Set (init reads none of these):
+  OPENAI_API_KEY, for the app and where the index is built: in Netlify's environment variables; without it there, the index is keyword-only, which works too
+
+Next:
+  1. npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
+  2. Build the index before the app, as a "prebuild" script: npx ask-my-site index content --base-url /docs (it embeds with OPENAI_API_KEY; -e none builds a keyword-only index without it)
+  3. Render <AskDialog launcher /> from 'ask-my-site/react' in your layout, with 'ask-my-site/react/styles.css' and 'ask-my-site/embed/launcher.css'
+  4. Deploy as you do now. init has deployed nothing."
+`;
+
+exports[`ask-my-site init: what it writes per host > Starlight on Vercel 1`] = `
+{
+  "api/ask.ts": "// The ask endpoint, POST /api/ask, as a Vercel Function. Written by \`npx ask-my-site init\`: edit it
+// as you like, and init asks before it overwrites it.
+//
+// It answers from dist/ask-index.json, which the build writes and vercel.json bundles with this
+// function. Set OPENAI_API_KEY in the project's environment variables: the build embeds the pages
+// with it, and this function embeds questions and calls the model.
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { openai } from '@ai-sdk/openai';
+import { createAskHandler, memoryRateLimit } from 'ask-my-site/server';
+
+const handler = createAskHandler({
+  index: () => readFile(join(process.cwd(), 'dist/ask-index.json'), 'utf8'),
+  model: openai('gpt-5.4-mini'),
+  // The model the plugins and the CLI embed pages with when OPENAI_API_KEY is set as the site
+  // builds. The index records its model, and a different one here fails loudly. An index built
+  // without a key has no vectors: it is searched by keywords, and this model is never called.
+  embeddingModel: openai.embedding('text-embedding-3-small'),
+  siteName: 'Acme',
+  // 10 questions a minute per client, keyed on the client IP Vercel sets in X-Forwarded-For.
+  rateLimit: memoryRateLimit({ limit: 10, windowMs: 60_000 }),
+  // A daily cap for the endpoint, counted per instance: about 500 answers. Set a spend limit
+  // with your model provider as well; it is the only hard cap.
+  budget: { requestsPerDay: 500, tokensPerDay: 1_500_000 },
+  // A question asked again is answered from memory, without a model call.
+  answerCache: true,
+});
+
+export const POST = handler;
+// CORS preflights, for a dialog on another origin (add access-control-* headers with \`headers\`).
+export const OPTIONS = handler;
+",
+  "api/mcp.ts": "// The MCP endpoint, /api/mcp, as a Vercel Function. Written by \`npx ask-my-site init\`: edit it as
+// you like, and init asks before it overwrites it.
+//
+// It serves dist/ask-index.json to agents as search, fetch and list_pages tools. Search is
+// keyword-only, so it calls no model: the agent brings its own.
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { createMcpHandler, memoryRateLimit } from 'ask-my-site/server';
+
+const handler = createMcpHandler({
+  index: () => readFile(join(process.cwd(), 'dist/ask-index.json'), 'utf8'),
+  siteName: 'the Acme docs',
+  // 60 tool calls a minute per client, keyed on the client IP Vercel sets in X-Forwarded-For.
+  rateLimit: memoryRateLimit({ limit: 60, windowMs: 60_000 }),
+});
+
+export const GET = handler;
+export const POST = handler;
+export const DELETE = handler;
+export const OPTIONS = handler;
+",
+  "vercel.json": "{
+  "functions": {
+    "api/ask.ts": {
+      "includeFiles": "dist/ask-index.json"
+    },
+    "api/mcp.ts": {
+      "includeFiles": "dist/ask-index.json"
+    }
+  }
+}
+",
+}
+`;
+
+exports[`ask-my-site init: what it writes per host > Starlight on Vercel 2`] = `
+"a Starlight site on Vercel.
+
+  created    api/ask.ts   POST /api/ask: answers questions from the index
+  created    api/mcp.ts   /api/mcp: the same index as an MCP server for agents, keyword-only
+  created    vercel.json  bundles dist/ask-index.json with the functions
+
+Set (init reads none of these):
+  OPENAI_API_KEY, for the functions and the site’s build: in the project's Settings, Environment Variables; without it there, the index is keyword-only, which works too
+
+Next:
+  1. npm i ask-my-site ai @ai-sdk/openai react react-dom @radix-ui/react-dialog cmdk
+  2. npm i -D @types/node (the functions' types)
+  3. Add the plugin to Starlight in astro.config: plugins: [askMySite()], from 'ask-my-site/starlight'
+  4. Deploy as you do now. init has deployed nothing."
+`;

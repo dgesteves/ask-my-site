@@ -23,6 +23,8 @@ export type {
   UpstashRedisCacheLike,
 } from './cache';
 export { buildSources, defaultInstructions, formatPrompt } from './prompt';
+export { remoteIndex } from './remote-index';
+export type { RemoteIndex, RemoteIndexOptions } from './remote-index';
 export type { PromptSource } from './prompt';
 export { clientKey, memoryRateLimit, upstashRateLimit } from './rate-limit';
 export type {

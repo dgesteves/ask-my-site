@@ -33,7 +33,7 @@ export const OPTIONS = handler;
 
 Pass the same imported `index` to `createAskHandler` and `createMcpHandler`, and it is loaded into memory once for both. MCP clients send JSON-RPC with POST. The handler answers GET and DELETE with a 405, as a server without sessions does, and OPTIONS for browser clients.
 
-For a static site, deploy it next to the ask endpoint with the [Vercel, Netlify or Cloudflare recipe](./deployment.md#deploy-to-vercel), with `createMcpHandler` in place of `createAskHandler` and no `model`, at `api/mcp.ts`, `netlify/functions/mcp.mts` (with `config = { path: '/api/mcp' }`) or `functions/api/mcp.ts`. On Vercel, export the handler as `POST`, `GET`, `DELETE` and `OPTIONS`. Rate-limit on your platform's client IP header, as the ask endpoint does.
+For a static site, `npx ask-my-site init` writes it next to the ask endpoint: `api/mcp.ts` on Vercel, `netlify/functions/mcp.mts` on Netlify, `functions/api/mcp.ts` on Cloudflare Pages, or `/api/mcp` in the Worker it writes for a Cloudflare Worker or a GitHub Pages site, each rate-limited on the host's client IP header. On an Astro site with an SSR adapter, the integration serves `/api/mcp` itself. See [Deploying](./deployment.md#write-the-endpoint-with-init).
 
 ## The tools
 

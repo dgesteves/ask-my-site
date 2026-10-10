@@ -53,24 +53,13 @@ plugins: [['ask-my-site/docusaurus', { embedding: 'openai:text-embedding-3-small
 
 ## Deploy the endpoint for Docusaurus
 
-A Docusaurus site is static, so the endpoint runs as a function on your host and reads the index the build wrote. It must embed questions with the same model as the build. On Vercel, add `api/ask.ts`:
+A Docusaurus site is static, so the endpoint runs as a function on your host and reads the index the build wrote. Write it with one command in the site's folder:
 
-```ts
-// api/ask.ts
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { openai } from '@ai-sdk/openai';
-import { createAskHandler } from 'ask-my-site/server';
-
-export const POST = createAskHandler({
-  index: () => readFile(join(process.cwd(), 'build/ask-index.json'), 'utf8'),
-  model: openai('gpt-5.4-mini'),
-  embeddingModel: openai.embedding('text-embedding-3-small'),
-  siteName: 'Acme Docs',
-});
+```sh
+npx ask-my-site init
 ```
 
-Include the index in the function's bundle with `vercel.json`: `{ "functions": { "api/ask.ts": { "includeFiles": "build/ask-index.json" } } }`. [Deploying](/docs/deployment) has the Netlify and Cloudflare Pages versions.
+On Vercel it writes `api/ask.ts` and `api/mcp.ts` and bundles `build/ask-index.json` with them in `vercel.json`; on Netlify and Cloudflare, their equivalents. On GitHub Pages, where Docusaurus sites often live and nothing runs but files, it writes a Cloudflare Worker that reads the index from the live site, and the dialog posts to it: set `endpoint` to its URL. Each embeds questions with OpenAI's `text-embedding-3-small`, the plugin's default, and has a rate limit and a daily budget. See [Deploying](/docs/deployment) for what it writes on each host.
 
 ## Try the Docusaurus plugin locally
 

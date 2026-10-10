@@ -63,9 +63,11 @@ Embeddings work as in the Docusaurus plugin. OpenAI's `text-embedding-3-small` a
 
 ## Deploy the endpoint for Astro
 
-The endpoint is the same as for Docusaurus, reading `dist/ask-index.json` (or `dist/client/ask-index.json` with an adapter) instead of `build/ask-index.json`: see the Vercel, Netlify and Cloudflare Pages recipes in [Deploying](/guides/deployment/). Astro writes `base` into URLs, not folders, so with `base: '/docs'` the file is still `dist/ask-index.json` and is served at `/docs/ask-index.json`.
+With an SSR adapter, there is nothing to deploy apart from the site: the integration serves `POST /api/ask` and `/api/mcp` itself, from the index it builds, and the dialog posts there. Set `OPENAI_API_KEY` where the site builds and where it runs. `route` changes the model and the limits, and `route: false` turns the routes off; see [Astro with an adapter](/guides/deployment/#astro-with-an-adapter).
 
-To try it locally, build the site once, run `npx ask-my-site dev`, which answers from `dist/ask-index.json` or `dist/client/ask-index.json`, and start `astro dev` with `ASK_ENDPOINT=http://localhost:8787/api/ask`.
+A static site, without an adapter, needs the endpoint as a function on its host. Write it with `npx ask-my-site init`, which reads `dist/ask-index.json` on Vercel, Netlify or Cloudflare, or writes a Cloudflare Worker for GitHub Pages; see [Deploying](/guides/deployment/). Astro writes `base` into URLs, not folders, so with `base: '/docs'` the file is still `dist/ask-index.json` and is served at `/docs/ask-index.json`.
+
+To try it locally, build the site once and start `astro dev`: with an adapter, the integration's routes answer from the index the build wrote. Without one, run `npx ask-my-site dev`, which answers from `dist/ask-index.json` or `dist/client/ask-index.json`, and start `astro dev` with `ASK_ENDPOINT=http://localhost:8787/api/ask`.
 
 ## Astro and Starlight options
 
@@ -78,6 +80,7 @@ To try it locally, build the site once, run `npx ask-my-site dev`, which answers
 | `indexFile`                                  | `ask-index.json`                   | Where the index is written in `dist/` and served from.                                           |
 | `exclude`                                    | `[]`                               | Path prefixes to leave out, relative to `base` and the locale.                                   |
 | `dialog`                                     |                                    | `title`, `placeholder`, `suggestions`, `shortcut`, `buttonLabel`, `theme`.                       |
+| `route`                                      | on with an SSR adapter             | The endpoints the integration serves: `{ model, rateLimit, budget, mcp }`, or `false`.           |
 | `content`, `ignore`                          | `main`                             | Astro integration only: what to read from each page, and what to skip.                           |
 | `mcp`                                        | none                               | The [MCP endpoint](/integrations/mcp/)'s URL or path, for `McpInstall.astro`.                    |
 | `llmsTxt`                                    | on                                 | Write [llms.txt, llms-full.txt and .md copies](/integrations/llms-txt/); `false` turns them off. |

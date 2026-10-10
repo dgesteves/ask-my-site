@@ -1,0 +1,14 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the module generated for the routes > makes the OpenAI model with the key from the adapter’s environment 1`] = `
+"import { getSecret } from 'astro:env/server';
+import { createOpenAI } from '@ai-sdk/openai';
+let provider;
+const openai = () => (provider ??= createOpenAI({ apiKey: getSecret('OPENAI_API_KEY') }));
+export const settings = {"siteName":"Acme","indexPath":"/ask-index.json","rateLimit":{"limit":10,"windowMs":60000},"mcpRateLimit":{"limit":60,"windowMs":60000},"budget":{"requestsPerDay":500,"tokensPerDay":1500000},"answerCache":true};
+export const chatModel = () => openai()("gpt-5.4-mini");
+export const openaiEmbedding = (id) => openai().embedding(id);
+export const secret = (name) => getSecret(name);
+export const assets = () => undefined;
+"
+`;

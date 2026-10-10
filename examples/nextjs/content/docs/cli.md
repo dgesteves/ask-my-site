@@ -1,11 +1,11 @@
 ---
 title: CLI and config file
-description: Every flag of ask-my-site index and ask-my-site dev, and the config module.
+description: Every flag of ask-my-site index, init and dev, and the config module.
 section: Reference
 order: 30
 ---
 
-The `ask-my-site` command has two subcommands: `index` builds or checks the index, and `dev` serves the endpoint on your machine. Run either with `npx ask-my-site`, or from a `package.json` script.
+The `ask-my-site` command has three subcommands: `index` builds or checks the index, `init` writes the endpoint for your host, and `dev` serves the endpoint on your machine. Run them with `npx ask-my-site`, or from a `package.json` script.
 
 ## ask-my-site index
 
@@ -38,6 +38,23 @@ Without `--embedding`, the CLI uses `openai:text-embedding-3-small` when `OPENAI
 ## Environment and exit codes
 
 The CLI reads `.env` and `.env.local` from the working directory, without overriding variables that are already set. It exits with 0 on success, 1 when the build fails or `--check` finds the index stale, and 2 on a usage error.
+
+## ask-my-site init
+
+`ask-my-site init [options]` writes the ask endpoint and the MCP endpoint for the site in the working directory and the host it deploys to: Vercel, Netlify, Cloudflare (Pages, or a Worker with static assets) or GitHub Pages, whose endpoint is a Cloudflare Worker of its own. It detects the site from its config (Docusaurus, Starlight, Astro, Next.js, VitePress, Hugo, MkDocs, Jekyll or Eleventy) and the host from `vercel.json`, `netlify.toml`, a wrangler config or a GitHub Pages workflow, and asks for the host when it cannot tell. [Deploying](/docs/deployment#write-the-endpoint-with-init) shows what it writes for each.
+
+| Flag               | Default                | What it does                                                                   |
+| ------------------ | ---------------------- | ------------------------------------------------------------------------------ |
+| `--host <name>`    | detected, else asked   | `vercel`, `netlify`, `cloudflare` or `github-pages`.                           |
+| `--site-url <url>` | from the site's config | The site's public URL with its base path, which the GitHub Pages Worker reads. |
+| `--name <text>`    | the site's title       | The site's name, in the model's instructions.                                  |
+| `--out <dir>`      | detected               | A static site's build folder, where the index goes.                            |
+| `--no-mcp`         | the MCP endpoint is on | Write the ask endpoint only.                                                   |
+| `--dry-run`        | off                    | Print every file it would write, and write nothing.                            |
+| `-y, --yes`        | asks                   | Overwrite files that differ without asking.                                    |
+| `-h, --help`       |                        | Print the help.                                                                |
+
+It prints each file it created, updated or left unchanged, the environment variables to set and where, and the steps left: the packages to install, the dialog to add and the deploy. It exits with 0 when everything is written, 1 when it left a file as it was or an edit for you to make by hand, and 2 on a usage error. It reads no `.env` file and no credential, and it deploys nothing. An Astro site with an SSR adapter gets no file: its integration serves the endpoints.
 
 ## ask-my-site dev
 

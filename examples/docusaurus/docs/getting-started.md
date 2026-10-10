@@ -11,7 +11,7 @@ Every setup has the same two halves: an index built with your site, and an endpo
 - **Docusaurus.** One line in `docusaurus.config.ts`: the plugin builds the index and adds the dialog. See [Docusaurus](./docusaurus.md).
 - **Astro or Starlight.** One plugin or integration in `astro.config.mjs`, which builds the index and adds the dialog. See [Astro and Starlight](./astro.md).
 - **Next.js or another React app.** Index with the CLI, mount `createAskHandler` as a route, and render `<AskDialog />`. See [Next.js and React](./nextjs.md).
-- **Any other site.** Index the built HTML with the CLI, deploy the endpoint, and add one script tag. See [Script tag](./script-tag.md).
+- **Any other site.** Index the built HTML with the CLI, write the endpoint with `npx ask-my-site init`, and add one script tag. See [Script tag](./script-tag.md).
 
 ## Install
 
@@ -49,7 +49,7 @@ export const POST = createAskHandler({
 });
 ```
 
-[Deploying](./deployment.md) has ready-made versions for Vercel, Netlify and Cloudflare.
+`npx ask-my-site init` writes this for your host, with a rate limit and a daily budget: Vercel, Netlify, Cloudflare, or a Cloudflare Worker for a site on GitHub Pages. An Astro site with an SSR adapter needs nothing: the integration serves it. See [Deploying](./deployment.md).
 
 ## Add the dialog
 

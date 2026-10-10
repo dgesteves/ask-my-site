@@ -1,0 +1,809 @@
+// `ask-my-site init`: writes the ask endpoint, and the MCP endpoint, for a docs site and the host
+// it deploys to. Node.js only. It reads the site's config files to tell the framework and the host
+// apart, never an .env file or a credential, and it deploys nothing.
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { parseArgs } from 'node:util';
+
+import { version } from '../../package.json' with { type: 'json' };
+import {
+  cloudflarePagesFiles,
+  cloudflareWorkerFiles,
+  netlifyConfig,
+  netlifyFiles,
+  nextFiles,
+  STANDALONE_DIR,
+  standaloneWorkerFiles,
+  vercelConfig,
+  vercelFiles,
+  WORKER_MODULE,
+  workerName,
+  type CloudflareMode,
+  type GeneratedFile,
+  type Host,
+  type TemplateSite,
+} from './init-templates';
+import type { CliIO } from './main';
+
+export const INIT_USAGE = `Usage: ask-my-site init [options]
+
+Writes the ask endpoint (POST /api/ask) and the MCP endpoint (/api/mcp) for your docs site and
+the host it deploys to, with a rate limit, a daily budget, CORS where the endpoint is on another
+origin, and the index bundled the way the host needs. It detects the site (Docusaurus, Starlight,
+Astro, Next.js or a static site) and the host (Vercel, Netlify, Cloudflare or GitHub Pages), and
+prints what it wrote and the environment variables to set. It never deploys anything and never
+reads secrets. Run it again any time: unchanged files stay as they are, and it asks before it
+overwrites a file that differs.
+
+Options:
+      --host <name>        vercel | netlify | cloudflare | github-pages (default: detected, else
+                           asked). github-pages also suits any other static host: the endpoint is
+                           a Cloudflare Worker of its own.
+      --site-url <url>     The site's public URL with its base path, for github-pages
+                           (default: from the site's config)
+      --name <text>        The site's name, for the model's instructions (default: its title)
+      --out <dir>          A static site's build output folder (default: detected)
+      --no-mcp             Write the ask endpoint only
+      --dry-run            Print what it would write, and write nothing
+  -y, --yes                Overwrite files that differ without asking
+  -h, --help               Show this help`;
+
+class InitError extends Error {}
+
+const HOSTS: readonly Host[] = ['vercel', 'netlify', 'cloudflare', 'github-pages'];
+const HOST_LABELS: Record<Host, string> = {
+  vercel: 'Vercel',
+  netlify: 'Netlify',
+  cloudflare: 'Cloudflare',
+  'github-pages': 'GitHub Pages',
+};
+
+type SiteKind = 'docusaurus' | 'starlight' | 'astro' | 'next' | 'static';
+
+/** What init found out about the site. */
+interface Site extends TemplateSite {
+  kind: SiteKind;
+  /** The framework or generator, for messages: "Docusaurus", "Hugo". */
+  label: string;
+  /** Astro's SSR adapter package, when the site has one. */
+  adapter?: string;
+  /** Next.js's app folder: `app` or `src/app`. */
+  appDir?: string;
+  /** For a site the CLI indexes (Next.js, static generators): the command that builds the index. */
+  indexCommand?: string;
+}
+
+interface PackageJson {
+  name?: unknown;
+  homepage?: unknown;
+  scripts?: Record<string, unknown>;
+  dependencies?: Record<string, unknown>;
+  devDependencies?: Record<string, unknown>;
+}
+
+/** The project: its root, its package.json and its dependencies. */
+interface Project {
+  root: string;
+  pkg: PackageJson | null;
+  deps: Set<string>;
+  read: (path: string) => string | null;
+  has: (path: string) => boolean;
+}
+
+function project(root: string): Project {
+  const read = (path: string): string | null => {
+    try {
+      return readFileSync(join(root, path), 'utf8');
+    } catch {
+      return null;
+    }
+  };
+  let pkg: PackageJson | null = null;
+  try {
+    const parsed: unknown = JSON.parse(read('package.json') ?? 'null');
+    if (parsed && typeof parsed === 'object') pkg = parsed;
+  } catch {
+    // Not a Node project, or a broken package.json: detect from the other files.
+  }
+  const deps = new Set([
+    ...Object.keys(pkg?.dependencies ?? {}),
+    ...Object.keys(pkg?.devDependencies ?? {}),
+  ]);
+  return { root, pkg, deps, read, has: (path) => existsSync(join(root, path)) };
+}
+
+/** The first of `names` that exists in the project. */
+const first = (p: Project, names: readonly string[]): string | undefined =>
+  names.find((name) => p.has(name));
+
+const configNames = (base: string) =>
+  ['ts', 'mts', 'js', 'mjs', 'cjs'].map((extension) => `${base}.${extension}`);
+
+/** A string-valued key from a JS/TS config's source, such as `url: 'https://…'`. */
+function configString(source: string | null, key: string): string | undefined {
+  if (!source) return undefined;
+  return new RegExp(`\\b${key}\\s*:\\s*(['"\`])([^'"\`]+)\\1`).exec(source)?.[2];
+}
+
+/** A key from a YAML or TOML config, such as `site_name: Acme Docs` or `baseURL = "…"`. */
+function flatConfigString(source: string | null, key: string): string | undefined {
+  if (!source) return undefined;
+  const match = new RegExp(
+    `^[ \\t]*${key}[ \\t]*[:=][ \\t]*(?:"([^"\\n]*)"|'([^'\\n]*)'|([^#\\n]*))`,
+    'm',
+  ).exec(source);
+  const value = (match?.[1] ?? match?.[2] ?? match?.[3])?.trim();
+  return value || undefined;
+}
+
+/** A URL and a base path joined: `https://acme.github.io` and `/docs/` give `https://acme.github.io/docs`. */
+function joinUrl(url: string | undefined, base: string | undefined): string | undefined {
+  if (!url || !/^https?:\/\//.test(url)) return undefined;
+  const path = (base ?? '').replace(/^\/+|\/+$/g, '');
+  return `${url.replace(/\/+$/, '')}${path ? `/${path}` : ''}`;
+}
+
+const STATIC_GENERATORS: { label: string; files: string[]; out: string }[] = [
+  { label: 'Hugo', files: ['hugo.toml', 'hugo.yaml', 'hugo.json'], out: 'public' },
+  { label: 'MkDocs', files: ['mkdocs.yml', 'mkdocs.yaml'], out: 'site' },
+  { label: 'Jekyll', files: ['_config.yml', '_config.yaml'], out: '_site' },
+  {
+    label: 'Eleventy',
+    files: [...configNames('eleventy.config'), '.eleventy.js', '.eleventy.cjs'],
+    out: '_site',
+  },
+];
+
+/** Detects the site's framework, where its build writes the index, its name and its URL. */
+function detectSite(p: Project, flags: { out?: string; name?: string; siteUrl?: string }): Site {
+  const packageName = typeof p.pkg?.name === 'string' ? p.pkg.name : undefined;
+  const homepage = typeof p.pkg?.homepage === 'string' ? p.pkg.homepage : undefined;
+  const named = (title: string | undefined) => flags.name ?? title ?? packageName ?? 'the docs';
+  const url = (found: string | undefined) => flags.siteUrl ?? found ?? joinUrl(homepage, '');
+
+  const docusaurus = first(p, configNames('docusaurus.config'));
+  if (docusaurus || p.deps.has('@docusaurus/core')) {
+    const source = docusaurus ? p.read(docusaurus) : null;
+    return withUrl(
+      {
+        kind: 'docusaurus',
+        label: 'Docusaurus',
+        name: named(configString(source, 'title')),
+        indexFile: 'build/ask-index.json',
+        indexPath: '/ask-index.json',
+      },
+      url(joinUrl(configString(source, 'url'), configString(source, 'baseUrl'))),
+    );
+  }
+
+  const astro = first(p, configNames('astro.config'));
+  if (astro || p.deps.has('astro')) {
+    const source = astro ? p.read(astro) : null;
+    const starlight = p.deps.has('@astrojs/starlight') || !!source?.includes('@astrojs/starlight');
+    const adapter =
+      [...p.deps].find((dep) =>
+        /^@astrojs\/(?:node|vercel|netlify|cloudflare)$|^astro-.*adapter|adapter-/.test(dep),
+      ) ?? (/\badapter\s*:/.test(source ?? '') ? 'an adapter' : undefined);
+    const outDir = adapter ? 'dist/client' : 'dist';
+    return withUrl(
+      {
+        kind: starlight ? 'starlight' : 'astro',
+        label: starlight ? 'Starlight' : 'Astro',
+        name: named(configString(source, 'title')),
+        indexFile: `${outDir}/ask-index.json`,
+        indexPath: '/ask-index.json',
+        ...(adapter ? { adapter } : {}),
+      },
+      url(joinUrl(configString(source, 'site'), configString(source, 'base'))),
+    );
+  }
+
+  if (first(p, configNames('next.config')) || p.deps.has('next')) {
+    const appDir = p.has('src/app') ? 'src/app' : 'app';
+    const content = first(p, ['content/docs', 'content', 'docs']) ?? 'content';
+    return withUrl(
+      {
+        kind: 'next',
+        label: 'Next.js',
+        name: named(undefined),
+        indexFile: 'ask-index.json',
+        indexPath: '/ask-index.json',
+        appDir,
+        indexCommand: `npx ask-my-site index ${content} --base-url /docs`,
+      },
+      url(undefined),
+    );
+  }
+
+  const vitepress = first(p, ['docs/.vitepress', '.vitepress']);
+  const generator = vitepress
+    ? { label: 'VitePress', out: `${vitepress}/dist` }
+    : STATIC_GENERATORS.find(({ files }) => files.some((file) => p.has(file)));
+  const out = (flags.out ?? generator?.out)?.replace(/^\.\/|\/+$/g, '');
+  if (!out) {
+    throw new InitError(
+      'No Docusaurus, Astro, Next.js, VitePress, Hugo, MkDocs, Jekyll or Eleventy config here. ' +
+        'Run init in the site’s folder, or pass --out <dir>, the folder a static site builds into.',
+    );
+  }
+  const source =
+    first(p, generator && 'files' in generator ? generator.files : [])?.toString() ?? null;
+  const config = source ? p.read(source) : null;
+  const foundUrl =
+    flatConfigString(config, 'site_url') ??
+    flatConfigString(config, 'baseURL') ??
+    joinUrl(flatConfigString(config, 'url'), flatConfigString(config, 'baseurl'));
+  return withUrl(
+    {
+      kind: 'static',
+      label: generator?.label ?? 'static',
+      name: named(
+        flatConfigString(config, 'site_name') ?? flatConfigString(config, 'title') ?? undefined,
+      ),
+      indexFile: `${out}/ask-index.json`,
+      indexPath: '/ask-index.json',
+      indexCommand: `npx ask-my-site index ${out} -o ${out}/ask-index.json`,
+    },
+    url(foundUrl?.replace(/\/+$/, '')),
+  );
+}
+
+const withUrl = (site: Site, url: string | undefined): Site => (url ? { ...site, url } : site);
+
+/** The wrangler config file, if any. */
+const WRANGLER = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml'];
+
+/** Hosts the project's files point at, in the order they are checked. */
+function detectHosts(p: Project): Host[] {
+  const hosts: Host[] = [];
+  if (p.has('vercel.json') || p.has('.vercel')) hosts.push('vercel');
+  if (p.has('netlify.toml') || p.has('.netlify')) hosts.push('netlify');
+  if (first(p, WRANGLER)) hosts.push('cloudflare');
+  if (deploysToPages(p)) hosts.push('github-pages');
+  return hosts;
+}
+
+/** A GitHub Pages workflow, or a gh-pages or `docusaurus deploy` script. */
+function deploysToPages(p: Project): boolean {
+  const scripts = Object.values(p.pkg?.scripts ?? {}).filter((s) => typeof s === 'string');
+  if (p.deps.has('gh-pages') || scripts.some((s) => /\bgh-pages\b|docusaurus deploy/.test(s))) {
+    return true;
+  }
+  const dir = join(p.root, '.github', 'workflows');
+  let files: string[];
+  try {
+    files = readdirSync(dir).filter((file) => /\.ya?ml$/.test(file));
+  } catch {
+    return false;
+  }
+  return files.some((file) =>
+    /actions\/deploy-pages|actions\/upload-pages-artifact|peaceiris\/actions-gh-pages|JamesIves\/github-pages-deploy-action/.test(
+      p.read(join('.github', 'workflows', file)) ?? '',
+    ),
+  );
+}
+
+/** Cloudflare Pages (`pages_build_output_dir`, or no wrangler config) or a Worker with assets. */
+function cloudflareMode(p: Project): { mode: CloudflareMode; file?: string } {
+  const file = first(p, WRANGLER);
+  if (!file) return { mode: 'pages' };
+  const source = p.read(file) ?? '';
+  if (source.includes('pages_build_output_dir')) return { mode: 'pages', file };
+  return { mode: 'workers', file };
+}
+
+/**
+ * The wrangler config with the Worker's entry point and the ASSETS binding added, or why it
+ * cannot be edited safely, with what to add by hand.
+ */
+export function wranglerWorkerConfig(
+  file: string,
+  source: string,
+): { content: string } | { error: string } {
+  const main = WORKER_MODULE;
+  const byHand = `${file}: set main to "${main}" and the static assets' binding to "ASSETS"`;
+  if (file.endsWith('.toml')) {
+    const lines = source.split('\n');
+    const header = (line: string) => /^\s*\[/.test(line);
+    const firstTable = lines.findIndex(header);
+    const top = firstTable === -1 ? lines : lines.slice(0, firstTable);
+    const mainLine = top.find((line) => /^\s*main\s*=/.test(line));
+    if (mainLine && !mainLine.includes(main)) {
+      return {
+        error: `${file} has its own entry point (${mainLine.trim()}): call askMySite(request, env) from ${main} in it`,
+      };
+    }
+    const assets = lines.findIndex((line) => /^\s*\[\s*assets\s*\]\s*$/.test(line));
+    if (assets === -1) {
+      return /^\s*assets\s*=/m.test(source)
+        ? { error: byHand }
+        : {
+            error: `${file} has no [assets] (a Worker with static assets) nor pages_build_output_dir (Pages)`,
+          };
+    }
+    const end = lines.findIndex((line, i) => i > assets && header(line));
+    const table = lines.slice(assets + 1, end === -1 ? undefined : end);
+    const binding = table.find((line) => /^\s*binding\s*=/.test(line));
+    if (binding && !/["']ASSETS["']/.test(binding)) {
+      return { error: `${file}: the static assets' binding must be "ASSETS" (${binding.trim()})` };
+    }
+    const out = [...lines];
+    if (!binding) out.splice(assets + 1, 0, 'binding = "ASSETS"');
+    if (!mainLine) {
+      const name = out.findIndex(
+        (line, i) => /^\s*name\s*=/.test(line) && (firstTable === -1 || i < firstTable),
+      );
+      out.splice(name === -1 ? 0 : name + 1, 0, `main = "${main}"`);
+    }
+    return { content: out.join('\n') };
+  }
+  // JSON, with comments in a .jsonc: edited as text, so the comments stay.
+  const mainMatch = /"main"\s*:\s*"([^"]*)"/.exec(source);
+  if (mainMatch && mainMatch[1] !== main) {
+    return {
+      error: `${file} has its own entry point ("main": "${String(mainMatch[1])}"): call askMySite(request, env) from ${main} in it`,
+    };
+  }
+  const assets = /"assets"\s*:\s*\{/.exec(source);
+  if (!assets) {
+    return {
+      error: `${file} has no "assets" (a Worker with static assets) nor "pages_build_output_dir" (Pages)`,
+    };
+  }
+  const close = source.indexOf('}', assets.index);
+  const object = source.slice(assets.index, close);
+  const binding = /"binding"\s*:\s*"([^"]*)"/.exec(object);
+  if (binding && binding[1] !== 'ASSETS') {
+    return {
+      error: `${file}: the static assets' binding must be "ASSETS" ("${String(binding[1])}")`,
+    };
+  }
+  const indent = /\n([ \t]+)"/.exec(source)?.[1] ?? '  ';
+  let out = source;
+  if (!binding) {
+    const at = assets.index + assets[0].length;
+    // `"assets": { "directory": "./build" }` stays on one line; a multi-line object gets a line.
+    const inline = !object.includes('\n');
+    const insert = inline ? ' "binding": "ASSETS",' : `\n${indent}${indent}"binding": "ASSETS",`;
+    out = `${out.slice(0, at)}${insert}${out.slice(at)}`;
+  }
+  if (!mainMatch) {
+    // After "name", where a config usually says what the Worker is, else first.
+    const name = /^([ \t]*)"name"\s*:\s*"[^"]*"\s*,[^\n]*$/m.exec(out);
+    if (name) {
+      const at = name.index + name[0].length;
+      out = `${out.slice(0, at)}\n${String(name[1])}"main": "${main}",${out.slice(at)}`;
+    } else {
+      const open = out.indexOf('{');
+      if (open === -1) return { error: byHand };
+      out = `${out.slice(0, open + 1)}\n${indent}"main": "${main}",${out.slice(open + 1)}`;
+    }
+  }
+  return { content: out };
+}
+
+/** One file of the plan, with what init does with it. */
+interface Change extends GeneratedFile {
+  /** `create`: new; `update`: exists and differs; `same`: already as it would write it. */
+  status: 'create' | 'update' | 'same';
+}
+
+interface Plan {
+  site: Site;
+  host: Host;
+  changes: Change[];
+  /** Edits init could not make safely, with what to do by hand. */
+  manual: string[];
+  /** Variables to set: what they are for, and where. */
+  env: { name: string; when: string; how: string }[];
+  next: string[];
+}
+
+/** What the CLI's index step needs to know without a key. */
+const WITHOUT_KEY =
+  ' (it embeds with OPENAI_API_KEY; -e none builds a keyword-only index without it)';
+
+/** The dependency ranges init writes into a standalone Worker's package.json. */
+const WORKER_VERSIONS = {
+  askMySite: `^${version}`,
+  ai: '^7.0.0',
+  openai: '^4.0.0',
+  wrangler: '^4.0.0',
+};
+
+function install(p: Project, packages: string[], dev = false): string | null {
+  const missing = packages.filter((name) => !p.deps.has(name));
+  if (missing.length === 0 || !p.pkg) return null;
+  const pm = p.has('pnpm-lock.yaml')
+    ? `pnpm add${dev ? ' -D' : ''}`
+    : p.has('yarn.lock')
+      ? `yarn add${dev ? ' -D' : ''}`
+      : p.has('bun.lock') || p.has('bun.lockb')
+        ? `bun add${dev ? ' -d' : ''}`
+        : `npm i${dev ? ' -D' : ''}`;
+  return `${pm} ${missing.join(' ')}`;
+}
+
+/** The packages the site needs for the dialog and the endpoint it was given. */
+function sitePackages(site: Site): string[] {
+  const dialog =
+    site.kind === 'starlight' || site.kind === 'astro'
+      ? ['react', 'react-dom', '@radix-ui/react-dialog', 'cmdk']
+      : site.kind === 'static'
+        ? []
+        : ['@radix-ui/react-dialog', 'cmdk'];
+  // The plugins embed the pages with OpenAI when OPENAI_API_KEY is set as the site builds; a
+  // static site is indexed with npx, and the standalone Worker has a package.json of its own.
+  const models = site.kind === 'static' ? [] : ['ai', '@ai-sdk/openai'];
+  return ['ask-my-site', ...models, ...dialog];
+}
+
+/** How to add the dialog, for the site's framework, pointed at `endpoint` when it is not /api/ask. */
+function dialogStep(site: Site, endpoint: string | null): string {
+  const option = endpoint ? `{ endpoint: '${endpoint}' }` : '';
+  switch (site.kind) {
+    case 'docusaurus':
+      return endpoint
+        ? `Add the plugin to docusaurus.config: plugins: [['ask-my-site/docusaurus', ${option}]]`
+        : "Add the plugin to docusaurus.config: plugins: ['ask-my-site/docusaurus']";
+    case 'starlight':
+      return `Add the plugin to Starlight in astro.config: plugins: [askMySite(${option})], from 'ask-my-site/starlight'`;
+    case 'astro':
+      return `Add the integration to astro.config: integrations: [askMySite(${option})], from 'ask-my-site/astro'`;
+    case 'next':
+      return `Render <AskDialog launcher${endpoint ? ` endpoint="${endpoint}"` : ''} /> from 'ask-my-site/react' in your layout, with 'ask-my-site/react/styles.css' and 'ask-my-site/embed/launcher.css'`;
+    case 'static':
+      return `Add to your base template: <script src="https://cdn.jsdelivr.net/npm/ask-my-site@${version.split('.').slice(0, 2).join('.')}/dist/embed.global.js" data-endpoint="${endpoint ?? '/api/ask'}" defer></script>`;
+  }
+}
+
+/** The files and steps for `site` on `host`. */
+function planFor(
+  p: Project,
+  site: Site,
+  host: Host,
+  mcp: boolean,
+): Omit<Plan, 'changes'> & {
+  files: GeneratedFile[];
+} {
+  const files: GeneratedFile[] = [];
+  const manual: string[] = [];
+  const env: Plan['env'] = [];
+  const next: string[] = [];
+  const key = 'OPENAI_API_KEY';
+  // Where the pages are embedded: by the plugin as the site builds, or by `ask-my-site index`.
+  const build =
+    site.kind === 'next' || site.kind === 'static'
+      ? 'where the index is built'
+      : 'the site\u2019s build';
+  const keyless = 'without it there, the index is keyword-only, which works too';
+  const packages = install(p, sitePackages(site));
+  if (packages) next.push(packages);
+
+  const edit = (
+    path: string,
+    description: string,
+    result: { content: string } | { error: string },
+  ): void => {
+    if ('error' in result) manual.push(result.error);
+    else files.push({ path, content: result.content, description, addition: true });
+  };
+
+  if (site.kind === 'next' && host !== 'github-pages') {
+    files.push(...nextFiles(site, host, site.appDir ?? 'app', mcp));
+    env.push({
+      name: key,
+      when: `for the app and ${build}`,
+      how: `in ${HOST_LABELS[host]}'s environment variables; ${keyless}`,
+    });
+    next.push(
+      `Build the index before the app, as a "prebuild" script: ${String(site.indexCommand)}${WITHOUT_KEY}`,
+    );
+    next.push(dialogStep(site, null));
+  } else if (host === 'github-pages') {
+    if (!site.url) {
+      throw new InitError(
+        'The Worker fetches the index from the live site, so it needs the site’s URL: pass --site-url https://<user>.github.io/<repo>.',
+      );
+    }
+    const indexed = site.kind === 'next' ? { ...site, indexFile: 'public/ask-index.json' } : site;
+    files.push(...standaloneWorkerFiles({ ...indexed, url: site.url }, mcp, WORKER_VERSIONS));
+    env.push({
+      name: key,
+      when: 'for the Worker',
+      how: `cd ${STANDALONE_DIR} && npx wrangler secret put ${key}`,
+    });
+    env.push({
+      name: key,
+      when: `for ${build}`,
+      how: `a repository secret, for a GitHub Actions build; ${keyless}`,
+    });
+    if (site.indexCommand) {
+      next.push(
+        `Build the index with the site: ${site.kind === 'next' ? `${site.indexCommand} -o public/ask-index.json` : site.indexCommand}${WITHOUT_KEY}`,
+      );
+    }
+    next.push(
+      `cd ${STANDALONE_DIR} && npm install && npx wrangler deploy (it prints the Worker's URL, https://${standaloneName(site)}.<your-subdomain>.workers.dev)`,
+    );
+    next.push(
+      dialogStep(site, `https://${standaloneName(site)}.<your-subdomain>.workers.dev/api/ask`),
+    );
+  } else if (host === 'vercel') {
+    files.push(...vercelFiles(site, mcp));
+    edit(
+      'vercel.json',
+      `bundles ${site.indexFile} with the function${mcp ? 's' : ''}`,
+      vercelConfig(p.read('vercel.json'), site, mcp),
+    );
+    env.push({
+      name: key,
+      when: `for the functions and ${build}`,
+      how: `in the project's Settings, Environment Variables; ${keyless}`,
+    });
+    if (p.pkg && !p.deps.has('@types/node')) {
+      const types = install(p, ['@types/node'], true);
+      if (types) next.push(`${types} (the functions' types)`);
+    }
+  } else if (host === 'netlify') {
+    files.push(...netlifyFiles(site, mcp));
+    edit(
+      'netlify.toml',
+      `bundles ${site.indexFile} with the function${mcp ? 's' : ''}`,
+      netlifyConfig(p.read('netlify.toml'), site, mcp),
+    );
+    env.push({
+      name: key,
+      when: `for the functions and ${build}`,
+      how: `in the site's Environment variables, or netlify env:set ${key}; ${keyless}`,
+    });
+    if (p.pkg && !p.deps.has('@types/node')) {
+      const types = install(p, ['@types/node'], true);
+      if (types) next.push(`${types} (the functions' types)`);
+    }
+  } else {
+    const { mode, file } = cloudflareMode(p);
+    if (mode === 'pages') {
+      files.push(...cloudflarePagesFiles(site, mcp));
+      env.push({
+        name: key,
+        when: 'for the functions',
+        how: `npx wrangler pages secret put ${key}, or the project's Variables and Secrets`,
+      });
+      env.push({ name: key, when: `for ${build}`, how: `a build variable; ${keyless}` });
+    } else {
+      files.push(...cloudflareWorkerFiles(site, mcp));
+      if (file) {
+        edit(
+          file,
+          `sets main to ${WORKER_MODULE}, and the static assets' binding to ASSETS`,
+          wranglerWorkerConfig(file, p.read(file) ?? ''),
+        );
+      }
+      env.push({ name: key, when: 'for the Worker', how: `npx wrangler secret put ${key}` });
+      env.push({ name: key, when: `for ${build}`, how: `a build variable; ${keyless}` });
+    }
+  }
+
+  if (site.kind === 'static' && site.indexCommand && host !== 'github-pages') {
+    next.push(`Build the index after the site: ${site.indexCommand}${WITHOUT_KEY}`);
+  }
+  if (site.kind !== 'next' && host !== 'github-pages') next.push(dialogStep(site, null));
+  next.push('Deploy as you do now. init has deployed nothing.');
+  return { site, host, files, manual, env, next };
+}
+
+const standaloneName = (site: Site): string => workerName(site.name);
+
+function parseInitFlags(args: string[]) {
+  try {
+    const { values } = parseArgs({
+      args,
+      allowNegative: true,
+      strict: true,
+      options: {
+        host: { type: 'string' },
+        'site-url': { type: 'string' },
+        name: { type: 'string' },
+        out: { type: 'string' },
+        mcp: { type: 'boolean' },
+        'dry-run': { type: 'boolean' },
+        yes: { type: 'boolean', short: 'y' },
+        help: { type: 'boolean', short: 'h' },
+      },
+    });
+    const host = values.host;
+    if (host !== undefined && !HOSTS.includes(host as Host)) {
+      throw new InitError(`--host must be one of ${HOSTS.join(', ')}.`);
+    }
+    const siteUrl = values['site-url'];
+    if (siteUrl !== undefined && !/^https?:\/\/[^/]/.test(siteUrl)) {
+      throw new InitError(`--site-url must be an absolute http(s) URL (got ${siteUrl}).`);
+    }
+    return {
+      ...(host ? { host: host as Host } : {}),
+      ...(siteUrl ? { siteUrl: siteUrl.replace(/\/+$/, '') } : {}),
+      ...(values.name ? { name: values.name } : {}),
+      ...(values.out ? { out: values.out } : {}),
+      mcp: values.mcp ?? true,
+      dryRun: values['dry-run'] ?? false,
+      yes: values.yes ?? false,
+      help: values.help ?? false,
+    };
+  } catch (error) {
+    if (error instanceof InitError) throw error;
+    throw new InitError((error as Error).message);
+  }
+}
+
+async function chooseHost(detected: Host[], io: CliIO): Promise<Host> {
+  const choices = detected.length > 1 ? detected : HOSTS;
+  if (!io.prompt) {
+    throw new InitError(
+      detected.length > 1
+        ? `This site has config for ${detected.map((h) => HOST_LABELS[h]).join(' and ')}: pick one with --host ${detected.join('|')}.`
+        : `No vercel.json, netlify.toml, wrangler config or GitHub Pages workflow here: pass --host ${HOSTS.join('|')}.`,
+    );
+  }
+  const lines = [
+    detected.length > 1
+      ? `This site has config for ${detected.map((h) => HOST_LABELS[h]).join(' and ')}. Which one serves it?`
+      : 'Where is the site hosted?',
+    ...choices.map(
+      (host, i) =>
+        `  ${String(i + 1)}. ${HOST_LABELS[host]}${host === 'github-pages' ? ', or another static host (the endpoint runs as a Cloudflare Worker)' : ''}`,
+    ),
+  ];
+  for (const line of lines) io.stdout(line);
+  for (;;) {
+    const answer = (await io.prompt(`Choose 1-${String(choices.length)}: `)).trim();
+    const host = choices[Number(answer) - 1] ?? choices.find((h) => h === answer);
+    if (host) return host;
+  }
+}
+
+async function confirm(io: CliIO, question: string): Promise<boolean> {
+  if (!io.prompt) return false;
+  return /^y(es)?$/i.test((await io.prompt(`${question} [y/N] `)).trim());
+}
+
+/** Runs `ask-my-site init`. Returns the exit code: 0 done, 1 something left undone, 2 usage. */
+export async function init(args: string[], io: CliIO): Promise<number> {
+  let flags: ReturnType<typeof parseInitFlags>;
+  try {
+    flags = parseInitFlags(args);
+  } catch (error) {
+    io.stderr((error as Error).message);
+    io.stderr(`\n${INIT_USAGE}`);
+    return 2;
+  }
+  if (flags.help) {
+    io.stdout(INIT_USAGE);
+    return 0;
+  }
+  try {
+    const p = project(io.cwd);
+    const site = detectSite(p, flags);
+    const detected = detectHosts(p);
+
+    // Astro with an adapter: the integration serves the endpoints itself, on any host.
+    if ((site.kind === 'astro' || site.kind === 'starlight') && site.adapter) {
+      const packages = install(p, sitePackages(site));
+      io.stdout(
+        [
+          `${site.label} with ${site.adapter}: nothing to write. The ask-my-site integration serves POST /api/ask and /api/mcp itself, through the adapter, from the index it builds.`,
+          '',
+          'Set OPENAI_API_KEY where the site builds and where it runs. Pass route: { model, rateLimit, budget } to askMySite() to change the model or the limits; route: false turns it off.',
+          ...(packages ? ['', `Install: ${packages}`] : []),
+        ].join('\n'),
+      );
+      return 0;
+    }
+
+    const host =
+      flags.host ??
+      (detected.length === 1 && detected[0] ? detected[0] : await chooseHost(detected, io));
+    let resolved = site;
+    if (host === 'github-pages' && !site.url && io.prompt) {
+      const answer = (
+        await io.prompt('The site’s public URL, with its base path (https://user.github.io/repo): ')
+      ).trim();
+      if (/^https?:\/\/[^/]/.test(answer)) resolved = { ...site, url: answer.replace(/\/+$/, '') };
+    }
+    const planned = planFor(p, resolved, host, flags.mcp);
+    const changes: Change[] = planned.files.map((file) => {
+      const existing = p.read(file.path);
+      const status = existing === null ? 'create' : existing === file.content ? 'same' : 'update';
+      return { ...file, status };
+    });
+    const plan: Plan = { ...planned, changes };
+    return await apply(plan, flags, io);
+  } catch (error) {
+    if (error instanceof InitError) {
+      io.stderr(`✗ ${error.message}`);
+      return 2;
+    }
+    io.stderr(`✗ ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
+}
+
+async function apply(
+  plan: Plan,
+  flags: { dryRun: boolean; yes: boolean },
+  io: CliIO,
+): Promise<number> {
+  const { site, host } = plan;
+  const where =
+    host === 'github-pages' ? 'GitHub Pages, answered by a Cloudflare Worker' : HOST_LABELS[host];
+  io.stdout(`${flags.dryRun ? 'Dry run: ' : ''}a ${site.label} site on ${where}.`);
+  io.stdout('');
+
+  const written: Change[] = [];
+  const skipped: Change[] = [];
+  for (const change of plan.changes) {
+    if (change.status === 'same') continue;
+    if (flags.dryRun) {
+      written.push(change);
+      continue;
+    }
+    if (change.status === 'update' && !change.addition && !flags.yes) {
+      if (
+        !(await confirm(
+          io,
+          `${change.path} exists and differs from what init writes. Overwrite it?`,
+        ))
+      ) {
+        skipped.push(change);
+        continue;
+      }
+    }
+    await mkdir(dirname(join(io.cwd, change.path)), { recursive: true });
+    await writeFile(join(io.cwd, change.path), change.content);
+    written.push(change);
+  }
+
+  const width = Math.max(...plan.changes.map((change) => change.path.length), 0);
+  const verb = (change: Change): string => {
+    if (skipped.includes(change)) return 'skipped';
+    if (change.status === 'same') return 'unchanged';
+    if (flags.dryRun) return change.status === 'create' ? 'would create' : 'would update';
+    return change.status === 'create' ? 'created' : 'updated';
+  };
+  const verbWidth = flags.dryRun ? 12 : 9;
+  for (const change of plan.changes) {
+    io.stdout(
+      `  ${verb(change).padEnd(verbWidth)}  ${change.path.padEnd(width)}  ${change.description}`,
+    );
+  }
+  for (const line of plan.manual) io.stdout(`  ${'by hand'.padEnd(verbWidth)}  ${line}`);
+
+  if (flags.dryRun) {
+    for (const change of written) {
+      io.stdout('');
+      io.stdout(`--- ${change.path}`);
+      io.stdout(change.content.replace(/\n$/, ''));
+    }
+  }
+
+  io.stdout('');
+  io.stdout('Set (init reads none of these):');
+  for (const variable of plan.env) {
+    io.stdout(`  ${variable.name}, ${variable.when}: ${variable.how}`);
+  }
+  io.stdout('');
+  io.stdout('Next:');
+  plan.next.forEach((step, i) => {
+    io.stdout(`  ${String(i + 1)}. ${step}`);
+  });
+
+  if (skipped.length > 0) {
+    io.stderr('');
+    io.stderr(
+      `! Left ${skipped.map((change) => change.path).join(', ')} as ${skipped.length === 1 ? 'it is' : 'they are'}. Rerun with --dry-run to see what init would write, or --yes to overwrite.`,
+    );
+    return 1;
+  }
+  return plan.manual.length > 0 ? 1 : 0;
+}

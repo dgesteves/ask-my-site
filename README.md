@@ -42,7 +42,7 @@ Search runs in memory inside one function you deploy: BM25 and vectors, merged w
 | Next.js or another React app       | A route and a component     | [Next.js and React](https://ask-my-site-demo.vercel.app/docs/nextjs)  |
 | Hugo, Jekyll, MkDocs or plain HTML | One script tag              | [Script tag](https://ask-my-site-demo.vercel.app/docs/script-tag)     |
 
-Each answers from an endpoint you deploy as one function next to the site, rate-limited by default: see the [Vercel, Netlify and Cloudflare recipes](https://ask-my-site-demo.vercel.app/docs/deployment).
+Each answers from an endpoint you deploy as one function next to the site, rate-limited by default. `npx ask-my-site init` writes it for Vercel, Netlify, Cloudflare or GitHub Pages (as a Cloudflare Worker of its own), and an Astro site with an SSR adapter needs none: see [Deploying](https://ask-my-site-demo.vercel.app/docs/deployment).
 
 **Docusaurus.** `npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk`, then:
 
@@ -73,7 +73,7 @@ export const POST = createAskHandler({
 
 and render `<AskDialog launcher />` from `ask-my-site/react` in your layout.
 
-**Any other site.** Index the HTML it builds (`npx ask-my-site index public`), deploy the endpoint, and add:
+**Any other site.** Index the HTML it builds (`npx ask-my-site index public`), write the endpoint with `npx ask-my-site init`, and add:
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/ask-my-site@0.6/dist/embed.global.js" defer></script>
