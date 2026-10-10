@@ -18,10 +18,10 @@ src/                  the package: build and search (root), cli/, node/, server/
                       docusaurus/, astro/, starlight/, loaders/, mock/
 test/                 Vitest: unit, robustness (linear-time parsing), plugins, dialog with axe
 examples/             nextjs (the live demo), docusaurus and starlight, built in CI
-packages/             docusaurus-plugin-ask-my-site and starlight-ask-my-site, which re-export
-                      ask-my-site/docusaurus and ask-my-site/starlight under the names people search for
 scripts/              consumer-site.mjs (fresh sites from the packed package), openai-stub.mjs, assets
 bench/                retrieval and load benchmarks
+packages/             docusaurus-plugin-ask-my-site and starlight-ask-my-site, which re-export
+                      ask-my-site/docusaurus and ask-my-site/starlight under the names people search for
 ```
 
 ## Checks
