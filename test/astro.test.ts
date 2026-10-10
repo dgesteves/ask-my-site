@@ -460,6 +460,10 @@ describe('ask-my-site/astro', () => {
     vi.stubEnv('ASK_ENDPOINT', 'http://localhost:8787/api/ask');
     const [, script] = await dev(askMySite({ embeddingModel: null }), []);
     expect(script).toContain('mountAskDialog({"endpoint":"http://localhost:8787/api/ask"});');
+    // Over a configured endpoint too, as the README's config sets one and its local-dev steps
+    // start the site with ASK_ENDPOINT.
+    const [, configured] = await dev(askMySite({ embeddingModel: null, endpoint: '/api/ask' }), []);
+    expect(configured).toContain('mountAskDialog({"endpoint":"http://localhost:8787/api/ask"});');
   });
 
   it('passes embeddingProviderOptions to the default OpenAI and AI Gateway models', async () => {

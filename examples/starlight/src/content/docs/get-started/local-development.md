@@ -22,7 +22,7 @@ npx ask-my-site dev                    # serves POST http://localhost:8787/api/a
 
 ## Point the dialog at it
 
-The plugins post to the `ASK_ENDPOINT` environment variable when it is set and no `endpoint` option is given, so you don't edit any config:
+The plugins post to the `ASK_ENDPOINT` environment variable whenever it is set, over any `endpoint` option, so you don't edit any config:
 
 ```sh
 ASK_ENDPOINT=http://localhost:8787/api/ask npm start

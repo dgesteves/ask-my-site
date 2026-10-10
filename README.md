@@ -175,9 +175,11 @@ npm i ask-my-site ai @ai-sdk/openai @radix-ui/react-dialog cmdk
 // docusaurus.config.ts
 export default {
   // …
-  plugins: [['ask-my-site/docusaurus', { endpoint: '/api/ask' }]],
+  plugins: ['ask-my-site/docusaurus'],
 };
 ```
+
+The dialog posts to `/api/ask` on your site. Set `endpoint` for another path or host, as in `['ask-my-site/docusaurus', { endpoint: 'https://ask.example.com/api/ask' }]`; the `ASK_ENDPOINT` environment variable overrides it as the site builds or starts.
 
 - **After `docusaurus build`** it indexes the docs, blog posts and MDX pages the site serves into `build/ask-index.json`, at the exact URLs Docusaurus generated. It reads each page's Markdown, without the navbar, breadcrumbs, table of contents, doc cards or pagination, and leaves out the pages that only list others: blog lists, tag and author pages, and generated category indexes. There is no URL guessing, and nothing to commit: the index is rebuilt with the site, and unchanged pages reuse their vectors from the previous build, cached in `node_modules/.cache/ask-my-site` (Netlify and Vercel keep it between builds).
 - **In the browser** it adds a floating "Ask AI" button beside the back-to-top button, and <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>I</kbd> (⌘K stays with your search, and text fields keep ⌘I for italic). It follows the site's light or dark mode and routes citations without a page reload. DocSearch's Ask AI side panel also opens with ⌘/Ctrl+I; pick another key with `dialog: { shortcut: 'j' }`, or turn it off with `shortcut: false`.
@@ -300,7 +302,7 @@ export const onRequest: PagesFunction<{ OPENAI_API_KEY: string; ASSETS: Fetcher 
 
 </details>
 
-To try it locally, build the site once, run `npx ask-my-site dev` in its folder, which answers from `build/ask-index.json` with the model the build embedded with (the mock one without a key), and start the site with `ASK_ENDPOINT=http://localhost:8787/api/ask npm start`. The plugin posts to `ASK_ENDPOINT` when it is set and `endpoint` is not, and `docusaurus start` reminds you when the dialog posts to a path it does not serve. The [Docusaurus example](./examples/docusaurus) runs this way.
+To try it locally, build the site once, run `npx ask-my-site dev` in its folder, which answers from `build/ask-index.json` with the model the build embedded with (the mock one without a key), and start the site with `ASK_ENDPOINT=http://localhost:8787/api/ask npm start`. The plugin posts to `ASK_ENDPOINT` whenever it is set, over any `endpoint` in the config, and `docusaurus start` reminds you when the dialog posts to a path it does not serve. The [Docusaurus example](./examples/docusaurus) runs this way.
 
 ## Astro and Starlight
 
@@ -317,11 +319,11 @@ import askMySite from 'ask-my-site/starlight';
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-  integrations: [starlight({ title: 'Acme Docs', plugins: [askMySite({ endpoint: '/api/ask' })] })],
+  integrations: [starlight({ title: 'Acme Docs', plugins: [askMySite()] })],
 });
 ```
 
-Without Starlight, add `askMySite({ endpoint: '/api/ask' })` from `ask-my-site/astro` to `integrations` instead.
+Without Starlight, add `askMySite()` from `ask-my-site/astro` to `integrations` instead. As with Docusaurus, the dialog posts to `/api/ask` unless you set `endpoint`, and `ASK_ENDPOINT` overrides both.
 
 - **After `astro build`** it indexes the pages Astro built into `dist/ask-index.json`, at the URLs Astro serves them from: with your `base`, and with or without a trailing slash as `trailingSlash` and `build.format` have it. The Starlight plugin reads what Starlight's own search reads, the part of each page Starlight marks `data-pagefind-body`: the title and the Markdown, notes and tips included, without the header, sidebar, table of contents, heading anchors, edit link or pagination. Pages that Starlight's search leaves out are left out too: the 404 page and any page with `pagefind: false`. Mark anything else to leave out with `data-pagefind-ignore`, which keeps it out of the search as well. The Astro integration reads each page's `<main>`; choose another part with `content: '.prose'` (a tag, `#id`, `.class` or `[attribute]`, or a comma-separated list) and leave parts out with `ignore: '.toc'`. 404 and 500 pages, redirects and `noindex` pages are skipped. Unchanged pages reuse their vectors from the previous build, cached in `node_modules/.cache/ask-my-site`.
 - **In the browser** it adds a floating "Ask AI" button and <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>I</kbd> to every page (⌘K stays with Starlight's search, and text fields keep ⌘I). In Starlight the button sits in the corner of the table of contents column, in Starlight's colors, and the dialog follows its light or dark theme; elsewhere the dialog follows `data-theme` on `<html>`, or the system setting. Vite bundles the dialog with your pages, so it shares React with your own islands. With `<ClientRouter />`, the dialog stays across navigations and citations navigate through the router.

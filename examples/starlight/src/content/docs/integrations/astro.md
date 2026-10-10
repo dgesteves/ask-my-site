@@ -27,7 +27,7 @@ import askMySite from 'ask-my-site/starlight';
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-  integrations: [starlight({ title: 'Acme Docs', plugins: [askMySite({ endpoint: '/api/ask' })] })],
+  integrations: [starlight({ title: 'Acme Docs', plugins: [askMySite()] })],
 });
 ```
 
@@ -40,7 +40,7 @@ Without Starlight, add the integration from `ask-my-site/astro` to `integrations
 import askMySite from 'ask-my-site/astro';
 import { defineConfig } from 'astro/config';
 
-export default defineConfig({ integrations: [askMySite({ endpoint: '/api/ask' })] });
+export default defineConfig({ integrations: [askMySite()] });
 ```
 
 ## What Astro and Starlight index
@@ -71,7 +71,7 @@ To try it locally, build the site once, run `npx ask-my-site dev`, which answers
 
 | Option                                       | Default                            | What it does                                                               |
 | -------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------- |
-| `endpoint`                                   | `ASK_ENDPOINT`, else `/api/ask`    | Where the dialog posts questions.                                          |
+| `endpoint`                                   | `ASK_ENDPOINT`, else `/api/ask`    | Where the dialog posts questions; `ASK_ENDPOINT` overrides it.             |
 | `embedding`, `dimensions`                    | OpenAI when a key is set           | The embedding model, named as the CLI names it.                            |
 | `embeddingModel`, `embeddingProviderOptions` | none                               | An AI SDK model object and its options, instead of `embedding`.            |
 | `chunking`                                   | `{ maxChars: 1200, overlap: 150 }` | Chunk size and overlap, in characters.                                     |
