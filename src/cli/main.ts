@@ -59,7 +59,7 @@ Options:
                                into <dir>, the folder your site serves at its root
       --no-llms-index, --no-llms-full, --no-llms-markdown
                                Leave out llms.txt, llms-full.txt or the .md copies
-      --llms-title <text>      The site's name, the H1 of llms.txt (default: the folder's)
+      --llms-title <text>      The site's name, the H1 of llms.txt (default: package.json's name)
       --llms-description <text>  The summary under it
       --site-url <url>         The site's origin, to link pages absolutely in llms.txt
       --mcp-url <url>          The site's MCP endpoint, for llms.txt to point agents at
