@@ -1,5 +1,0 @@
----
-'ask-my-site': minor
----
-
-Write `llms.txt`, `llms-full.txt` and a Markdown copy of each page at build time, from the pages the index is built from. The Docusaurus, Astro and Starlight plugins write them into the build output by default: `llms.txt` as llmstxt.org describes it, linking each page's copy at its URL plus `.md` (`/docs/intro.md`), and naming the MCP endpoint when the `mcp` option is set. The copies, read from the built HTML, keep links, emphasis, code languages, numbered and nested lists, tables and quotes; the index is unchanged. The plugins never replace a file the build already has, and leave what `docusaurus-plugin-llms`, `docusaurus-plugin-llms-txt`, `docusaurus-plugin-copy-page-button`, `starlight-llms-txt`, `starlight-page-actions` and `starlight-llm-actions` write to them. `llmsTxt: false` turns all three off, or `{ index, full, markdown }` one at a time. The CLI writes them with `ask-my-site index --llms-txt <dir>`, and `buildLlmsFiles` from `ask-my-site` builds them anywhere. Pages read from Markdown or HTML now carry their `description`.
