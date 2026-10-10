@@ -5,7 +5,7 @@
  * classes yourself.
  */
 
-export { AskDialog } from './ask-dialog';
+export { AskDialog, loadAskDialog } from './ask-dialog';
 export type { AskDialogProps, AskDialogSlot } from './ask-dialog';
 export { AskAnswer, citedSourceIds, safeHref } from './answer';
 export type { AnswerLinks, AskAnswerProps } from './answer';

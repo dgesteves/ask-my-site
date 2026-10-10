@@ -231,7 +231,7 @@ describe('answers that hit the output limit', () => {
   it('says so in the dialog', async () => {
     const user = userEvent.setup();
     render(<AskDialog defaultOpen fetch={answer('length')} />);
-    await user.type(screen.getByRole('combobox'), 'How do I install it?{Enter}');
+    await user.type(await screen.findByRole('combobox'), 'How do I install it?{Enter}');
     expect(await screen.findByText(/reached its length limit/)).toBeTruthy();
     expect(screen.getByRole('status').textContent).toMatch(/cut short/);
   });
@@ -252,7 +252,7 @@ describe('AskDialog closing', () => {
     });
     const user = userEvent.setup();
     render(<AskDialog defaultOpen fetch={fetch} />);
-    await user.type(screen.getByRole('combobox'), 'question{Enter}');
+    await user.type(await screen.findByRole('combobox'), 'question{Enter}');
     await waitFor(() => {
       expect(signal).toBeDefined();
     });
@@ -273,7 +273,7 @@ describe('AskDialog closing', () => {
     });
     const user = userEvent.setup();
     const { rerender } = render(<AskDialog open fetch={fetch} />);
-    await user.type(screen.getByRole('combobox'), 'question{Enter}');
+    await user.type(await screen.findByRole('combobox'), 'question{Enter}');
     await waitFor(() => {
       expect(signal).toBeDefined();
     });

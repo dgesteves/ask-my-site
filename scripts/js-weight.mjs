@@ -1,0 +1,306 @@
+// Measures the JavaScript a docs page of each example loads in headless Chrome, gzipped: before
+// any interaction, and after the visitor opens the dialog. With --check, fails when a page loads
+// more before interaction than its budget.
+//
+//   pnpm build && pnpm --filter <example> build
+//   node scripts/js-weight.mjs [docusaurus|starlight|next|embed ...] [--check] [--json]
+//
+// Each site is served from its build output by a static server in this process (Next.js by
+// `next start`), so what Chrome downloads is what a host would serve. Bytes are gzipped here,
+// at level 9, from the response bodies, so the numbers do not depend on the server compressing.
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { extname, join, normalize } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
+
+import { chromium } from 'playwright-core';
+
+const root = fileURLToPath(new URL('..', import.meta.url));
+
+/**
+ * Per site: where its build is, the page to load, the key that opens the dialog, and the budget
+ * for the JavaScript the page loads before any interaction, in gzipped KB. The budgets are the
+ * framework's own JavaScript plus ask-my-site's launcher, with a little room; the dialog itself
+ * loads on first use and is not counted. A framework update that grows its own JavaScript can
+ * need a budget raised: measure the site without ask-my-site (`docusaurus=<another build>`).
+ */
+const SITES = {
+  docusaurus: {
+    dir: 'examples/docusaurus/build',
+    page: '/getting-started',
+    key: 'i',
+    // Docusaurus's own 170 KB, and ask-my-site's launcher (3 KB).
+    budget: 178,
+  },
+  starlight: {
+    dir: 'examples/starlight/dist',
+    page: '/get-started/getting-started/',
+    key: 'i',
+    // Starlight's own 34 KB, and the launcher (1.5 KB).
+    budget: 40,
+  },
+  next: {
+    next: 'examples/nextjs',
+    page: '/docs/getting-started',
+    key: 'k',
+    // The website: Next.js and its own pages; its header has the button, not a launcher.
+    launcher: false,
+    budget: 170,
+  },
+  embed: {
+    dir: null,
+    page: '/',
+    key: 'i',
+    // dist/embed.global.js alone: the button, the shortcut and their styles.
+    budget: 4,
+  },
+};
+
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+};
+
+/** A page for the script embed: plain HTML with the script tag, as on a Hugo or Jekyll site. */
+const EMBED_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Embed</title>
+<script src="/embed.global.js" data-endpoint="/api/ask" defer></script></head>
+<body><main><h1>A static page</h1><p>With the <a href="/">script embed</a>.</p></main></body></html>`;
+
+/** Serves a folder as a static host does: `/a` from `a.html` or `a/index.html`. */
+async function serveStatic(dir) {
+  const server = createServer((request, response) => {
+    const path = decodeURIComponent(new URL(request.url, 'http://x').pathname);
+    if (dir === null) {
+      if (path === '/') {
+        response.writeHead(200, { 'content-type': TYPES['.html'] });
+        response.end(EMBED_PAGE);
+        return;
+      }
+      const file = join(root, 'dist', path.replace(/^\/+/, ''));
+      if (existsSync(file) && statSync(file).isFile()) {
+        response.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'text/plain' });
+        response.end(readFileSync(file));
+        return;
+      }
+      response.writeHead(404).end();
+      return;
+    }
+    const base = join(root, dir);
+    const clean = normalize(path).replace(/^(\.\.[/\\])+/, '');
+    for (const candidate of [
+      join(base, clean),
+      join(base, `${clean.replace(/\/$/, '')}.html`),
+      join(base, clean, 'index.html'),
+    ]) {
+      if (existsSync(candidate) && statSync(candidate).isFile()) {
+        response.writeHead(200, {
+          'content-type': TYPES[extname(candidate)] ?? 'application/octet-stream',
+        });
+        response.end(readFileSync(candidate));
+        return;
+      }
+    }
+    response.writeHead(404).end();
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  return { url: `http://127.0.0.1:${String(server.address().port)}`, close: () => server.close() };
+}
+
+/** Runs `next start` for the example and waits until it answers. */
+async function serveNext(dir) {
+  const port = 3100 + Math.floor(Math.random() * 500);
+  const child = spawn('npx', ['next', 'start', '-p', String(port)], {
+    cwd: join(root, dir),
+    stdio: 'ignore',
+    env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' },
+  });
+  const url = `http://127.0.0.1:${String(port)}`;
+  for (let i = 0; i < 100; i++) {
+    try {
+      if ((await fetch(url)).ok) break;
+    } catch {
+      // Not up yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  return { url, close: () => child.kill() };
+}
+
+async function measure(name, dir, baseline) {
+  const site = dir ? { ...SITES[name], dir, next: undefined } : SITES[name];
+  const server = site.next ? await serveNext(site.next) : await serveStatic(site.dir);
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    const scripts = new Map();
+    let phase = 'initial';
+    page.on('response', async (response) => {
+      const type = response.request().resourceType();
+      if (type !== 'script') return;
+      const url = response.url();
+      if (scripts.has(url)) return;
+      scripts.set(url, { phase, bytes: null });
+      try {
+        const body = await response.body();
+        scripts.set(url, {
+          phase: scripts.get(url).phase,
+          bytes: gzipSync(body, { level: 9 }).length,
+        });
+      } catch {
+        // A response without a body (a redirect).
+      }
+    });
+    await page.goto(`${server.url}${site.page}`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(500);
+    const inline = await page.evaluate(() =>
+      [...document.querySelectorAll('script:not([src])')]
+        .filter((script) => !script.type || /javascript|module/.test(script.type))
+        .map((script) => script.textContent ?? ''),
+    );
+    const inlineBytes = inline.reduce((sum, code) => sum + gzipSync(code, { level: 9 }).length, 0);
+    const launcher = await page.locator('.ask-my-site-launcher').count();
+    if (baseline) {
+      const initial = [...scripts.values()].reduce(
+        (total, script) => total + (script.bytes ?? 0),
+        0,
+      );
+      return {
+        site: name,
+        page: site.page,
+        initialKB: +((initial + inlineBytes) / 1024).toFixed(1),
+        baseline: true,
+      };
+    }
+
+    phase = 'open';
+    // Whatever loads from here on arrives late, as on a slow connection, so the shortcut is
+    // pressed while the dialog's code is still on its way, and has to be queued.
+    await page.route('**/*.js', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await route.continue();
+    });
+    // Focus a link on the page, to see focus come back to it when the dialog closes.
+    await page.evaluate(() => {
+      const link = [...document.querySelectorAll('a[href]')].find(
+        (a) => !a.closest('.ask-my-site') && a.getBoundingClientRect().width > 0,
+      );
+      link?.setAttribute('data-ask-start', '');
+      link?.focus();
+    });
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+    await page.keyboard.press(`${modifier}+${site.key}`);
+    await page.waitForSelector('.ask-dialog', { timeout: 10_000 });
+    await page
+      .waitForFunction(() => document.activeElement?.classList.contains('ask-input'), null, {
+        timeout: 5000,
+      })
+      .catch(() => undefined);
+    const focused = await page.evaluate(() => document.activeElement?.className ?? '');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.ask-dialog', { state: 'detached', timeout: 5000 });
+    // Radix gives focus back a moment after the dialog has gone.
+    const focusOn = (test) =>
+      page
+        .waitForFunction(test, null, { timeout: 2000 })
+        .then(() => true)
+        .catch(() => false);
+    const focusReturned = await focusOn(
+      () => document.activeElement?.hasAttribute('data-ask-start') ?? false,
+    );
+    let launcherFocusReturned = null;
+    if (launcher > 0) {
+      await page.click('.ask-my-site-launcher');
+      await page.waitForSelector('.ask-dialog', { timeout: 10_000 });
+      await page.waitForFunction(
+        () => document.activeElement?.classList.contains('ask-input'),
+        null,
+        {
+          timeout: 5000,
+        },
+      );
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('.ask-dialog', { state: 'detached', timeout: 5000 });
+      launcherFocusReturned = await focusOn(
+        () => document.activeElement?.classList.contains('ask-my-site-launcher') ?? false,
+      );
+    }
+    await page.unroute('**/*.js');
+    await page.waitForLoadState('networkidle');
+
+    const sum = (wanted) =>
+      [...scripts.values()]
+        .filter((script) => script.phase === wanted)
+        .reduce((total, script) => total + (script.bytes ?? 0), 0);
+    return {
+      site: name,
+      page: site.page,
+      initialKB: +((sum('initial') + inlineBytes) / 1024).toFixed(1),
+      onOpenKB: +(sum('open') / 1024).toFixed(1),
+      files: scripts.size,
+      launcher: launcher > 0,
+      dialogFocused: /ask-input/.test(focused),
+      focusReturned,
+      launcherFocusReturned,
+      budgetKB: site.budget,
+    };
+  } finally {
+    await browser.close();
+    server.close();
+  }
+}
+
+const args = process.argv.slice(2);
+const check = args.includes('--check');
+const json = args.includes('--json');
+const names = args.filter((arg) => !arg.startsWith('--'));
+const results = [];
+// `docusaurus=examples/docusaurus/build-plain` measures another build of a site, such as one
+// without ask-my-site, for the framework's own JavaScript; it is not opened or checked.
+for (const arg of names.length > 0 ? names : Object.keys(SITES)) {
+  const [name = '', dir] = arg.split('=');
+  if (!SITES[name])
+    throw new Error(`Unknown site ${name}; one of ${Object.keys(SITES).join(', ')}`);
+  results.push(await measure(name, dir, Boolean(dir)));
+}
+if (json) console.log(JSON.stringify(results, null, 2));
+else {
+  for (const result of results) {
+    if (result.baseline) {
+      console.log(
+        `${result.site.padEnd(11)} ${String(result.initialKB).padStart(6)} KB without ask-my-site`,
+      );
+      continue;
+    }
+    console.log(
+      `${result.site.padEnd(11)} ${String(result.initialKB).padStart(6)} KB before interaction (budget ${String(result.budgetKB)}), +${String(result.onOpenKB)} KB on open; launcher ${result.launcher ? 'shown' : 'missing'}; shortcut while loading: input ${result.dialogFocused ? 'focused' : 'NOT focused'}, focus ${result.focusReturned ? 'back on the page' : 'NOT back'} after Escape${result.launcher ? `, ${result.launcherFocusReturned ? 'and back on the button' : 'NOT back on the button'} after a click` : ''}`,
+    );
+  }
+}
+const failures = results.filter(
+  (result) =>
+    !result.baseline &&
+    (result.initialKB > result.budgetKB ||
+      (SITES[result.site].launcher !== false && !result.launcher) ||
+      !result.dialogFocused ||
+      !result.focusReturned ||
+      result.launcherFocusReturned === false),
+);
+if (check && failures.length > 0) {
+  for (const failure of failures) {
+    console.error(
+      `✗ ${failure.site}: ${String(failure.initialKB)} KB of JavaScript before interaction (budget ${String(failure.budgetKB)} KB)${failure.launcher || SITES[failure.site].launcher === false ? '' : ', no launcher'}${failure.dialogFocused ? '' : ', the dialog input did not get focus'}${failure.focusReturned ? '' : ', focus did not come back after Escape'}${failure.launcherFocusReturned === false ? ', focus did not come back to the button' : ''}`,
+    );
+  }
+  process.exit(1);
+}

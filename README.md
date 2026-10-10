@@ -78,6 +78,7 @@ Then point the dialog at `http://localhost:8787/api/ask`: start a site that uses
 - **Citations that land.** Every chunk belongs to exactly one heading, so `[1]` links to the section, not the page. Anchors are the slugs GitHub, rehype-slug and Docusaurus generate (github-slugger, applied to the heading as CommonMark renders it), or your own `{#id}`, `{/* #id */}` (as Docusaurus writes it in MDX) and HTML `id`s; from built HTML, a citation links only to an `id` the page has.
 - **Any AI SDK model.** Embeddings through `embedMany`/`embed` and answers through `streamText`, from OpenAI, Anthropic, Google, xAI or any other provider package, or an AI Gateway model string.
 - **Web-standard handler.** `(Request) => Promise<Response>` built on Web APIs only, so it mounts in Next.js route handlers, Hono, Bun, Deno or Cloudflare Workers. It streams the AI SDK UI message protocol, so `useChat` can consume it too.
+- **Light on every page.** A page carries the button and the shortcut, about 3 KB; the dialog loads the first time it is wanted, and a shortcut pressed meanwhile still opens it.
 - **Accessible ⌘K dialog.** Radix Dialog and cmdk; focus management, `aria-live` answer, reduced motion, light and dark themes, unstyled-friendly.
 - **Plugins and a script tag.** [Docusaurus](#docusaurus), [Astro and Starlight](#astro-and-starlight) plugins index the built site at the URLs it serves and add the dialog; [one `<script>` tag](#any-static-site-script-embed) adds it to Hugo, Jekyll, Eleventy, MkDocs or plain HTML.
 - **Production hygiene.** zod-validated input, body-size cap, pluggable rate limiting (in-memory or Upstash) keyed on the one client IP header your platform controls, a daily budget of questions and model tokens, an answer cache for repeated questions, masked model errors, keyword fallback when the embedding provider is down.
@@ -344,7 +345,7 @@ Options: `endpoint`, `embedding`, `dimensions`, `embeddingModel`, `embeddingProv
 
 ## Any static site (script embed)
 
-For Hugo, Jekyll, Eleventy, MkDocs or plain HTML, one script tag adds the dialog and its button, with React and the styles bundled in (91 KB gzipped):
+For Hugo, Jekyll, Eleventy, MkDocs or plain HTML, one script tag adds the dialog and its button. The script is 2.4 KB gzipped; the dialog, with React and its styles, loads from a second file next to it (91 KB gzipped) the first time it is wanted:
 
 ```html
 <script
@@ -358,7 +359,7 @@ For Hugo, Jekyll, Eleventy, MkDocs or plain HTML, one script tag adds the dialog
 2. **Deploy the endpoint** next to the site, with one of the [recipes](#docusaurus) or the [full setup](#full-setup), reading your index. To try it first, run `npx ask-my-site dev` beside the index and set `data-endpoint="http://localhost:8787/api/ask"`.
 3. **Add the script tag** to your base template.
 
-It mounts itself once the page has loaded, with its tag's attributes: `data-endpoint` (default `/api/ask`), `data-title`, `data-placeholder`, `data-suggestions` (a JSON array, as in `data-suggestions='["How do I install it?"]'`), `data-shortcut` (default `i`; `"false"` turns it off), `data-button-label` (default "Ask AI"; `"false"` hides the button), `data-links` (`all`, the default, or `sources`: see below) and `data-theme` (`auto`, the default, follows `data-theme` on `<html>` when the site sets one, and the system setting otherwise; or `light` or `dark`). With `data-manual` it waits for `window.AskMySite.mount(options)`, which takes the same options and returns `{ open, close, unmount }`, for example to open the dialog from your own search box. Pin an exact version (`ask-my-site@0.5.0`) in production.
+It mounts itself once the page has loaded, with its tag's attributes: `data-endpoint` (default `/api/ask`), `data-title`, `data-placeholder`, `data-suggestions` (a JSON array, as in `data-suggestions='["How do I install it?"]'`), `data-shortcut` (default `i`; `"false"` turns it off), `data-button-label` (default "Ask AI"; `"false"` hides the button), `data-links` (`all`, the default, or `sources`: see below) and `data-theme` (`auto`, the default, follows `data-theme` on `<html>` when the site sets one, and the system setting otherwise; or `light` or `dark`). With `data-manual` it waits for `window.AskMySite.mount(options)`, which takes the same options and returns `{ open, close, unmount }`, for example to open the dialog from your own search box. Pin an exact version (`ask-my-site@0.5.0`) in production, and if you host the script yourself, copy `embed-dialog.global.js` next to it or set `data-dialog-src`.
 
 In an app with a bundler, `mountAskDialog(options)` from `ask-my-site/embed` does the same with your own React (install `react`, `react-dom`, `@radix-ui/react-dialog` and `cmdk`); import `ask-my-site/react/styles.css` and `ask-my-site/embed/launcher.css` with it.
 
